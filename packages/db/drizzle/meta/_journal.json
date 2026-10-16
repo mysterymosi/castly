@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790436263023,
+      "tag": "0000_abnormal_sue_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791600000000,
+      "tag": "0001_default_deny_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791600001000,
+      "tag": "0002_lovely_blade",
+      "breakpoints": true
+    }
+  ]
+}

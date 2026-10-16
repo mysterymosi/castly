@@ -1,0 +1,31 @@
+{
+  "name": "@workspace/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:check": "tsx src/db-check.ts",
+    "db:migrate": "tsx src/migrate.ts",
+    "db:provision-api-role": "tsx src/provision-api-role.ts",
+    "db:seed": "tsx src/seed.ts",
+    "db:assert-prohibited": "tsx src/assert-prohibited-tier.ts",
+    "db:assert-rls": "tsx src/assert-rls.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@workspace/config": "workspace:*",
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.3",
+    "postgres": "^3.4.9",
+    "uuid": "^14.0.2"
+  }
+}

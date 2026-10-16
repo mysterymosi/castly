@@ -1,0 +1,20 @@
+{
+  "name": "@workspace/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./release": "./src/release.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "@workspace/config": "workspace:*",
+    "typescript": "^5",
+    "vitest": "^4.0.16"
+  }
+}

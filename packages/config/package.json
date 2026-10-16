@@ -1,0 +1,19 @@
+{
+  "name": "@workspace/config",
+  "version": "0.0.0",
+  "private": true,
+  "license": "PROPRIETARY",
+  "scripts": {
+    "typecheck": "node -e \"process.exit(0)\""
+  },
+  "exports": {
+    "./base.json": "./base.json",
+    "./nextjs.json": "./nextjs.json",
+    "./react-library.json": "./react-library.json",
+    "./node.json": "./node.json",
+    "./expo.json": "./expo.json"
+  },
+  "dependencies": {
+    "@workspace/typescript-config": "workspace:*"
+  }
+}

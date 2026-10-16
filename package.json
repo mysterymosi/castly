@@ -1,0 +1,30 @@
+{
+  "name": "castly",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "format": "turbo format",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "ci:prohibited-guard": "node scripts/ci/prohibited-attribute-guard.mjs",
+    "db:migrate": "pnpm --filter @workspace/db db:migrate",
+    "db:provision-api-role": "pnpm --filter @workspace/db db:provision-api-role",
+    "db:seed": "pnpm --filter @workspace/db db:seed"
+  },
+  "devDependencies": {
+    "@workspace/config": "workspace:*",
+    "@workspace/eslint-config": "workspace:*",
+    "@workspace/typescript-config": "workspace:*",
+    "prettier": "^3.8.3",
+    "prettier-plugin-tailwindcss": "^0.8.0",
+    "turbo": "^2.9.18",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@10.33.4",
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}
