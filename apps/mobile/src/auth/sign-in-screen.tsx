@@ -4,7 +4,6 @@ import type { Me } from "@workspace/schema"
 
 import { authApi } from "@/auth/client"
 import { clearSession, currentUser, saveSession } from "@/auth/session"
-import { Sentry } from "@/observability/sentry"
 
 type Step = "email" | "code"
 

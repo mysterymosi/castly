@@ -15,6 +15,13 @@ CREATE TABLE IF NOT EXISTS auth.users (
 
 DO $$
 BEGIN
+  CREATE ROLE anon NOLOGIN;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
   CREATE ROLE authenticated NOLOGIN;
 EXCEPTION
   WHEN duplicate_object THEN NULL;
