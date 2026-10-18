@@ -1,0 +1,4 @@
+{
+  "extends": "@workspace/config/shared-source.json",
+  "include": ["./**/*.ts"]
+}

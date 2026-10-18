@@ -1,0 +1,62 @@
+---
+description: Load @trpc/server Intent skills and follow Castly tRPC server/client conventions
+globs: apps/api/src/trpc/**,apps/api/src/**/router.ts,apps/mobile/src/**
+alwaysApply: false
+---
+
+# tRPC conventions (Castly)
+
+Before editing matched files, load the relevant **local** `@trpc/server` skill from the repo root:
+
+```bash
+pnpm exec intent list
+pnpm exec intent load @trpc/server#<skill>
+```
+
+## When to load which skill
+
+| Task | Skill |
+|------|--------|
+| `initTRPC`, routers, procedures, context, `AppRouter` | `server-setup` |
+| Auth / mode gates, `.use()`, base procedures | `middlewares` or `auth` |
+| `.input()` / `.output()`, Zod in `@workspace/schema` | `validators` |
+| `TRPCError`, codes, `errorFormatter`, `onError` | `error-handling` |
+| `createCaller` / integration tests | `server-side-calls` |
+| Hono / fetch adapter wiring | `adapter-fetch` (or entry `trpc-router`) |
+| Mobile `createTRPCClient`, links, headers | `auth` + `client-setup` (via `trpc-router` tree) |
+
+Unsure where to start: `pnpm exec intent load @trpc/server#trpc-router`.
+
+## Server (`apps/api`)
+
+- **One** `initTRPC.context<Context>().create()` in `apps/api/src/trpc/trpc.ts`. Feature routers import `router` and procedures from there—never a second `initTRPC.create()`.
+- Map domain failures with `throwTrpc` / `callProcedure` in `apps/api/src/trpc/errors.ts`. Use specific codes (`NOT_FOUND`, `BAD_REQUEST`, `UNAUTHORIZED`, …); unexpected errors → `INTERNAL_SERVER_ERROR` with `cause`, not a blanket 400.
+- Procedure inputs/outputs: shared Zod in `@workspace/schema`, not ad-hoc inline schemas in routers.
+- Keep procedures thin; business logic in services (e.g. `studio-service.ts`). Domain errors: typed errors (e.g. `StudioError`) mapped in `throwTrpc`.
+- Export `export type AppRouter = typeof appRouter` from the router module; clients must **not** import the router value.
+
+## Mobile (`apps/mobile`)
+
+- Use `createTRPCClient<AppRouter>` + `httpBatchLink` in `apps/mobile/src/trpc/client.ts`. Auth header + `x-request-id` on the link.
+- Import **`import type { AppRouter } from "api/router"`** only (type-only) so Metro does not bundle the API.
+- Do **not** hand-roll `fetch` to `/trpc/...` for app APIs; wrap calls with `invoke()` for user-facing messages and read `error.data.zodError` when present.
+- Thin facades (`auth/client.ts`, `studio/api.ts`) delegate to `trpc.*`; screens and hooks call those facades (or `invoke` + `trpc` from `@/trpc/client`), not raw `/trpc` fetch.
+- Reuse schema types from `@workspace/schema` where outputs need narrowing (e.g. `studioStateSchema.parse`).
+
+## Anti-patterns
+
+```typescript
+// ❌ Second tRPC instance in a feature router
+const t = initTRPC.create()
+
+// ❌ Plain Error → always BAD_REQUEST in router catch-all
+catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: String(e) }) }
+
+// ❌ Untyped path strings + manual JSON envelope on mobile
+fetch(`${base}/trpc/talent.studio.get?input=...`)
+
+// ✅
+import type { AppRouter } from "api/router"
+await callProcedure(() => updateSection(db, ctx.userId, input))
+await invoke(() => trpc.talent.studio.get.query())
+```

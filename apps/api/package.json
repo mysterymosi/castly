@@ -12,11 +12,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run src/auth/age.test.ts src/auth/rate-limit.test.ts src/auth/termii.test.ts src/auth/phone.test.ts src/observability/sentry.test.ts",
-    "test:integration": "vitest run src/trpc/middleware.test.ts src/auth/router.test.ts"
+    "test:integration": "vitest run src/trpc/middleware.test.ts src/auth/router.test.ts src/media/media.integration.test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",
     "@hono/trpc-server": "^0.4.1",
+    "@mux/mux-node": "^15.5.0",
     "@sentry/node": "^11.8.0",
     "@trpc/server": "^11.8.1",
     "@workspace/core": "workspace:*",
@@ -24,8 +25,10 @@
     "@workspace/schema": "workspace:*",
     "drizzle-orm": "^0.45.3",
     "hono": "^4.11.3",
+    "image-size": "^2.0.4",
     "jose": "^6.2.12",
-    "standardwebhooks": "^1.1.1"
+    "standardwebhooks": "^1.1.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",

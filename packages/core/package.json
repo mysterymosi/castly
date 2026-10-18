@@ -11,6 +11,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@workspace/schema": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^22.19.0",
     "@workspace/config": "workspace:*",

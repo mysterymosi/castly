@@ -12,9 +12,11 @@
     "ci:prohibited-guard": "node scripts/ci/prohibited-attribute-guard.mjs",
     "db:migrate": "pnpm --filter @workspace/db db:migrate",
     "db:provision-api-role": "pnpm --filter @workspace/db db:provision-api-role",
-    "db:seed": "pnpm --filter @workspace/db db:seed"
+    "db:seed": "pnpm --filter @workspace/db db:seed",
+    "cf:media-setup": "pnpm exec tsx scripts/cloudflare-media-setup.ts"
   },
   "devDependencies": {
+    "@tanstack/intent": "^0.5.5",
     "@workspace/config": "workspace:*",
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
@@ -26,5 +28,10 @@
   "packageManager": "pnpm@10.33.4",
   "engines": {
     "node": ">=22.13.0"
+  },
+  "intent": {
+    "skills": [
+      "*"
+    ]
   }
 }

@@ -12,6 +12,8 @@
 
 ### 2.1 Talent schema
 
+**Status:** Done — `packages/db/src/schema/talent.ts`, migration `0003_talent_core_schema.sql` (RLS + 12-section cap trigger + owner immutability trigger). CI runs `pnpm --filter @workspace/db db:assert-talent` after migrate.
+
 Tables: `talent_profiles`, `talent_categories`, `talent_attributes`, `talent_skills`, `talent_languages`, `talent_accents`, `credits`, `talent_rates`, `talent_availability`, `training`, `affiliations`, `press`, `testimonials`, `social_links`, `portfolio_sections`, `section_media`, `media_assets`.
 
 `rate_visibility` on the profile (`public | verified_bookers | hidden`). Trigger: at most 12 visible `portfolio_sections` per talent.
@@ -21,6 +23,8 @@ Tables: `talent_profiles`, `talent_categories`, `talent_attributes`, `talent_ski
 **Acceptance.** Migrations apply. Inserting a 13th visible section fails. A delegate can be granted and revoked; owner_id cannot be reassigned to the agency.
 
 ### 2.2 Section schema and forward-migrators
+
+**Status:** Done — `packages/schema/src/portfolio/` (Zod bodies per type, `sectionRegistry`, forward migrators, `validatePortfolioSectionWrite` / `readStoredPortfolioSection`). Hero ships v1→v2 migrator for contract tests; other core + stub types at v1. CI runs `pnpm --filter @workspace/schema test`.
 
 In `packages/schema`, a Zod discriminated union on `type`, versioned per type. Core set for this milestone:
 
@@ -34,6 +38,8 @@ Each type registers `schemaVersion` and a forward-migrator map. Readers always m
 
 ### 2.3 Native renderers and height estimates
 
+**Status:** Done — `packages/portfolio-native` (`studioSectionRegistry`, `CARD_WIDTH`, per-type `Section` + `estimateHeight`, `renderStudioSection` / `estimateSectionHeight`). CI runs `pnpm --filter @workspace/portfolio-native test`.
+
 `packages/portfolio-native`: one renderer per core type. Each exports `estimateHeight(config, mediaMeta)`. A type without an estimator cannot be imported into the studio.
 
 Render at card width. FlashList consumes the estimated heights.
@@ -41,6 +47,8 @@ Render at card width. FlashList consumes the estimated heights.
 **Acceptance.** Unit tests assert every shipped type exports `estimateHeight`. Live preview on device shows all core types at card width without horizontal overflow.
 
 ### 2.4 Studio UI
+
+**Status:** Done — `apps/mobile/src/studio/*` (quick-start, studio, FlashList portfolio preview, decision card preview), `apps/api/src/talent/*` (studio + sections tRPC), `packages/core/completeness.ts`, migration `0004_studio_card_config.sql`. Placeholder photos until M2.5 upload.
 
 Guided quick-start (name, location, 3 photos, one-line bio, top 3 skills) then the open studio: add / hide / reorder sections, pick a template (Editorial, Reel-first, Case study), live preview of portfolio and of the decision-layer card (lead media + three highlight facts).
 
@@ -52,9 +60,11 @@ Completeness meter: weighted by category; **sensitive attribute fields excluded*
 
 ### 2.5 Media pipeline
 
+**Status:** Done — `apps/api/src/media/*` (`media.createUploadUrl` / `status` / `delete`, local upload hook + Cloudflare direct upload + webhooks), migration `0005_material_grim_reaper.sql` (`media_upload_tokens`, `media_moderation_jobs` stub queue). Mobile: `apps/mobile/src/media/*` (compress, pick, upload, poll), quick-start uses real photos, studio showreel upload.
+
 1. Client compresses images via `expo-image-manipulator`; video uploaded as captured.
-2. `media.createUploadUrl` creates `media_assets` at `pending` and returns a single-use signed tus URL (Cloudflare Images or Stream).
-3. Direct tus upload; webhook → `processing` → `ready` with dimensions, duration, poster, playback ids, blurhash.
+2. `media.createUploadUrl` creates `media_assets` at `pending` and returns a direct upload URL (Cloudflare Images POST or Mux PUT).
+3. Client upload; Mux webhook or Images poll sync → `ready` with dimensions, duration, poster, playback ids, blurhash.
 4. Image variants: `card`, `thumb`, `full`, `og`.
 5. Reaching `ready` enqueues a moderation job **stub** that no-ops until M7 (do not skip the enqueue).
 
@@ -114,5 +124,5 @@ A talent on device completes quick-start, uploads media over a killed-app interr
 
 | Risk | Decision if it materialises |
 |------|------------------------------|
-| Cloudflare Stream tus from Expo is painful | Keep Stream for playback; use a documented fallback upload path, do not change CDN |
+| Mux direct upload from Expo is painful | Document fallback (e.g. presigned retry); keep Mux for playback |
 | 12-section preview janks badly in 2.10 | Fix estimators/virtualisation before starting M5; do not ignore the log |

@@ -53,6 +53,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @workspace/core test
+      - run: pnpm --filter @workspace/schema test
+      - run: pnpm --filter @workspace/portfolio-native test
       - run: pnpm --filter api test:unit
 
   integration-test:
@@ -89,6 +91,7 @@ jobs:
       - name: Auth schema stub
         run: psql "$DATABASE_URL" -f packages/db/ci/postgres-auth-stub.sql
       - run: pnpm db:migrate
+      - run: pnpm --filter @workspace/db db:assert-talent
       - run: pnpm db:provision-api-role
       - run: pnpm --filter api test:integration
 

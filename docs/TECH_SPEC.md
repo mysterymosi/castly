@@ -84,8 +84,8 @@ RLS is **enabled with default-deny on every table** as defence in depth, not as 
 | Jobs | **pg-boss** | Postgres-backed. Zero additional infrastructure. Revisit BullMQ/Redis only when measured throughput demands it. |
 | Auth | Supabase Auth + Termii hook | Phone OTP, WhatsApp-first. Never build auth. |
 | Realtime | Supabase Realtime | Chat transport and presence. |
-| Video | Cloudflare Stream | Automatic HLS with multiple renditions and poster frames — mandatory for 3G autoplay. tus resumable uploads. Lagos edge presence. |
-| Images | Cloudflare Images | Named variants, same vendor and edge as video. |
+| Video | Mux | HLS playback, direct upload, webhooks for ready state. |
+| Images | Cloudflare Images | Named variants at the CDN edge. |
 | Payments | Paystack | NGN, cards, bank transfer, USSD. See §19 on store billing. |
 | KYC | Smile ID | Most mature React Native SDK among Nigerian providers. |
 | Moderation | Hive or Sightengine + PhotoDNA | Nudity scanning by API; CSAM handled separately as a legal obligation (§18.3). |
@@ -190,7 +190,7 @@ portfolio_sections       id, talent_id, type, position, is_visible,
                          schema_version, config jsonb
 section_media            section_id, media_id, position, caption
 media_assets             id, owner_id, kind(image|video|audio|document),
-                         provider(cf_images|cf_stream|supabase),
+                         provider(cf_images|mux|supabase),
                          provider_ref, status(pending|processing|ready|failed|quarantined),
                          width, height, duration_ms, poster_url, blurhash,
                          moderation_status, moderation_payload jsonb
@@ -511,7 +511,7 @@ A persistent client queue in MMKV holding upload intents with their tus fingerpr
 ### 11.3 Delivery
 
 - **Images** — Cloudflare Images named variants: `card` (card width), `thumb`, `full`, `og`. Blurhash stored on the asset row for instant placeholders.
-- **Video** — Cloudflare Stream HLS with automatic renditions. Poster frames generated at upload. Data-saver pins the lowest rendition.
+- **Video** — Mux HLS playback and poster thumbnails. Data-saver pins the lowest rendition.
 - **Audio** — Supabase Storage behind the CDN; normalised to AAC by a job.
 
 ---

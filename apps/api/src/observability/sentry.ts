@@ -29,14 +29,23 @@ export function initApiSentry(): boolean {
 /** Report server bugs, not expected client/auth failures. */
 export function shouldCaptureTrpcError(error: unknown): boolean {
   if (error instanceof TRPCError) {
-    return error.code === "INTERNAL_SERVER_ERROR" || error.code === "NOT_IMPLEMENTED"
+    return (
+      error.code === "INTERNAL_SERVER_ERROR" || error.code === "NOT_IMPLEMENTED"
+    )
   }
   return true
 }
 
+function reportableException(error: unknown): Error {
+  if (error instanceof TRPCError && error.cause instanceof Error)
+    return error.cause
+  if (error instanceof Error) return error
+  return new Error(String(error))
+}
+
 export function captureTrpcError(
   error: unknown,
-  meta: { requestId: string; path?: string; userId?: string },
+  meta: { requestId: string; path?: string; userId?: string }
 ) {
   if (!process.env.SENTRY_DSN?.trim()) return
   if (!shouldCaptureTrpcError(error)) return
@@ -45,7 +54,6 @@ export function captureTrpcError(
     scope.setTag("request_id", meta.requestId)
     if (meta.path) scope.setTag("trpc.path", meta.path)
     if (meta.userId) scope.setUser({ id: meta.userId })
-    const exception = error instanceof Error ? error : new Error(String(error))
-    Sentry.captureException(exception)
+    Sentry.captureException(reportableException(error))
   })
 }

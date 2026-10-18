@@ -102,6 +102,14 @@ await db
       tier: "standard",
       appliesToCategoryIds: allCategories,
     },
+    {
+      key: "ethnicity",
+      label: "Ethnicity",
+      dataType: "select",
+      tier: "sensitive",
+      appliesToCategoryIds: onCamera,
+      options: ["black", "white", "mixed", "other", "prefer_not_to_say"],
+    },
   ])
   .onConflictDoNothing({ target: attributeDefinitions.key })
 
