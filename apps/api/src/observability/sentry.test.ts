@@ -5,9 +5,11 @@ const sentryMocks = vi.hoisted(() => ({
   setTag: vi.fn(),
   setUser: vi.fn(),
   captureException: vi.fn(),
-  withScope: vi.fn((fn: (scope: { setTag: typeof vi.fn; setUser: typeof vi.fn }) => void) => {
-    fn({ setTag: sentryMocks.setTag, setUser: sentryMocks.setUser })
-  }),
+  withScope: vi.fn(
+    (fn: (scope: { setTag: typeof vi.fn; setUser: typeof vi.fn }) => void) => {
+      fn({ setTag: sentryMocks.setTag, setUser: sentryMocks.setUser })
+    }
+  ),
   init: vi.fn(),
 }))
 
@@ -21,14 +23,18 @@ const { captureTrpcError, shouldCaptureTrpcError } = await import("./sentry.js")
 
 describe("shouldCaptureTrpcError", () => {
   it("skips expected client errors", () => {
-    expect(shouldCaptureTrpcError(new TRPCError({ code: "UNAUTHORIZED" }))).toBe(false)
-    expect(shouldCaptureTrpcError(new TRPCError({ code: "BAD_REQUEST" }))).toBe(false)
+    expect(
+      shouldCaptureTrpcError(new TRPCError({ code: "UNAUTHORIZED" }))
+    ).toBe(false)
+    expect(shouldCaptureTrpcError(new TRPCError({ code: "BAD_REQUEST" }))).toBe(
+      false
+    )
   })
 
   it("captures internal failures and unknown throws", () => {
-    expect(shouldCaptureTrpcError(new TRPCError({ code: "INTERNAL_SERVER_ERROR" }))).toBe(
-      true,
-    )
+    expect(
+      shouldCaptureTrpcError(new TRPCError({ code: "INTERNAL_SERVER_ERROR" }))
+    ).toBe(true)
     expect(shouldCaptureTrpcError(new Error("boom"))).toBe(true)
   })
 })
@@ -57,5 +63,21 @@ describe("captureTrpcError", () => {
   it("does nothing when Sentry is not configured", () => {
     captureTrpcError(new Error("probe"), { requestId: "req-abc" })
     expect(sentryMocks.withScope).not.toHaveBeenCalled()
+  })
+
+  it("reports the underlying cause of an internal tRPC error", () => {
+    process.env.SENTRY_DSN = "https://example@sentry.io/1"
+    const cause = new Error("relation talent_profiles does not exist")
+    captureTrpcError(
+      new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Request failed",
+        cause,
+      }),
+      {
+        requestId: "req-cause",
+      }
+    )
+    expect(sentryMocks.captureException).toHaveBeenCalledWith(cause)
   })
 })

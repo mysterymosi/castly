@@ -1,8 +1,6 @@
 {
-  "extends": "@workspace/config/base.json",
-  "compilerOptions": {
-    "noEmit": true
-  },
+  "extends": "@workspace/config/shared-source.json",
+  "compilerOptions": {},
   "include": ["src"],
   "exclude": ["node_modules"]
 }

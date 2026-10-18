@@ -11,7 +11,8 @@
     "./nextjs.json": "./nextjs.json",
     "./react-library.json": "./react-library.json",
     "./node.json": "./node.json",
-    "./expo.json": "./expo.json"
+    "./expo.json": "./expo.json",
+    "./shared-source.json": "./shared-source.json"
   },
   "dependencies": {
     "@workspace/typescript-config": "workspace:*"

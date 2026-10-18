@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Link } from "expo-router"
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native"
 import type { Me } from "@workspace/schema"
 
@@ -78,6 +79,11 @@ export function SignInScreen() {
         <Pressable style={styles.button} onPress={() => enable("talent")}>
           <Text style={styles.buttonText}>Enable talent</Text>
         </Pressable>
+        {me.modes.includes("talent") ? (
+          <Link href="/studio" style={styles.link}>
+            Open portfolio studio
+          </Link>
+        ) : null}
         <Pressable style={styles.button} onPress={() => enable("booker")}>
           <Text style={styles.buttonText}>Enable booker</Text>
         </Pressable>

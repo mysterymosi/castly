@@ -5,14 +5,20 @@
   "dependencies": {
     "@expo/ui": "~57.0.19",
     "@sentry/react-native": "^8.31.0",
+    "@shopify/flash-list": "2.0.2",
+    "@trpc/client": "^11.19.0",
     "@workspace/core": "workspace:*",
+    "@workspace/portfolio-native": "workspace:*",
     "@workspace/schema": "workspace:*",
+    "api": "workspace:*",
     "expo": "~57.0.24",
     "expo-constants": "~57.0.19",
     "expo-device": "~57.0.2",
     "expo-font": "~57.0.4",
     "expo-glass-effect": "~57.0.3",
     "expo-image": "~57.0.5",
+    "expo-image-manipulator": "^58.0.14",
+    "expo-image-picker": "^58.0.10",
     "expo-linking": "~57.0.10",
     "expo-router": "~57.0.22",
     "expo-secure-store": "~57.0.4",
@@ -31,9 +37,11 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "tus-js-client": "^4.3.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.3",
     "@types/react": "~19.2.2",
     "@workspace/config": "workspace:*",
     "eslint": "^9.39.4",

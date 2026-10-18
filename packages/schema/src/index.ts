@@ -1,6 +1,9 @@
 import { z } from "zod"
 
-/** Placeholder until M2 section schemas land. */
+export * from "./portfolio/index"
+export * from "./talent/studio"
+export * from "./media"
+
 export const healthSchema = z.object({
   ok: z.literal(true),
 })
