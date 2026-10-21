@@ -1,0 +1,8 @@
+[role="button"]:focus-visible,
+[role="checkbox"]:focus-visible,
+[role="radio"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="link"]:focus-visible {
+  outline: 2px solid rgb(var(--color-focus));
+  outline-offset: 2px;
+}

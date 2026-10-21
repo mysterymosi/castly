@@ -18,7 +18,8 @@ export const clientModeSchema = z.enum(["talent", "booker"])
 
 export const requestOtpInput = z.object({
   email: emailSchema,
-  dateOfBirth: dateOfBirthSchema,
+  /** Required to create an account. Omitted when signing in to an account that already exists. */
+  dateOfBirth: dateOfBirthSchema.optional(),
 })
 
 export const verifyOtpInput = requestOtpInput.extend({

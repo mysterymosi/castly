@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View } from "react-native"
+import { Text, View } from "react-native"
 
-import { CARD_WIDTH, SECTION_TITLE_HEIGHT } from "../constants"
+import { CARD_WIDTH, SECTION_HORIZONTAL_PADDING, SECTION_TITLE_HEIGHT } from "../constants"
 import { showreelMediaHeight } from "../layout"
-import { SectionShell } from "../section-shell"
+import { SectionShell, SectionTitle } from "../section-shell"
 import type { CoreSectionConfigMap, NativeSectionRenderer, SectionMediaMeta } from "../types"
 
 type ShowreelConfig = CoreSectionConfigMap["showreel"]
@@ -16,9 +16,38 @@ function ShowreelSection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config
   const mediaH = showreelMediaHeight(config.mediaId, cardWidth, mediaMeta)
   return (
     <SectionShell cardWidth={cardWidth}>
-      <Text style={styles.title}>Showreel</Text>
-      <View style={[styles.video, { height: mediaH, width: cardWidth - 32 }]} />
-      {config.headline ? <Text style={styles.headline}>{config.headline}</Text> : null}
+      <SectionTitle>Showreel</SectionTitle>
+      <View
+        className="items-center justify-center rounded-lg bg-inverse"
+        style={{ height: mediaH, width: cardWidth - SECTION_HORIZONTAL_PADDING * 2 }}
+        accessibilityLabel={config.mediaId ? "Showreel video" : "No showreel yet"}
+      >
+        <View className="h-12 w-12 items-center justify-center rounded-pill bg-accent">
+          <View
+            style={{
+              width: 0,
+              height: 0,
+              marginLeft: 4,
+              borderTopWidth: 9,
+              borderBottomWidth: 9,
+              borderLeftWidth: 14,
+              borderTopColor: "transparent",
+              borderBottomColor: "transparent",
+            }}
+            className="border-l-onAccent"
+          />
+        </View>
+      </View>
+      {config.headline ? (
+        <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.3}
+          className="mt-2 font-body text-textMuted"
+          style={{ fontSize: 14, lineHeight: 20 }}
+        >
+          {config.headline}
+        </Text>
+      ) : null}
     </SectionShell>
   )
 }
@@ -27,9 +56,3 @@ export const showreelRenderer: NativeSectionRenderer<ShowreelConfig> = {
   estimateHeight,
   Section: ShowreelSection,
 }
-
-const styles = StyleSheet.create({
-  title: { fontSize: 16, fontWeight: "600", marginBottom: 8 },
-  video: { backgroundColor: "#171717", borderRadius: 8 },
-  headline: { fontSize: 14, marginTop: 8, color: "#404040" },
-})

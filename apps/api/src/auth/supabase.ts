@@ -1,5 +1,8 @@
 import { OtpRateLimited } from "./rate-limit.js"
 
+/** Shown for a wrong, expired, or absent code. Same text whether or not the email is registered. */
+export const INVALID_OTP_MESSAGE = "That code is invalid or has expired."
+
 export class AuthRejected extends Error {
   constructor(message = "That sign-in attempt was not accepted.") {
     super(message)
@@ -37,9 +40,11 @@ function baseUrl() {
   )
 }
 
-async function readError(response: Response) {
+async function readError(response: Response, clientMessage?: string) {
   if (response.status === 429) throw new OtpRateLimited(60)
-  if (response.status >= 400 && response.status < 500) throw new AuthRejected()
+  if (response.status >= 400 && response.status < 500) {
+    throw new AuthRejected(clientMessage)
+  }
   throw new Error(`Supabase auth failed (${response.status})`)
 }
 
@@ -85,7 +90,7 @@ export const supabaseAuth = {
       headers: authHeaders(),
       body: JSON.stringify({ type: "email", email, token }),
     })
-    if (!response.ok) await readError(response)
+    if (!response.ok) await readError(response, INVALID_OTP_MESSAGE)
     return sessionFrom(
       (await response.json()) as Parameters<typeof sessionFrom>[0],
       email

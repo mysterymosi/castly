@@ -13,7 +13,8 @@ import { mediaRouter } from "../media/router.js"
 import { talentRouter } from "../talent/router.js"
 import { assertAdult } from "../auth/age.js"
 import { otpLimiter } from "../auth/rate-limit.js"
-import { enableUserMode, readMe, recordSignup } from "../auth/users.js"
+import { AuthRejected, INVALID_OTP_MESSAGE } from "../auth/supabase.js"
+import { enableUserMode, findUserByEmail, readMe, recordSignup } from "../auth/users.js"
 import { callProcedure } from "./errors.js"
 import {
   authedProcedure,
@@ -51,8 +52,11 @@ const authRouter = router({
     .input(requestOtpInput)
     .mutation(({ ctx, input }) =>
       callProcedure(async () => {
-        assertAdult(input.dateOfBirth)
+        if (input.dateOfBirth) assertAdult(input.dateOfBirth)
         otpLimiter.consume(input.email, ctx.ip)
+        const existing = await findUserByEmail(ctx.db, input.email)
+        // Unknown sign-in looks exactly like a sent code, and does not create a Supabase user.
+        if (!input.dateOfBirth && !existing) return { ok: true as const }
         await ctx.auth.requestOtp(input.email)
         return { ok: true as const }
       })
@@ -63,12 +67,17 @@ const authRouter = router({
     .output(sessionSchema)
     .mutation(({ ctx, input }) =>
       callProcedure(async () => {
-        assertAdult(input.dateOfBirth)
+        if (input.dateOfBirth) assertAdult(input.dateOfBirth)
+        const existing = await findUserByEmail(ctx.db, input.email)
+        // Same failure as a wrong code, so a missing account is not distinguishable.
+        if (!input.dateOfBirth && !existing) {
+          throw new AuthRejected(INVALID_OTP_MESSAGE)
+        }
         const session = await ctx.auth.verifyOtp(input.email, input.token)
         await recordSignup(ctx.db, {
           id: session.userId,
           email: input.email,
-          dateOfBirth: input.dateOfBirth,
+          ...(input.dateOfBirth ? { dateOfBirth: input.dateOfBirth } : {}),
         })
         return {
           accessToken: session.accessToken,

@@ -40,6 +40,7 @@ export async function clearSession() {
 
 export async function currentUser(): Promise<Me | null> {
   const raw = await read(KEY)
+  console.log("raw", raw)
   if (!raw) return null
   const session = JSON.parse(raw) as Session
   setAccessToken(session.accessToken)
