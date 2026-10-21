@@ -1,21 +1,8 @@
-import { StyleSheet } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
+import { Redirect } from "expo-router"
 
-import { SignInScreen } from "@/auth/sign-in-screen"
-import { ThemedView } from "@/components/themed-view"
-import { Spacing } from "@/constants/theme"
+import { useSession } from "@/auth/session-provider"
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <SignInScreen />
-      </SafeAreaView>
-    </ThemedView>
-  )
+export default function Index() {
+  const { status } = useSession()
+  return <Redirect href={status === "signedIn" ? "/studio" : "/welcome"} />
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  safeArea: { flex: 1, paddingHorizontal: Spacing.four },
-})

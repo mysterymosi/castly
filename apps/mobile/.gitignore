@@ -21,6 +21,9 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
+# Brand asset previews (scripts/generate-brand-assets.mjs --preview)
+.brand-preview/
+
 # debug
 npm-debug.*
 yarn-debug.*

@@ -1,7 +1,8 @@
-import { StyleSheet, Text, View } from "react-native"
+import { Text, View } from "react-native"
 
 import {
   CARD_WIDTH,
+  SECTION_HORIZONTAL_PADDING,
   SECTION_TITLE_HEIGHT,
   SECTION_VERTICAL_PADDING,
 } from "../constants"
@@ -24,13 +25,24 @@ function HeroSection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config: He
   const mediaHeight = heroMediaHeight(config.mediaId, cardWidth, mediaMeta)
   return (
     <SectionShell cardWidth={cardWidth}>
-      <View style={[styles.media, { height: mediaHeight, width: cardWidth - 32 }]} />
-      {config.headline ? <Text style={styles.headline} numberOfLines={2}>{config.headline}</Text> : null}
-      {config.subtitle ? <Text style={styles.subtitle} numberOfLines={2}>{config.subtitle}</Text> : null}
+      <View
+        className="self-center rounded-lg bg-surfaceMuted"
+        style={{ height: mediaHeight, width: cardWidth - SECTION_HORIZONTAL_PADDING * 2 }}
+      />
+      {config.headline ? (
+        <Text numberOfLines={2} maxFontSizeMultiplier={1.3} className="mt-2 font-heading text-title-sm text-text">
+          {config.headline}
+        </Text>
+      ) : null}
+      {config.subtitle ? (
+        <Text numberOfLines={2} maxFontSizeMultiplier={1.3} className="mt-1 font-body text-footnote text-textMuted">
+          {config.subtitle}
+        </Text>
+      ) : null}
       {config.showBadges ? (
-        <View style={styles.badges}>
-          <View style={styles.badge} />
-          <View style={styles.badge} />
+        <View className="mt-2 flex-row gap-2">
+          <View className="h-6 rounded-pill bg-surfaceMuted" style={{ width: 72 }} />
+          <View className="h-6 rounded-pill bg-surfaceMuted" style={{ width: 72 }} />
         </View>
       ) : null}
     </SectionShell>
@@ -41,11 +53,3 @@ export const heroRenderer: NativeSectionRenderer<HeroConfig> = {
   estimateHeight,
   Section: HeroSection,
 }
-
-const styles = StyleSheet.create({
-  media: { backgroundColor: "#e5e5e5", borderRadius: 8, alignSelf: "center" },
-  headline: { fontSize: 18, fontWeight: "600", marginTop: 8 },
-  subtitle: { fontSize: 14, color: "#525252", marginTop: 4 },
-  badges: { flexDirection: "row", gap: 8, marginTop: 8 },
-  badge: { width: 72, height: 24, borderRadius: 12, backgroundColor: "#f5f5f5" },
-})

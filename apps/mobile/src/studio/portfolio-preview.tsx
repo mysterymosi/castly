@@ -7,7 +7,7 @@ import {
 } from "@workspace/portfolio-native"
 import type { PortfolioSection, StudioState } from "@workspace/schema"
 import { useMemo } from "react"
-import { StyleSheet, View } from "react-native"
+import { View } from "react-native"
 
 type Props = {
   sections: StudioState["sections"]
@@ -29,16 +29,22 @@ export function PortfolioPreview({ sections, mediaMeta = {} }: Props) {
   )
 
   return (
-    <View style={styles.frame}>
+    <View
+      className="flex-1 self-center overflow-hidden rounded-xl border border-border bg-surface"
+      style={{ width: CARD_WIDTH, maxWidth: "100%", minHeight: 400 }}
+    >
       <FlashList
         data={visible}
+        ItemSeparatorComponent={() => <View className="mx-4 h-px bg-border" />}
         keyExtractor={(item) => item.id}
         getItemType={(item) => item.type}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 32 }}
         renderItem={({ item }) => {
           const section = toPortfolioSection(item)
           const height = estimateSectionHeight(section, mediaMeta)
           return (
-            <View style={[styles.row, { height, width: CARD_WIDTH }]}>
+            <View className="self-center overflow-hidden" style={{ height, width: CARD_WIDTH, maxWidth: "100%" }}>
               {renderStudioSection(section, mediaMeta, CARD_WIDTH)}
             </View>
           )
@@ -47,19 +53,3 @@ export function PortfolioPreview({ sections, mediaMeta = {} }: Props) {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  frame: {
-    width: CARD_WIDTH,
-    maxWidth: "100%",
-    alignSelf: "center",
-    minHeight: 400,
-    flex: 1,
-    overflow: "hidden",
-  },
-  row: {
-    maxWidth: "100%",
-    alignSelf: "center",
-    overflow: "hidden",
-  },
-})

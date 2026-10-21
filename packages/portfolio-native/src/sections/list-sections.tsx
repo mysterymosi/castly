@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native"
+import { View } from "react-native"
 
 import {
   CARD_WIDTH,
@@ -6,7 +6,7 @@ import {
   SECTION_TITLE_HEIGHT,
   TAG_ROW_HEIGHT,
 } from "../constants"
-import { SectionShell } from "../section-shell"
+import { SectionShell, SectionTitle } from "../section-shell"
 import type { CoreSectionConfigMap, NativeSectionRenderer, SectionMediaMeta } from "../types"
 
 type SectionRendererProps<T> = { config: T; mediaMeta: SectionMediaMeta; cardWidth?: number }
@@ -26,10 +26,10 @@ function ListSection({
 }) {
   return (
     <SectionShell cardWidth={cardWidth}>
-      <Text style={styles.title}>{title}</Text>
+      <SectionTitle>{title}</SectionTitle>
       {Array.from({ length: rowCount }, (_, i) => (
-        <View key={i} style={styles.row}>
-          <View style={styles.rowLine} />
+        <View key={i} className="justify-center border-b border-border" style={{ height: LIST_ROW_HEIGHT }}>
+          <View className="h-3 rounded-sm bg-surfaceMuted" style={{ width: i % 2 ? "64%" : "88%" }} />
         </View>
       ))}
     </SectionShell>
@@ -72,10 +72,10 @@ function SkillsSection(props: SectionRendererProps<SkillsConfig>) {
   const rows = props.config.highlightTop ?? 5
   return (
     <SectionShell cardWidth={props.cardWidth ?? CARD_WIDTH}>
-      <Text style={styles.title}>Skills</Text>
-      <View style={styles.tags}>
+      <SectionTitle>Skills</SectionTitle>
+      <View className="flex-row flex-wrap gap-2">
         {Array.from({ length: rows }, (_, i) => (
-          <View key={i} style={styles.tag} />
+          <View key={i} className="h-7 rounded-pill bg-surfaceMuted" style={{ width: 96 }} />
         ))}
       </View>
     </SectionShell>
@@ -125,11 +125,3 @@ export const availabilityRenderer: NativeSectionRenderer<AvailabilityConfig> = {
   estimateHeight: estimateAvailabilityHeight,
   Section: AvailabilitySection,
 }
-
-const styles = StyleSheet.create({
-  title: { fontSize: 16, fontWeight: "600", marginBottom: 8 },
-  row: { height: LIST_ROW_HEIGHT, justifyContent: "center" },
-  rowLine: { height: 12, borderRadius: 4, backgroundColor: "#e5e5e5", width: "90%" },
-  tags: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tag: { width: 96, height: 28, borderRadius: 14, backgroundColor: "#f5f5f5" },
-})
