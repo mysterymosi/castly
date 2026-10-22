@@ -10,6 +10,17 @@ export class AuthRejected extends Error {
   }
 }
 
+/**
+ * Supabase could not send the code: its mailer or SMS hook failed, or it was unreachable.
+ * The client sees a retryable message; the Supabase detail stays on `cause` for logs.
+ */
+export class OtpDeliveryFailed extends Error {
+  constructor(options?: ErrorOptions) {
+    super("We couldn't send your code right now. Try again in a moment.", options)
+    this.name = "OtpDeliveryFailed"
+  }
+}
+
 export type AuthSession = {
   accessToken: string
   refreshToken: string
@@ -76,11 +87,22 @@ function sessionFrom(
 
 export const supabaseAuth = {
   async requestOtp(email: string) {
-    const response = await fetch(`${baseUrl()}/auth/v1/otp`, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify({ email, create_user: true }),
-    })
+    let response: Response
+    try {
+      response = await fetch(`${baseUrl()}/auth/v1/otp`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ email, create_user: true }),
+      })
+    } catch (error) {
+      throw new OtpDeliveryFailed({ cause: error })
+    }
+    if (response.status >= 500) {
+      const detail = await response.text().catch(() => "")
+      throw new OtpDeliveryFailed({
+        cause: new Error(`Supabase auth failed (${response.status}): ${detail}`),
+      })
+    }
     if (!response.ok) await readError(response)
   },
 

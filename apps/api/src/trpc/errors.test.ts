@@ -5,7 +5,7 @@ import { z } from "zod"
 
 import { InvalidDateOfBirth, UnderageError } from "../auth/age.js"
 import { OtpRateLimited } from "../auth/rate-limit.js"
-import { AuthRejected } from "../auth/supabase.js"
+import { AuthRejected, OtpDeliveryFailed } from "../auth/supabase.js"
 import { StudioError } from "../talent/errors.js"
 import { zodErrorShape } from "./error-shape.js"
 import { throwTrpc } from "./errors.js"
@@ -64,6 +64,16 @@ describe("throwTrpc", () => {
     expect(caught(new OtpRateLimited(30))).toMatchObject({
       code: "TOO_MANY_REQUESTS",
     })
+  })
+
+  it("reports a failed code delivery as a 500 with a retryable message", () => {
+    const supabase = new Error("Supabase auth failed (500): Error sending magic link email")
+    const error = new OtpDeliveryFailed({ cause: supabase })
+    const thrown = caught(error) as TRPCError
+    expect(thrown.code).toBe("INTERNAL_SERVER_ERROR")
+    expect(thrown.message).toBe("We couldn't send your code right now. Try again in a moment.")
+    expect(thrown.cause).toBe(error)
+    expect(error.cause).toBe(supabase)
   })
 
   it("hides unexpected failures and keeps the original error as the cause", () => {

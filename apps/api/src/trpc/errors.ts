@@ -3,7 +3,7 @@ import { PortfolioSectionValidationError } from "@workspace/schema"
 
 import { InvalidDateOfBirth, UnderageError } from "../auth/age.js"
 import { OtpRateLimited } from "../auth/rate-limit.js"
-import { AuthRejected } from "../auth/supabase.js"
+import { AuthRejected, OtpDeliveryFailed } from "../auth/supabase.js"
 import { MediaError } from "../media/errors.js"
 import { StudioError } from "../talent/errors.js"
 
@@ -66,6 +66,14 @@ export function throwTrpc(error: unknown): never {
   if (error instanceof AuthRejected) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof OtpDeliveryFailed) {
+    // Stays a 500 so Sentry still reports it; only the client-facing text is friendlier.
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
       message: error.message,
       cause: error,
     })
