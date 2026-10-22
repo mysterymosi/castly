@@ -22,9 +22,11 @@ import {
   createSection,
   deleteSection,
   getStudioState,
+  publishTalent,
   reorderSections,
   setTalentAttribute,
   setTalentSkills,
+  unpublishTalent,
   updateSection,
   updateStudioProfile,
 } from "./studio-service.js"
@@ -43,6 +45,14 @@ export const talentRouter = router({
           updateStudioProfile(ctx.db, ctx.userId, input)
         )
       }),
+
+    publish: talentProcedure.output(studioStateSchema).mutation(({ ctx }) => {
+      return callProcedure(() => publishTalent(ctx.db, ctx.userId))
+    }),
+
+    unpublish: talentProcedure.output(studioStateSchema).mutation(({ ctx }) => {
+      return callProcedure(() => unpublishTalent(ctx.db, ctx.userId))
+    }),
 
     completeQuickStart: talentProcedure
       .input(completeQuickStartInput)

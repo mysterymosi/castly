@@ -74,11 +74,15 @@ Audio: Supabase Storage + AAC job can wait until a later task in this milestone 
 
 ### 2.6 Offline upload queue
 
+**Status:** Implemented, device acceptance pending — `apps/mobile/src/media/upload-queue-*` (MMKV intents), `UploadQueueProvider` on the studio stack (NetInfo resume), showreel card progress/error in `studio/index.tsx`. Video uses a resumable chunked PUT against the Mux direct-upload URL (`resumablePut` in `upload.ts`): the client asks Mux how many bytes it holds (`Content-Range: bytes */N` → 308 + `Range`) and continues from there, reading 1 MiB chunks from disk. The processor never re-sends once an intent reached `processing`, and checks `media.status` before repeating a single-use POST. Kill-and-resume verified against live Mux from Node; resume window is bounded by the 1h Mux upload timeout.
+
 MMKV queue of upload intents with tus fingerprints. Survives app kill. Resumes on connectivity. Per-item progress and failure in the studio.
 
 **Acceptance.** Start a showreel upload, force-quit mid-transfer, reopen on a connection: upload resumes without re-selecting the file.
 
 ### 2.7 Publish and completeness scores
+
+**Status:** Done — `talent.studio.publish` / `unpublish` (`apps/api/src/talent/studio-service.ts`). Completeness is rewritten on section writes via `loadCompleteness`. `runQualityScoreJob` (`talent.quality-score`) runs on publish from completeness, ready media, showreel, and credits only — no follower count, no `talent_attributes`. Studio hub has Publish / Unpublish.
 
 `talent.publish` / `unpublish`. Status `draft | live | suspended`. Completeness score written on section write. Quality score job runs on publish (follower count and sensitive attributes excluded).
 

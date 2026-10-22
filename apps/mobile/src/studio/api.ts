@@ -64,6 +64,16 @@ export const studioApi = {
       )
     )
   },
+  publish() {
+    return invoke(async () =>
+      asStudioState(await trpc.talent.studio.publish.mutate())
+    )
+  },
+  unpublish() {
+    return invoke(async () =>
+      asStudioState(await trpc.talent.studio.unpublish.mutate())
+    )
+  },
   setAttribute(definitionKey: string, valueText: string) {
     return invoke(async () =>
       asStudioState(

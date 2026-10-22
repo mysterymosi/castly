@@ -4,5 +4,10 @@ export function identity<T>(value: T): T {
 }
 
 export { computeCompleteness, type CompletenessInput, type CompletenessResult } from "./completeness.js"
+export {
+  computeQualityScore,
+  type QualityScoreInput,
+  type VerificationTier,
+} from "./quality-score.js"
 export { portfolioTemplates, portfolioTemplateIds, type PortfolioTemplateId } from "./portfolio-templates.js"
 export { releaseFromEnv } from "./release.js"

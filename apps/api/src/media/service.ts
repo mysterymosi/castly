@@ -38,7 +38,7 @@ export async function createUploadUrl(
   const provider = input.kind === "image" ? "cf_images" : "mux"
 
   let uploadUrl: string
-  let uploadMethod: "POST" | "TUS" | "PUT" = input.kind === "video" ? "PUT" : "POST"
+  let uploadMethod: "POST" | "PUT" = input.kind === "video" ? "PUT" : "POST"
   let uploadHeaders: Record<string, string> = {}
   let providerRef: string | null = null
 

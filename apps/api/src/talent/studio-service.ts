@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto"
 import { and, asc, eq } from "drizzle-orm"
 
 import { StudioError } from "./errors.js"
+import { runQualityScoreJob } from "./quality-score-job.js"
 import {
   defaultSchemaVersion,
   defaultSectionConfig,
@@ -156,6 +157,9 @@ export async function getStudioState(db: Db, userId: string) {
       quickStartCompletedAt:
         profile.quickStartCompletedAt?.toISOString() ?? null,
       completenessScore: completeness.score,
+      status: profile.status,
+      publishedAt: profile.publishedAt?.toISOString() ?? null,
+      qualityScore: Number(profile.qualityScore),
     },
     sections: sections.map((s) => ({
       id: s.id,
@@ -512,6 +516,48 @@ export async function setTalentAttribute(
     })
 
   // Sensitive attributes never affect completeness — recompute without reading attribute values.
+  return getStudioState(db, userId)
+}
+
+export async function publishTalent(db: Db, userId: string) {
+  const profile = await ensureProfile(db, userId)
+  if (profile.status === "suspended") {
+    throw new StudioError("This profile is suspended", "profile_suspended")
+  }
+
+  const state = await getStudioState(db, userId)
+  if (!state.completeness.canPublish) {
+    throw new StudioError(
+      "Finish quick start before publishing",
+      "publish_not_ready"
+    )
+  }
+
+  await db
+    .update(schema.talentProfiles)
+    .set({
+      status: "live",
+      publishedAt: profile.publishedAt ?? new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.talentProfiles.userId, userId))
+
+  await runQualityScoreJob(db, userId)
+  return getStudioState(db, userId)
+}
+
+export async function unpublishTalent(db: Db, userId: string) {
+  const profile = await ensureProfile(db, userId)
+  if (profile.status === "suspended") {
+    throw new StudioError("This profile is suspended", "profile_suspended")
+  }
+  if (profile.status === "draft") return getStudioState(db, userId)
+
+  await db
+    .update(schema.talentProfiles)
+    .set({ status: "draft", updatedAt: new Date() })
+    .where(eq(schema.talentProfiles.userId, userId))
+
   return getStudioState(db, userId)
 }
 

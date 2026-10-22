@@ -3,6 +3,8 @@ export type StudioErrorCode =
   | "invalid_section_order"
   | "unknown_attribute"
   | "profile_create_failed"
+  | "publish_not_ready"
+  | "profile_suspended"
 
 export class StudioError extends Error {
   readonly code: StudioErrorCode

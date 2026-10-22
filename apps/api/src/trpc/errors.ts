@@ -22,6 +22,8 @@ const studioCode = {
   invalid_section_order: "BAD_REQUEST",
   unknown_attribute: "BAD_REQUEST",
   profile_create_failed: "INTERNAL_SERVER_ERROR",
+  publish_not_ready: "PRECONDITION_FAILED",
+  profile_suspended: "FORBIDDEN",
 } as const
 
 /** Map known domain failures to tRPC codes. Unexpected errors stay 500 and keep their cause. */

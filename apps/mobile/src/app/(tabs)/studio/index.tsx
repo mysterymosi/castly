@@ -16,7 +16,9 @@ import { EmptyState, ErrorState, InlineError, Skeleton } from "@/components/ui/s
 import { Text } from "@/components/ui/text"
 import { useTokens } from "@/hooks/use-tokens"
 import { cn } from "@/lib/cn"
-import { mediaApi } from "@/media/api"
+import { isIntentActive, uploadIntentLabel } from "@/media/upload-intent"
+import { useUploadQueue } from "@/media/upload-queue-provider"
+import { ProgressBar } from "@/components/ui/progress-bar"
 import { studioApi } from "@/studio/api"
 import { CompletenessMeter } from "@/studio/completeness-meter"
 import { DecisionCardPreview } from "@/studio/decision-card-preview"
@@ -106,10 +108,13 @@ export default function StudioHub() {
   const { me } = useSession()
   const studio = useStudio()
   const { color } = useTokens()
+  const { intents, pickAndEnqueueShowreel, retry, dismiss } = useUploadQueue()
 
   if (!me?.modes.includes("talent")) return <EnableTalent />
 
   const { state, loading, loadError, actionError, pending, reload, run } = studio
+  const showreelUpload = intents.find((row) => row.goal === "showreel" && isIntentActive(row))
+  const failedShowreel = intents.find((row) => row.goal === "showreel" && row.phase === "failed")
 
   if (!state && loadError) {
     return (
@@ -132,30 +137,12 @@ export default function StudioHub() {
     void run(`move:${sectionId}`, () => studioApi.reorderSections(next.map((s) => s.id)), "Could not reorder")
   }
 
-  function uploadShowreel(current: StudioState) {
-    void run(
-      "showreel",
-      async () => {
-        const uri = await mediaApi.pickVideo()
-        if (!uri) return current
-        const ready = await mediaApi.uploadVideoFromUri(uri)
-        let section = current.sections.find((s) => s.type === "showreel")
-        if (!section) {
-          await studioApi.createSection("showreel")
-          section = (await studioApi.get()).sections.find((s) => s.type === "showreel")
-        }
-        if (!section) throw new Error("Could not create showreel section")
-        return studioApi.updateSection({
-          sectionId: section.id,
-          schemaVersion: section.schemaVersion,
-          config: { mediaId: ready.id },
-        })
-      },
-      "Showreel upload failed",
-    )
+  function startShowreelUpload() {
+    void pickAndEnqueueShowreel()
   }
 
   const hasShowreel = ordered.some((s) => s.type === "showreel")
+  const showreelBusy = !!showreelUpload
 
   return (
     <Screen scroll edges={["top"]} contentClassName="pt-2">
@@ -179,6 +166,49 @@ export default function StudioHub() {
           {actionError ? <InlineError message={actionError} className="mb-4" /> : null}
 
           <CompletenessMeter completeness={state.completeness} />
+
+          <Card className="mt-4 gap-3">
+            <View className="flex-row items-center justify-between gap-3">
+              <View className="flex-1 gap-0.5">
+                <Text variant="body-strong">
+                  {state.profile.status === "live"
+                    ? "Portfolio is live"
+                    : state.profile.status === "suspended"
+                      ? "Portfolio is suspended"
+                      : "Portfolio is a draft"}
+                </Text>
+                <Text variant="footnote" tone="muted">
+                  {state.profile.status === "suspended"
+                    ? "Publishing is turned off until this is lifted."
+                    : state.completeness.canPublish
+                      ? "Bookers can find you once this is published."
+                      : "Finish quick start before publishing."}
+                </Text>
+              </View>
+            </View>
+            {state.profile.status === "live" ? (
+              <Button
+                label="Unpublish"
+                variant="secondary"
+                size="md"
+                loading={pending === "unpublish"}
+                disabled={pending !== null}
+                onPress={() =>
+                  void run("unpublish", () => studioApi.unpublish(), "Could not unpublish")
+                }
+              />
+            ) : (
+              <Button
+                label="Publish"
+                size="md"
+                loading={pending === "publish"}
+                disabled={pending !== null || !state.completeness.canPublish || state.profile.status === "suspended"}
+                onPress={() =>
+                  void run("publish", () => studioApi.publish(), "Could not publish")
+                }
+              />
+            )}
+          </Card>
 
           <SectionHeading title="Decision card" />
           <PressableCard
@@ -316,24 +346,49 @@ export default function StudioHub() {
           />
 
           <SectionHeading title="Showreel" />
-          <Card className="flex-row items-center gap-4">
-            <View className="h-12 w-12 items-center justify-center rounded-pill bg-surfaceMuted">
-              <Icon name="video" size={22} />
+          <Card className="gap-3">
+            <View className="flex-row items-center gap-4">
+              <View className="h-12 w-12 items-center justify-center rounded-pill bg-surfaceMuted">
+                <Icon name="video" size={22} />
+              </View>
+              <View className="flex-1 gap-0.5">
+                <Text variant="body-strong">{hasShowreel ? "Replace showreel" : "Upload a showreel"}</Text>
+                <Text variant="footnote" tone="muted">
+                  {showreelBusy
+                    ? showreelUpload?.phase === "processing"
+                      ? "Processing video…"
+                      : "Uploading… you can leave the app"
+                    : failedShowreel
+                      ? (failedShowreel.error ?? "Upload failed")
+                      : "Pick a video from your library"}
+                </Text>
+              </View>
+              <Button
+                label={showreelBusy ? "Uploading" : failedShowreel ? "Retry" : "Upload"}
+                size="md"
+                variant="inverse"
+                loading={showreelBusy}
+                disabled={showreelBusy}
+                onPress={() => {
+                  if (failedShowreel) retry(failedShowreel.id)
+                  else startShowreelUpload()
+                }}
+              />
             </View>
-            <View className="flex-1 gap-0.5">
-              <Text variant="body-strong">{hasShowreel ? "Replace showreel" : "Upload a showreel"}</Text>
-              <Text variant="footnote" tone="muted">
-                {pending === "showreel" ? "Uploading and processing…" : "Pick a video from your library"}
-              </Text>
-            </View>
-            <Button
-              label={pending === "showreel" ? "Uploading" : "Upload"}
-              size="md"
-              variant="inverse"
-              loading={pending === "showreel"}
-              disabled={pending !== null}
-              onPress={() => uploadShowreel(state)}
-            />
+            {showreelUpload ? (
+              <ProgressBar
+                value={showreelUpload.progress}
+                label={`${uploadIntentLabel(showreelUpload)} upload`}
+              />
+            ) : null}
+            {failedShowreel ? (
+              <Button
+                label="Dismiss"
+                variant="ghost"
+                size="md"
+                onPress={() => dismiss(failedShowreel.id)}
+              />
+            ) : null}
           </Card>
 
           {__DEV__ ? (
