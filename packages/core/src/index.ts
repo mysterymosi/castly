@@ -4,6 +4,7 @@ export function identity<T>(value: T): T {
 }
 
 export { computeCompleteness, type CompletenessInput, type CompletenessResult } from "./completeness.js"
+export { computeFreshnessScore, type FreshnessScoreInput } from "./freshness-score.js"
 export {
   computeQualityScore,
   type QualityScoreInput,

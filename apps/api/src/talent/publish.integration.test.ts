@@ -13,6 +13,7 @@ const adult = "1990-01-01"
 const seededUserIds: string[] = []
 const createdCityIds: string[] = []
 const createdSkillIds: string[] = []
+const createdLanguageIds: string[] = []
 
 const stubAuth: AuthClient = {
   requestOtp: async () => {},
@@ -111,6 +112,10 @@ describe("talent publish", () => {
       const id = createdSkillIds.pop()
       if (id) await db.delete(schema.skills).where(eq(schema.skills.id, id))
     }
+    while (createdLanguageIds.length > 0) {
+      const id = createdLanguageIds.pop()
+      if (id) await db.delete(schema.languages).where(eq(schema.languages.id, id))
+    }
     while (createdCityIds.length > 0) {
       const id = createdCityIds.pop()
       if (id) await db.delete(schema.cities).where(eq(schema.cities.id, id))
@@ -187,5 +192,51 @@ describe("talent publish", () => {
     await expect(api.talent.studio.unpublish()).rejects.toMatchObject({
       code: "FORBIDDEN",
     })
+  })
+
+  it("keeps exactly one talent_search row in sync through publish, languages, and unpublish", async () => {
+    const userId = await seedAuthUser("publish-search", adult)
+    seededUserIds.push(userId)
+    const api = talentCaller(userId)
+    await api.auth.enableMode({ mode: "talent" })
+    await quickStart(userId)
+    await api.talent.sections.create({ type: "showreel" })
+
+    const searchRows = () =>
+      db
+        .select()
+        .from(schema.talentSearch)
+        .where(eq(schema.talentSearch.talentId, userId))
+
+    const published = await api.talent.studio.publish()
+    const [live, ...extra] = await searchRows()
+    expect(extra).toHaveLength(0)
+    expect(live?.status).toBe("live")
+    expect(live?.cityId).toBe(published.profile.cityId)
+    expect(live?.skillIds).toHaveLength(3)
+    expect(live?.hasShowreel).toBe(true)
+    expect(Number(live?.qualityScore)).toBe(published.profile.qualityScore)
+    expect(Number(live?.completenessScore)).toBe(published.profile.completenessScore)
+    expect(Number(live?.freshnessScore)).toBeGreaterThan(0)
+
+    const [language] = await db
+      .insert(schema.languages)
+      .values({ slug: `yoruba-${randomUUID().slice(0, 8)}`, name: "Yoruba" })
+      .returning({ id: schema.languages.id })
+    if (!language) throw new Error("language insert failed")
+    createdLanguageIds.push(language.id)
+    await db
+      .insert(schema.talentLanguages)
+      .values({ talentId: userId, languageId: language.id, fluency: "native" })
+
+    const [withYoruba, ...extraAfter] = await searchRows()
+    expect(extraAfter).toHaveLength(0)
+    expect(withYoruba?.languageIds).toEqual([language.id])
+    expect(withYoruba?.searchTsv).toContain("'yoruba'")
+    expect(withYoruba?.qualityScore).toBe(live?.qualityScore)
+
+    await api.talent.studio.unpublish()
+    const [draft] = await searchRows()
+    expect(draft?.status).toBe("draft")
   })
 })

@@ -18,6 +18,7 @@ import { and, asc, eq } from "drizzle-orm"
 
 import { StudioError } from "./errors.js"
 import { runQualityScoreJob } from "./quality-score-job.js"
+import { runSearchScoresJob } from "./search-scores-job.js"
 import {
   defaultSchemaVersion,
   defaultSectionConfig,
@@ -102,6 +103,10 @@ async function loadCompleteness(db: Db, userId: string) {
       updatedAt: new Date(),
     })
     .where(eq(schema.talentProfiles.userId, userId))
+
+  if (Number(profile.completenessScore) !== result.score) {
+    await runSearchScoresJob(db, userId)
+  }
 
   return result
 }
@@ -543,6 +548,7 @@ export async function publishTalent(db: Db, userId: string) {
     .where(eq(schema.talentProfiles.userId, userId))
 
   await runQualityScoreJob(db, userId)
+  await runSearchScoresJob(db, userId)
   return getStudioState(db, userId)
 }
 

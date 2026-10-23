@@ -1,4 +1,5 @@
 import Constants from "expo-constants"
+import { TurboModuleRegistry, type TurboModule } from "react-native"
 import {
   createTRPCClient,
   httpBatchLink,
@@ -9,10 +10,22 @@ import type { AppRouter } from "api/router"
 
 import { getAccessToken } from "@/auth/token"
 
+// Dev builds don't always populate expoConfig.hostUri, so fall back to the
+// host the JS bundle was loaded from (the Mac running Metro).
+interface SourceCodeModule extends TurboModule {
+  getConstants(): { scriptURL?: string }
+}
+
+function devServerHost() {
+  const sourceCode = TurboModuleRegistry.get<SourceCodeModule>("SourceCode")
+  const scriptURL = sourceCode?.getConstants().scriptURL
+  return scriptURL?.match(/^https?:\/\/([^:/]+)/)?.[1]
+}
+
 export function apiBaseUrl() {
   const configured = process.env.EXPO_PUBLIC_API_URL
   if (configured) return configured.replace(/\/$/, "")
-  const host = Constants.expoConfig?.hostUri?.split(":")[0]
+  const host = Constants.expoConfig?.hostUri?.split(":")[0] ?? devServerHost()
   return `http://${host ?? "127.0.0.1"}:3001`
 }
 

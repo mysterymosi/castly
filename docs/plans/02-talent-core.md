@@ -90,6 +90,8 @@ MMKV queue of upload intents with tus fingerprints. Survives app kill. Resumes o
 
 ### 2.8 `talent_search` projection
 
+**Status:** Done — `packages/db/src/schema/search.ts`, migration `0007_talent_search_projection.sql` (`refresh_talent_search(talent_id)` + row triggers on `talent_profiles`, `talent_categories`, `talent_skills`, `talent_languages`, `talent_accents`, `talent_rates`, `portfolio_sections`, `credits`, `cities`; backfill). `cities` gained `country` / `region`. Taxonomy ids are `uuid[]`, not `int[]`. Day rates project as null when `rate_visibility = 'hidden'`. `search_tsv` uses the `simple` config. `runSearchScoresJob` (`talent.search-scores`) writes quality / completeness / responsiveness (copied from the profile) and `freshness_score` (`packages/core` `computeFreshnessScore`) on publish and when completeness changes; it runs inline like `talent.quality-score` until pg-boss and the nightly schedule land. Sensitive attribute columns and `attrs` stay empty until M8. CI runs `pnpm --filter @workspace/db db:assert-talent-search` (EXPLAIN runs with `enable_seqscan = off` because the fixture table is tiny).
+
 Denormalised table per TECH_SPEC §5.10. Triggers on source tables for correctness-critical fields (status, city, categories, skills, languages, rates, visibility). pg-boss job for `quality_score`, `freshness_score`, `completeness_score`. Indexes: GIN on arrays, `attrs`, `search_tsv`; btree `(status, country, city_id)`; partial index `status = 'live'`.
 
 **Acceptance.** Publishing Tunde writes/updates exactly one `talent_search` row. Adding Yoruba updates that row without a full refresh. `EXPLAIN` of `SELECT … WHERE status = 'live' AND city_id = $1` uses the partial/compound index.
