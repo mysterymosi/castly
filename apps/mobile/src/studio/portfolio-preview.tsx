@@ -5,16 +5,16 @@ import {
   renderStudioSection,
   type SectionMediaMeta,
 } from "@workspace/portfolio-native"
-import type { PortfolioSection, StudioState } from "@workspace/schema"
+import type { PortfolioSection, TalentSectionDto } from "@workspace/schema"
 import { useMemo } from "react"
 import { View } from "react-native"
 
 type Props = {
-  sections: StudioState["sections"]
+  sections: TalentSectionDto[]
   mediaMeta?: SectionMediaMeta
 }
 
-function toPortfolioSection(section: StudioState["sections"][number]): PortfolioSection {
+function toPortfolioSection(section: TalentSectionDto): PortfolioSection {
   return {
     type: section.type,
     schemaVersion: section.schemaVersion,

@@ -1,6 +1,7 @@
 import {
   computeCompleteness,
   portfolioTemplates,
+  serializeTalent,
   type PortfolioTemplateId,
 } from "@workspace/core"
 import type { Db } from "@workspace/db"
@@ -124,6 +125,11 @@ export async function getStudioState(db: Db, userId: string) {
     .from(schema.talentSkills)
     .where(eq(schema.talentSkills.talentId, userId))
 
+  const rateRows = await db
+    .select()
+    .from(schema.talentRates)
+    .where(eq(schema.talentRates.talentId, userId))
+
   const cities = await db
     .select({
       id: schema.cities.id,
@@ -149,36 +155,56 @@ export async function getStudioState(db: Db, userId: string) {
   const cardConfig = cardConfigSchema.parse(profile.cardConfig ?? {})
   const completeness = await loadCompleteness(db, userId)
 
-  return {
-    profile: {
-      userId: profile.userId,
-      slug: profile.slug,
-      displayName: profile.displayName,
-      headline: profile.headline,
-      bio: profile.bio,
-      cityId: profile.cityId,
-      cityName,
-      cardConfig,
-      quickStartCompletedAt:
-        profile.quickStartCompletedAt?.toISOString() ?? null,
-      completenessScore: completeness.score,
-      status: profile.status,
-      publishedAt: profile.publishedAt?.toISOString() ?? null,
-      qualityScore: Number(profile.qualityScore),
+  const talent = serializeTalent(
+    {
+      profile: {
+        userId: profile.userId,
+        slug: profile.slug,
+        displayName: profile.displayName,
+        headline: profile.headline,
+        bio: profile.bio,
+        cityId: profile.cityId,
+        cityName,
+        cardConfig,
+        status: profile.status,
+        publishedAt: profile.publishedAt,
+        quickStartCompletedAt: profile.quickStartCompletedAt,
+        completenessScore: completeness.score,
+        qualityScore: Number(profile.qualityScore),
+        rateVisibility: profile.rateVisibility,
+      },
+      // Config is migrated to the current version on read, so the version sent with it must be
+      // the current one too — writes only accept the current version.
+      sections: sections.map((s) => {
+        const current = readStoredPortfolioSection({
+          type: s.type as CoreSectionType,
+          schemaVersion: s.schemaVersion,
+          config: s.config,
+        })
+        return {
+          id: s.id,
+          type: s.type as CoreSectionType,
+          schemaVersion: current.schemaVersion,
+          position: s.position,
+          isVisible: s.isVisible,
+          config: current.config,
+        }
+      }),
+      skillIds: skillRows.map((r) => r.skillId),
+      rates: rateRows.map((r) => ({
+        kind: r.kind,
+        amountMin: r.amountMin === null ? null : Number(r.amountMin),
+        amountMax: r.amountMax === null ? null : Number(r.amountMax),
+        currency: r.currency,
+        negotiable: r.negotiable,
+      })),
     },
-    sections: sections.map((s) => ({
-      id: s.id,
-      type: s.type as CoreSectionType,
-      schemaVersion: s.schemaVersion,
-      position: s.position,
-      isVisible: s.isVisible,
-      config: readStoredPortfolioSection({
-        type: s.type as CoreSectionType,
-        schemaVersion: s.schemaVersion,
-        config: s.config,
-      }).config,
-    })),
-    skillIds: skillRows.map((r) => r.skillId),
+    { kind: "owner", userId },
+    {}
+  )
+
+  return {
+    talent,
     completeness,
     cities,
     skills,

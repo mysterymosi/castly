@@ -124,8 +124,8 @@ export default function StudioHub() {
     )
   }
 
-  const quickStartDone = !!state?.profile.quickStartCompletedAt
-  const ordered = state ? [...state.sections].sort((a, b) => a.position - b.position) : []
+  const quickStartDone = !!state?.talent.profile.quickStartCompletedAt
+  const ordered = state ? [...state.talent.sections].sort((a, b) => a.position - b.position) : []
 
   function move(sectionId: string, direction: -1 | 1) {
     const index = ordered.findIndex((s) => s.id === sectionId)
@@ -171,14 +171,14 @@ export default function StudioHub() {
             <View className="flex-row items-center justify-between gap-3">
               <View className="flex-1 gap-0.5">
                 <Text variant="body-strong">
-                  {state.profile.status === "live"
+                  {state.talent.profile.status === "live"
                     ? "Portfolio is live"
-                    : state.profile.status === "suspended"
+                    : state.talent.profile.status === "suspended"
                       ? "Portfolio is suspended"
                       : "Portfolio is a draft"}
                 </Text>
                 <Text variant="footnote" tone="muted">
-                  {state.profile.status === "suspended"
+                  {state.talent.profile.status === "suspended"
                     ? "Publishing is turned off until this is lifted."
                     : state.completeness.canPublish
                       ? "Bookers can find you once this is published."
@@ -186,7 +186,7 @@ export default function StudioHub() {
                 </Text>
               </View>
             </View>
-            {state.profile.status === "live" ? (
+            {state.talent.profile.status === "live" ? (
               <Button
                 label="Unpublish"
                 variant="secondary"
@@ -202,7 +202,7 @@ export default function StudioHub() {
                 label="Publish"
                 size="md"
                 loading={pending === "publish"}
-                disabled={pending !== null || !state.completeness.canPublish || state.profile.status === "suspended"}
+                disabled={pending !== null || !state.completeness.canPublish || state.talent.profile.status === "suspended"}
                 onPress={() =>
                   void run("publish", () => studioApi.publish(), "Could not publish")
                 }
@@ -218,16 +218,16 @@ export default function StudioHub() {
           >
             <View className="overflow-hidden rounded-lg" style={{ width: 96, height: 128 }} pointerEvents="none">
               <DecisionCardPreview
-                displayName={state.profile.displayName}
-                headline={state.profile.headline}
-                cardConfig={state.profile.cardConfig}
+                displayName={state.talent.profile.displayName}
+                headline={state.talent.profile.headline}
+                cardConfig={state.talent.profile.cardConfig}
                 compact
               />
             </View>
             <View className="flex-1 gap-1">
               <Text variant="body-strong">What bookers see first</Text>
               <Text variant="body-sm" tone="muted">
-                {state.profile.cardConfig.highlightFacts.filter(Boolean).length}/3 highlights added
+                {state.talent.profile.cardConfig.highlightFacts.filter(Boolean).length}/3 highlights added
               </Text>
             </View>
             <Icon name="chevron-right" size={18} tone="textMuted" />

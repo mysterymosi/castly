@@ -14,7 +14,7 @@ import { useStudio } from "@/studio/studio-provider"
 export default function AddSectionSheet() {
   const { state, run, pending, actionError } = useStudio()
   const { color } = useTokens()
-  const existing = new Set(state?.sections.map((s) => s.type))
+  const existing = new Set(state?.talent.sections.map((s) => s.type))
 
   async function add(type: (typeof corePortfolioSectionTypes)[number]) {
     const ok = await run(`add:${type}`, () => studioApi.createSection(type), "Could not add section")

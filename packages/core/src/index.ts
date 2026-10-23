@@ -10,5 +10,14 @@ export {
   type QualityScoreInput,
   type VerificationTier,
 } from "./quality-score.js"
+export {
+  serializeTalent,
+  TalentOwnershipMismatch,
+  type OwnerViewer,
+  type SerializeTalentContext,
+  type TalentRecord,
+  type TalentRateVisibility,
+  type TalentViewer,
+} from "./serialize-talent.js"
 export { portfolioTemplates, portfolioTemplateIds, type PortfolioTemplateId } from "./portfolio-templates.js"
 export { releaseFromEnv } from "./release.js"

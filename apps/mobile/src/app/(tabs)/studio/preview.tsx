@@ -40,7 +40,7 @@ export default function PreviewScreen() {
 
   if (!state) return <LoadingState />
 
-  const hasVisible = state.sections.some((s) => s.isVisible)
+  const hasVisible = state.talent.sections.some((s) => s.isVisible)
 
   return (
     <View className="flex-1 bg-bg" style={{ paddingTop: Platform.OS === "ios" ? 8 : insets.top }}>
@@ -58,7 +58,7 @@ export default function PreviewScreen() {
       >
         <View style={{ width }} className="flex-1 px-4" accessibilityLabel="Portfolio preview">
           {hasVisible ? (
-            <PortfolioPreview sections={state.sections} />
+            <PortfolioPreview sections={state.talent.sections} />
           ) : (
             <EmptyState icon="eye-off" title="Nothing visible yet" body="Visible sections will show here as bookers see them." />
           )}
@@ -70,9 +70,9 @@ export default function PreviewScreen() {
           accessibilityLabel="Decision card preview"
         >
           <DecisionCardPreview
-            displayName={state.profile.displayName}
-            headline={state.profile.headline}
-            cardConfig={state.profile.cardConfig}
+            displayName={state.talent.profile.displayName}
+            headline={state.talent.profile.headline}
+            cardConfig={state.talent.profile.cardConfig}
           />
         </ScrollView>
       </ScrollView>

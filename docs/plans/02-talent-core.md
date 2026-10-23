@@ -98,6 +98,8 @@ Denormalised table per TECH_SPEC §5.10. Triggers on source tables for correctne
 
 ### 2.9 `serializeTalent` stub
 
+**Status:** Done — `packages/core/src/serialize-talent.ts` (`serializeTalent(talent, viewer, context)`; viewer is `owner | user (verifiedBooker) | anonymous`; an owner viewer that does not own the talent throws). DTO schemas in `packages/schema/src/talent/dto.ts` are branded on their **input** type (`.brand<…, "inout">()`), so a procedure whose `.output()` contains them only compiles when it returns `serializeTalent` output. Non-owners lose rates (key absent) when visibility is `hidden`, or `verified_bookers` without a verified viewer, plus the `rates` section, hidden sections, and owner-only profile fields (`status`, `quickStartCompletedAt`, `completenessScore`, `qualityScore`). Studio state now nests the talent under `talent` (`state.talent.profile`). `apps/api/src/talent/serialize-talent.guard.test.ts` (integration list) walks every procedure output for unbranded talent fields and requires every `talent.*` procedure to declare an output.
+
 Single function in `packages/core`. For M2, hide rates when `rate_visibility = 'hidden'` from non-owners. Viewer context (verified booker, active role) wired fully in M8; the function signature must already take `viewer` and `context` so callers never build payloads by hand.
 
 **Acceptance.** No tRPC procedure returns a talent object except via `serializeTalent`. Hidden rates are absent (not `null`) for a non-owner viewer.

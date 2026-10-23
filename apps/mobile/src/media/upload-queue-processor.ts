@@ -34,10 +34,10 @@ function sessionFromIntent(intent: UploadIntent): CreateUploadUrlOutput | null {
 
 async function attachShowreel(mediaId: string) {
   let state = await studioApi.get()
-  let section = state.sections.find((s) => s.type === "showreel")
+  let section = state.talent.sections.find((s) => s.type === "showreel")
   if (!section) {
     state = await studioApi.createSection("showreel")
-    section = state.sections.find((s) => s.type === "showreel")
+    section = state.talent.sections.find((s) => s.type === "showreel")
   }
   if (!section) throw new Error("Could not create showreel section")
   await studioApi.updateSection({

@@ -42,11 +42,11 @@ export default function QuickStartScreen() {
   const { state, setState } = useStudio()
   const [stepIndex, setStepIndex] = useState(0)
   const [displayName, setDisplayName] = useState(
-    state && state.profile.displayName !== "New talent" ? state.profile.displayName : "",
+    state && state.talent.profile.displayName !== "New talent" ? state.talent.profile.displayName : "",
   )
-  const [cityId, setCityId] = useState(state?.profile.cityId ?? "")
-  const [bio, setBio] = useState(state?.profile.bio ?? "")
-  const [skillIds, setSkillIds] = useState<string[]>(state?.skillIds.slice(0, SKILL_COUNT) ?? [])
+  const [cityId, setCityId] = useState(state?.talent.profile.cityId ?? "")
+  const [bio, setBio] = useState(state?.talent.profile.bio ?? "")
+  const [skillIds, setSkillIds] = useState<string[]>(state?.talent.skillIds.slice(0, SKILL_COUNT) ?? [])
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

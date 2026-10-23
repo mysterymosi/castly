@@ -139,36 +139,36 @@ describe("talent publish", () => {
     await api.auth.enableMode({ mode: "talent" })
 
     const ready = await quickStart(userId)
-    const beforeSection = Number(ready.profile.completenessScore)
+    const beforeSection = Number(ready.talent.profile.completenessScore)
 
     const withReel = await api.talent.sections.create({ type: "showreel" })
-    expect(withReel.profile.completenessScore).toBeGreaterThan(beforeSection)
+    expect(withReel.talent.profile.completenessScore).toBeGreaterThan(beforeSection)
     const [stored] = await db
       .select({ completenessScore: schema.talentProfiles.completenessScore })
       .from(schema.talentProfiles)
       .where(eq(schema.talentProfiles.userId, userId))
       .limit(1)
-    expect(Number(stored?.completenessScore)).toBe(withReel.profile.completenessScore)
+    expect(Number(stored?.completenessScore)).toBe(withReel.talent.profile.completenessScore)
 
     const published = await api.talent.studio.publish()
-    expect(published.profile.status).toBe("live")
-    expect(published.profile.publishedAt).toBeTruthy()
-    expect(published.profile.qualityScore).toBeGreaterThan(0)
-    const publishedAt = published.profile.publishedAt
-    const quality = published.profile.qualityScore
+    expect(published.talent.profile.status).toBe("live")
+    expect(published.talent.profile.publishedAt).toBeTruthy()
+    expect(published.talent.profile.qualityScore).toBeGreaterThan(0)
+    const publishedAt = published.talent.profile.publishedAt
+    const quality = published.talent.profile.qualityScore
 
     await ensureEthnicity()
     const afterSensitive = await api.talent.attributes.set({
       definitionKey: "ethnicity",
       valueText: "black",
     })
-    expect(afterSensitive.profile.completenessScore).toBe(
-      published.profile.completenessScore
+    expect(afterSensitive.talent.profile.completenessScore).toBe(
+      published.talent.profile.completenessScore
     )
 
     const republished = await api.talent.studio.publish()
-    expect(republished.profile.qualityScore).toBe(quality)
-    expect(republished.profile.publishedAt).toBe(publishedAt)
+    expect(republished.talent.profile.qualityScore).toBe(quality)
+    expect(republished.talent.profile.publishedAt).toBe(publishedAt)
 
     await db.insert(schema.credits).values({
       talentId: userId,
@@ -176,11 +176,11 @@ describe("talent publish", () => {
       roleName: "Lead",
     })
     const withCredit = await api.talent.studio.publish()
-    expect(withCredit.profile.qualityScore).toBeGreaterThan(quality)
+    expect(withCredit.talent.profile.qualityScore).toBeGreaterThan(quality)
 
     const draft = await api.talent.studio.unpublish()
-    expect(draft.profile.status).toBe("draft")
-    expect(draft.profile.publishedAt).toBe(publishedAt)
+    expect(draft.talent.profile.status).toBe("draft")
+    expect(draft.talent.profile.publishedAt).toBe(publishedAt)
 
     await db
       .update(schema.talentProfiles)
@@ -212,11 +212,11 @@ describe("talent publish", () => {
     const [live, ...extra] = await searchRows()
     expect(extra).toHaveLength(0)
     expect(live?.status).toBe("live")
-    expect(live?.cityId).toBe(published.profile.cityId)
+    expect(live?.cityId).toBe(published.talent.profile.cityId)
     expect(live?.skillIds).toHaveLength(3)
     expect(live?.hasShowreel).toBe(true)
-    expect(Number(live?.qualityScore)).toBe(published.profile.qualityScore)
-    expect(Number(live?.completenessScore)).toBe(published.profile.completenessScore)
+    expect(Number(live?.qualityScore)).toBe(published.talent.profile.qualityScore)
+    expect(Number(live?.completenessScore)).toBe(published.talent.profile.completenessScore)
     expect(Number(live?.freshnessScore)).toBeGreaterThan(0)
 
     const [language] = await db
@@ -239,4 +239,60 @@ describe("talent publish", () => {
     const [draft] = await searchRows()
     expect(draft?.status).toBe("draft")
   })
+
+  it("serialises the studio through serializeTalent, so the owner still sees hidden rates", async () => {
+    const userId = await seedAuthUser("publish-rates", adult)
+    seededUserIds.push(userId)
+    const api = talentCaller(userId)
+    await api.auth.enableMode({ mode: "talent" })
+    await quickStart(userId)
+
+    await db
+      .insert(schema.talentRates)
+      .values({ talentId: userId, kind: "day", amountMin: "50000", amountMax: "80000" })
+    await db
+      .update(schema.talentProfiles)
+      .set({ rateVisibility: "hidden" })
+      .where(eq(schema.talentProfiles.userId, userId))
+
+    const state = await api.talent.studio.get()
+    expect(state.talent.profile.rateVisibility).toBe("hidden")
+    expect(state.talent.rates).toEqual([
+      { kind: "day", amountMin: 50000, amountMax: 80000, currency: "NGN", negotiable: true },
+    ])
+  })
+
+  it("returns sections at the current schema version, so an old row can be saved back", async () => {
+    const userId = await seedAuthUser("section-version", adult)
+    seededUserIds.push(userId)
+    const api = talentCaller(userId)
+    await api.auth.enableMode({ mode: "talent" })
+    await api.talent.studio.get()
+
+    const [heroRow] = await db
+      .insert(schema.portfolioSections)
+      .values({
+        talentId: userId,
+        type: "hero",
+        position: 0,
+        schemaVersion: 1,
+        config: { style: "split", mediaId: null, headline: "Old hero", showBadges: true },
+      })
+      .returning({ id: schema.portfolioSections.id })
+    if (!heroRow) throw new Error("hero insert failed")
+
+    const state = await api.talent.studio.get()
+    const hero = state.talent.sections.find((section) => section.id === heroRow.id)
+    expect(hero?.schemaVersion).toBe(2)
+
+    const saved = await api.talent.sections.update({
+      sectionId: heroRow.id,
+      schemaVersion: hero!.schemaVersion,
+      config: { ...(hero!.config as object), headline: "New hero" },
+    })
+    const after = saved.talent.sections.find((section) => section.id === heroRow.id)
+    expect(after?.schemaVersion).toBe(2)
+    expect(after?.config).toMatchObject({ headline: "New hero" })
+  })
 })
+
