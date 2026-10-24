@@ -1,5 +1,6 @@
 import { studioStateSchema, type StudioState } from "@workspace/schema"
 
+import { logMeasure, measureEnabled } from "@/lib/measure"
 import { invoke, trpc } from "@/trpc/client"
 
 function asStudioState(data: unknown): StudioState {
@@ -8,9 +9,18 @@ function asStudioState(data: unknown): StudioState {
 
 export const studioApi = {
   get() {
-    return invoke(async () =>
-      asStudioState(await trpc.talent.studio.get.query())
-    )
+    return invoke(async () => {
+      const startedAt = Date.now()
+      const data = await trpc.talent.studio.get.query()
+      if (measureEnabled) {
+        logMeasure("studio.get", {
+          ms: Math.round(Date.now() - startedAt),
+          jsonBytes: JSON.stringify(data).length,
+          mediaCount: Object.keys(data.media).length,
+        })
+      }
+      return asStudioState(data)
+    })
   },
   updateProfile(
     input: Parameters<typeof trpc.talent.studio.updateProfile.mutate>[0]

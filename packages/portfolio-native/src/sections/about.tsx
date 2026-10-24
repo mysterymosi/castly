@@ -1,7 +1,8 @@
-import { Text, View } from "react-native"
+import { Text } from "react-native"
 
 import { CARD_WIDTH, DEFAULT_HERO_ASPECT, SECTION_HORIZONTAL_PADDING, SECTION_TITLE_HEIGHT } from "../constants"
 import { estimateTextBlockHeight, mediaHeightForWidth } from "../layout"
+import { SectionImage } from "../media"
 import { SectionShell, SectionTitle } from "../section-shell"
 import type { CoreSectionConfigMap, NativeSectionRenderer, SectionMediaMeta } from "../types"
 
@@ -35,7 +36,13 @@ function AboutSection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config: A
         </Text>
       ) : null}
       {config.mediaId ? (
-        <View className="mt-2 rounded-lg bg-surfaceMuted" style={{ height: mediaH, width: inner }} />
+        <SectionImage
+          mediaId={config.mediaId}
+          mediaMeta={mediaMeta}
+          width={inner}
+          height={mediaH}
+          className="mt-2 rounded-lg"
+        />
       ) : null}
     </SectionShell>
   )

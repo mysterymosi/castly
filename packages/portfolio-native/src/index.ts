@@ -1,4 +1,10 @@
 export { CARD_WIDTH } from "./constants"
+export {
+  PortfolioMediaProvider,
+  type PortfolioImageProps,
+  type PortfolioMediaComponents,
+  type PortfolioVideoProps,
+} from "./media"
 export { renderStudioSection } from "./render"
 export {
   assertStudioSectionType,

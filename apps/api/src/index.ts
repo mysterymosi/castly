@@ -12,6 +12,7 @@ import {
 } from "./media/mux-webhook.js"
 import { handleLocalMediaUpload } from "./media/local-upload.js"
 import { applyMediaReadyEvent } from "./media/service.js"
+import { measurePayload } from "./observability/measure-payload.js"
 import { verifyMediaProviderWebhook } from "./media/webhook.js"
 import { createContext, type Context } from "./trpc/context.js"
 import { appRouter } from "./trpc/router.js"
@@ -78,6 +79,8 @@ app.post("/hooks/send-sms", async (c) => {
     return c.json({ error: "sms_failed" }, 500)
   }
 })
+
+app.use("/trpc/*", measurePayload())
 
 app.use(
   "/trpc/*",

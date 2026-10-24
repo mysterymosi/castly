@@ -106,6 +106,8 @@ Single function in `packages/core`. For M2, hide rates when `rate_visibility = '
 
 ### 2.10 Device measurement gate (M2)
 
+**Status:** Tooling ready, device run pending. `talent.studio.get` returns a `media` map (dimensions, card variant, poster, HLS URL); `packages/portfolio-native` renders real media through injected components (`PortfolioMediaProvider`), with expo-image / expo-video supplied by `apps/mobile/src/studio/portfolio-media.tsx`. The showreel loads its HLS source on mount, so preview numbers include it. Fixture: `pnpm --filter api seed:measure -- <email> [--replace]` (12 visible sections from the talent's own ready media). Logging: `EXPO_PUBLIC_MEASURE=1` on the app prints `[measure] studio.get` and `[measure] preview.first_frame`; `MEASURE_PAYLOAD=1` on the API prints `[measure] payload` with raw and gzip bytes.
+
 On a 2GB Android over throttled 3G, open live preview of a 12-section portfolio including one HLS video.
 
 Record: time to first preview frame, scroll fps in the preview list, payload size of the preview fetch.

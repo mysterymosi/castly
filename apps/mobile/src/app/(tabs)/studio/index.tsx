@@ -19,6 +19,7 @@ import { cn } from "@/lib/cn"
 import { isIntentActive, uploadIntentLabel } from "@/media/upload-intent"
 import { useUploadQueue } from "@/media/upload-queue-provider"
 import { ProgressBar } from "@/components/ui/progress-bar"
+import { markPreviewRequested } from "@/lib/measure"
 import { studioApi } from "@/studio/api"
 import { CompletenessMeter } from "@/studio/completeness-meter"
 import { DecisionCardPreview } from "@/studio/decision-card-preview"
@@ -152,7 +153,10 @@ export default function StudioHub() {
           <IconButton
             icon="eye"
             accessibilityLabel="Preview portfolio"
-            onPress={() => router.push("/studio/preview")}
+            onPress={() => {
+              markPreviewRequested()
+              router.push("/studio/preview")
+            }}
           />
         ) : null}
       </View>
@@ -213,7 +217,10 @@ export default function StudioHub() {
           <SectionHeading title="Decision card" />
           <PressableCard
             accessibilityLabel="Decision card. Opens a preview"
-            onPress={() => router.push({ pathname: "/studio/preview", params: { tab: "card" } })}
+            onPress={() => {
+                markPreviewRequested()
+                router.push({ pathname: "/studio/preview", params: { tab: "card" } })
+              }}
             className="flex-row items-center gap-4 p-3"
           >
             <View className="overflow-hidden rounded-lg" style={{ width: 96, height: 128 }} pointerEvents="none">

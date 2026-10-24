@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto"
 
 import { and, asc, eq } from "drizzle-orm"
 
+import { getMediaStatuses } from "../media/service.js"
 import { StudioError } from "./errors.js"
 import { runQualityScoreJob } from "./quality-score-job.js"
 import { runSearchScoresJob } from "./search-scores-job.js"
@@ -51,6 +52,20 @@ async function ensureProfile(db: Db, userId: string) {
       "profile_create_failed"
     )
   return created
+}
+
+/** Media ids referenced by section configs (hero, about, gallery, showreel, audio). */
+function sectionMediaIds(sections: { config: unknown }[]): string[] {
+  const ids: string[] = []
+  for (const section of sections) {
+    const cfg = section.config as {
+      mediaId?: string | null
+      mediaIds?: string[]
+    }
+    if (cfg.mediaId) ids.push(cfg.mediaId)
+    if (cfg.mediaIds) ids.push(...cfg.mediaIds)
+  }
+  return ids
 }
 
 function photoCountFromSections(
@@ -203,11 +218,16 @@ export async function getStudioState(db: Db, userId: string) {
     {}
   )
 
+  const mediaIds = new Set(sectionMediaIds(talent.sections))
+  if (cardConfig.leadMediaId) mediaIds.add(cardConfig.leadMediaId)
+  const media = await getMediaStatuses(db, userId, [...mediaIds])
+
   return {
     talent,
     completeness,
     cities,
     skills,
+    media,
   }
 }
 

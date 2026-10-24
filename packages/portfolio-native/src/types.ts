@@ -9,6 +9,13 @@ export type SectionMediaMeta = Record<
     width?: number
     height?: number
     durationMs?: number
+    /** Card-width image variant (images only). */
+    imageUrl?: string | null
+    /** Poster frame (videos only). */
+    posterUrl?: string | null
+    /** HLS manifest (videos only). */
+    playbackUrl?: string | null
+    blurhash?: string | null
   }
 >
 

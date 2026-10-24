@@ -7,6 +7,7 @@ import {
   SECTION_VERTICAL_PADDING,
 } from "../constants"
 import { heroMediaHeight } from "../layout"
+import { SectionImage } from "../media"
 import { SectionShell } from "../section-shell"
 import type { CoreSectionConfigMap, NativeSectionRenderer, SectionMediaMeta } from "../types"
 
@@ -25,9 +26,12 @@ function HeroSection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config: He
   const mediaHeight = heroMediaHeight(config.mediaId, cardWidth, mediaMeta)
   return (
     <SectionShell cardWidth={cardWidth}>
-      <View
-        className="self-center rounded-lg bg-surfaceMuted"
-        style={{ height: mediaHeight, width: cardWidth - SECTION_HORIZONTAL_PADDING * 2 }}
+      <SectionImage
+        mediaId={config.mediaId}
+        mediaMeta={mediaMeta}
+        width={cardWidth - SECTION_HORIZONTAL_PADDING * 2}
+        height={mediaHeight}
+        className="self-center rounded-lg"
       />
       {config.headline ? (
         <Text numberOfLines={2} maxFontSizeMultiplier={1.3} className="mt-2 font-heading text-title-sm text-text">

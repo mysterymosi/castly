@@ -1,5 +1,6 @@
 import { z } from "zod"
 
+import { mediaStatusOutput } from "../media"
 import { corePortfolioSectionTypes } from "../portfolio/types"
 import { cardConfigSchema, ownerTalentDtoSchema } from "./dto"
 
@@ -31,6 +32,8 @@ export const studioStateSchema = z.object({
   skills: z.array(
     z.object({ id: z.uuid(), name: z.string(), slug: z.string() })
   ),
+  /** Owned media referenced by the sections and card, keyed by media id. */
+  media: z.record(z.uuid(), mediaStatusOutput),
 })
 
 export type StudioState = z.infer<typeof studioStateSchema>

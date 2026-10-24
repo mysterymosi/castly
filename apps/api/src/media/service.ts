@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import { schema, type Db } from "@workspace/db"
 import type { CreateUploadUrlInput, MediaStatusOutput } from "@workspace/schema"
-import { and, eq, isNull } from "drizzle-orm"
+import { and, eq, inArray, isNull } from "drizzle-orm"
 
 import { createCloudflareImageUpload } from "./cloudflare.js"
 import { maybeSyncCloudflareAsset } from "./cloudflare-sync.js"
@@ -126,6 +126,25 @@ export async function getMediaStatus(
     row = await loadOwnedMedia(db, userId, mediaId)
   }
   return toMediaStatus(row)
+}
+
+/** Status for several owned media at once, keyed by id. Reads stored state only (no provider sync). */
+export async function getMediaStatuses(
+  db: Db,
+  userId: string,
+  mediaIds: string[]
+): Promise<Record<string, MediaStatusOutput>> {
+  if (mediaIds.length === 0) return {}
+  const rows = await db
+    .select()
+    .from(schema.mediaAssets)
+    .where(
+      and(
+        eq(schema.mediaAssets.ownerId, userId),
+        inArray(schema.mediaAssets.id, mediaIds)
+      )
+    )
+  return Object.fromEntries(rows.map((row) => [row.id, toMediaStatus(row)]))
 }
 
 export async function deleteMedia(db: Db, userId: string, mediaId: string) {
