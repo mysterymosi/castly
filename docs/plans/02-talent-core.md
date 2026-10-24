@@ -74,11 +74,15 @@ Audio: Supabase Storage + AAC job can wait until a later task in this milestone 
 
 ### 2.6 Offline upload queue
 
+**Status:** Implemented, device acceptance pending — `apps/mobile/src/media/upload-queue-*` (MMKV intents), `UploadQueueProvider` on the studio stack (NetInfo resume), showreel card progress/error in `studio/index.tsx`. Video uses a resumable chunked PUT against the Mux direct-upload URL (`resumablePut` in `upload.ts`): the client asks Mux how many bytes it holds (`Content-Range: bytes */N` → 308 + `Range`) and continues from there, reading 1 MiB chunks from disk. The processor never re-sends once an intent reached `processing`, and checks `media.status` before repeating a single-use POST. Kill-and-resume verified against live Mux from Node; resume window is bounded by the 1h Mux upload timeout.
+
 MMKV queue of upload intents with tus fingerprints. Survives app kill. Resumes on connectivity. Per-item progress and failure in the studio.
 
 **Acceptance.** Start a showreel upload, force-quit mid-transfer, reopen on a connection: upload resumes without re-selecting the file.
 
 ### 2.7 Publish and completeness scores
+
+**Status:** Done — `talent.studio.publish` / `unpublish` (`apps/api/src/talent/studio-service.ts`). Completeness is rewritten on section writes via `loadCompleteness`. `runQualityScoreJob` (`talent.quality-score`) runs on publish from completeness, ready media, showreel, and credits only — no follower count, no `talent_attributes`. Studio hub has Publish / Unpublish.
 
 `talent.publish` / `unpublish`. Status `draft | live | suspended`. Completeness score written on section write. Quality score job runs on publish (follower count and sensitive attributes excluded).
 
@@ -86,17 +90,23 @@ MMKV queue of upload intents with tus fingerprints. Survives app kill. Resumes o
 
 ### 2.8 `talent_search` projection
 
+**Status:** Done — `packages/db/src/schema/search.ts`, migration `0007_talent_search_projection.sql` (`refresh_talent_search(talent_id)` + row triggers on `talent_profiles`, `talent_categories`, `talent_skills`, `talent_languages`, `talent_accents`, `talent_rates`, `portfolio_sections`, `credits`, `cities`; backfill). `cities` gained `country` / `region`. Taxonomy ids are `uuid[]`, not `int[]`. Day rates project as null when `rate_visibility = 'hidden'`. `search_tsv` uses the `simple` config. `runSearchScoresJob` (`talent.search-scores`) writes quality / completeness / responsiveness (copied from the profile) and `freshness_score` (`packages/core` `computeFreshnessScore`) on publish and when completeness changes; it runs inline like `talent.quality-score` until pg-boss and the nightly schedule land. Sensitive attribute columns and `attrs` stay empty until M8. CI runs `pnpm --filter @workspace/db db:assert-talent-search` (EXPLAIN runs with `enable_seqscan = off` because the fixture table is tiny).
+
 Denormalised table per TECH_SPEC §5.10. Triggers on source tables for correctness-critical fields (status, city, categories, skills, languages, rates, visibility). pg-boss job for `quality_score`, `freshness_score`, `completeness_score`. Indexes: GIN on arrays, `attrs`, `search_tsv`; btree `(status, country, city_id)`; partial index `status = 'live'`.
 
 **Acceptance.** Publishing Tunde writes/updates exactly one `talent_search` row. Adding Yoruba updates that row without a full refresh. `EXPLAIN` of `SELECT … WHERE status = 'live' AND city_id = $1` uses the partial/compound index.
 
 ### 2.9 `serializeTalent` stub
 
+**Status:** Done — `packages/core/src/serialize-talent.ts` (`serializeTalent(talent, viewer, context)`; viewer is `owner | user (verifiedBooker) | anonymous`; an owner viewer that does not own the talent throws). DTO schemas in `packages/schema/src/talent/dto.ts` are branded on their **input** type (`.brand<…, "inout">()`), so a procedure whose `.output()` contains them only compiles when it returns `serializeTalent` output. Non-owners lose rates (key absent) when visibility is `hidden`, or `verified_bookers` without a verified viewer, plus the `rates` section, hidden sections, and owner-only profile fields (`status`, `quickStartCompletedAt`, `completenessScore`, `qualityScore`). Studio state now nests the talent under `talent` (`state.talent.profile`). `apps/api/src/talent/serialize-talent.guard.test.ts` (integration list) walks every procedure output for unbranded talent fields and requires every `talent.*` procedure to declare an output.
+
 Single function in `packages/core`. For M2, hide rates when `rate_visibility = 'hidden'` from non-owners. Viewer context (verified booker, active role) wired fully in M8; the function signature must already take `viewer` and `context` so callers never build payloads by hand.
 
 **Acceptance.** No tRPC procedure returns a talent object except via `serializeTalent`. Hidden rates are absent (not `null`) for a non-owner viewer.
 
 ### 2.10 Device measurement gate (M2)
+
+**Status:** Tooling ready, device run pending. `talent.studio.get` returns a `media` map (dimensions, card variant, poster, HLS URL); `packages/portfolio-native` renders real media through injected components (`PortfolioMediaProvider`), with expo-image / expo-video supplied by `apps/mobile/src/studio/portfolio-media.tsx`. The showreel loads its HLS source on mount, so preview numbers include it. Fixture: `pnpm --filter api seed:measure -- <email> [--replace]` (12 visible sections from the talent's own ready media). Logging: `EXPO_PUBLIC_MEASURE=1` on the app prints `[measure] studio.get` and `[measure] preview.first_frame`; `MEASURE_PAYLOAD=1` on the API prints `[measure] payload` with raw and gzip bytes.
 
 On a 2GB Android over throttled 3G, open live preview of a 12-section portfolio including one HLS video.
 

@@ -3,6 +3,7 @@ export * from "./taxonomy.js"
 export * from "./config.js"
 export * from "./talent.js"
 export * from "./media.js"
+export * from "./search.js"
 
 /**
  * Tables with RLS enabled and no policies (default-deny).
@@ -42,4 +43,5 @@ export const rlsTables = [
   "media_upload_tokens",
   "media_moderation_jobs",
   "profile_delegates",
+  "talent_search",
 ] as const

@@ -1,28 +1,14 @@
 import { z } from "zod"
 
+import { mediaStatusOutput } from "../media"
 import { corePortfolioSectionTypes } from "../portfolio/types"
+import { cardConfigSchema, ownerTalentDtoSchema } from "./dto"
 
 export const portfolioTemplateIdSchema = z.enum([
   "editorial",
   "reel_first",
   "case_study",
 ])
-
-export const cardConfigSchema = z.object({
-  leadMediaId: z.uuid().nullable().default(null),
-  highlightFacts: z.array(z.string().max(80)).max(3).default([]),
-})
-
-export type CardConfig = z.infer<typeof cardConfigSchema>
-
-export const studioSectionSchema = z.object({
-  id: z.uuid(),
-  type: z.enum(corePortfolioSectionTypes),
-  schemaVersion: z.number().int().min(1),
-  position: z.number().int(),
-  isVisible: z.boolean(),
-  config: z.unknown(),
-})
 
 export const completenessBreakdownSchema = z.object({
   score: z.number().min(0).max(100),
@@ -38,20 +24,7 @@ export const completenessBreakdownSchema = z.object({
 })
 
 export const studioStateSchema = z.object({
-  profile: z.object({
-    userId: z.uuid(),
-    slug: z.string(),
-    displayName: z.string(),
-    headline: z.string().nullable(),
-    bio: z.string().nullable(),
-    cityId: z.uuid().nullable(),
-    cityName: z.string().nullable(),
-    cardConfig: cardConfigSchema,
-    quickStartCompletedAt: z.string().nullable(),
-    completenessScore: z.number(),
-  }),
-  sections: z.array(studioSectionSchema),
-  skillIds: z.array(z.uuid()),
+  talent: ownerTalentDtoSchema,
   completeness: completenessBreakdownSchema,
   cities: z.array(
     z.object({ id: z.uuid(), name: z.string(), slug: z.string() })
@@ -59,6 +32,8 @@ export const studioStateSchema = z.object({
   skills: z.array(
     z.object({ id: z.uuid(), name: z.string(), slug: z.string() })
   ),
+  /** Owned media referenced by the sections and card, keyed by media id. */
+  media: z.record(z.uuid(), mediaStatusOutput),
 })
 
 export type StudioState = z.infer<typeof studioStateSchema>

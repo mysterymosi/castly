@@ -2,6 +2,7 @@ import { Text, View } from "react-native"
 
 import { CARD_WIDTH, SECTION_HORIZONTAL_PADDING, SECTION_TITLE_HEIGHT } from "../constants"
 import { galleryTileHeight } from "../layout"
+import { SectionImage } from "../media"
 import { SectionShell, SectionTitle } from "../section-shell"
 import type { CoreSectionConfigMap, NativeSectionRenderer, SectionMediaMeta } from "../types"
 
@@ -29,7 +30,14 @@ function GallerySection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config:
       ) : (
         <View className="flex-row flex-wrap gap-2">
           {ids.map((id) => (
-            <View key={id} className="rounded-md bg-surfaceMuted" style={{ width: tileW, height: tileH }} />
+            <SectionImage
+              key={id}
+              mediaId={id}
+              mediaMeta={mediaMeta}
+              width={tileW}
+              height={tileH}
+              className="rounded-md"
+            />
           ))}
         </View>
       )}

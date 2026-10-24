@@ -110,6 +110,9 @@ export const cities = pgTable(
     id: primaryUuid(),
     slug: text("slug").notNull(),
     name: text("name").notNull(),
+    /** ISO 3166-1 alpha-2. Projected onto `talent_search` for geo scope. */
+    country: text("country").notNull().default("NG"),
+    region: text("region"),
     active: boolean("active").notNull().default(true),
   },
   (table) => [uniqueIndex("cities_slug_uidx").on(table.slug)],

@@ -1,12 +1,17 @@
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator"
 import * as ImagePicker from "expo-image-picker"
+import { fetch as expoFetch } from "expo/fetch"
+import { File } from "expo-file-system"
 import type { CreateUploadUrlOutput, MediaStatusOutput } from "@workspace/schema"
-import { Upload } from "tus-js-client"
 
 import { invoke, trpc } from "@/trpc/client"
 
 const readyPollMs = 800
 const readyTimeoutMs = 120_000
+
+/** Resumable PUT chunks must be a multiple of 256 KiB (except the last). */
+const chunkBytes = 4 * 256 * 1024
+const retryDelaysMs = [0, 2000, 5000, 10_000]
 
 export async function pickImages(max = 3) {
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -29,7 +34,7 @@ export async function pickVideo() {
   return result.assets[0]?.uri ?? null
 }
 
-async function compressImage(uri: string) {
+export async function compressImage(uri: string) {
   const rendered = await ImageManipulator.manipulate(uri)
     .resize({ width: 2048 })
     .renderAsync()
@@ -40,19 +45,18 @@ async function compressImage(uri: string) {
   return manipulated.uri
 }
 
-async function createUpload(kind: "image" | "video", contentType: string, byteSize?: number) {
+export async function createUpload(kind: "image" | "video", contentType: string, byteSize?: number) {
   return invoke(() =>
     trpc.media.createUploadUrl.mutate({ kind, contentType, byteSize })
   )
 }
 
-async function waitForReady(mediaId: string) {
+export async function waitForReady(mediaId: string) {
   const started = Date.now()
   while (Date.now() - started < readyTimeoutMs) {
     const status = await invoke(() => trpc.media.status.query({ mediaId }))
     if (status.status === "ready") return status
     if (status.status === "failed" || status.status === "quarantined") {
-      console.error("Media status:", status)
       throw new Error(`Upload failed (${status.status})`)
     }
     await new Promise<void>((resolve) => {
@@ -62,14 +66,92 @@ async function waitForReady(mediaId: string) {
   throw new Error("Upload timed out waiting for processing")
 }
 
-async function putUpload(upload: CreateUploadUrlOutput, body: Blob) {
-  const response = await fetch(upload.uploadUrl, {
-    method: "PUT",
-    headers: upload.uploadHeaders,
-    body,
-  })
-  if (!response.ok) {
+/** The provider no longer holds this upload session (timed out, cancelled, or unknown). */
+export class UploadSessionGoneError extends Error {}
+
+/**
+ * Reads a resumable-upload response: 200/201 means the provider has the whole file,
+ * 308 means it has `bytes=0-N` so far. Anything else either means the session is gone
+ * or is a transient failure worth retrying.
+ */
+function receivedBytes(response: {
+  status: number
+  headers: { get(name: string): string | null }
+}): number | "complete" {
+  if (response.status === 200 || response.status === 201) return "complete"
+  if (response.status === 308) {
+    const match = response.headers.get("range")?.match(/^bytes=0-(\d+)$/)
+    return match ? Number(match[1]) + 1 : 0
+  }
+  if (response.status >= 500 || response.status === 408 || response.status === 429) {
     throw new Error(`Upload failed (${response.status})`)
+  }
+  throw new UploadSessionGoneError(`Upload session rejected (${response.status})`)
+}
+
+/** Asks the provider how many bytes of this session it already has. */
+async function queryReceivedBytes(uploadUrl: string, total: number) {
+  const response = await expoFetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Range": `bytes */${total}` },
+    redirect: "manual",
+  })
+  return receivedBytes(response)
+}
+
+/**
+ * Chunked PUT against a resumable upload URL (Mux direct uploads). The provider is the
+ * source of truth for progress, so after an app kill or network drop we ask it where to
+ * continue instead of re-sending from byte 0. Reads one chunk at a time from disk, so a
+ * large showreel never sits in memory.
+ */
+async function resumablePut(
+  upload: CreateUploadUrlOutput,
+  fileUri: string,
+  onProgress?: (bytesUploaded: number, bytesTotal: number) => void
+) {
+  const file = new File(fileUri)
+  const total = file.size
+  if (!total) throw new Error("Upload file is missing or empty")
+
+  const handle = file.open()
+  try {
+    // null = unknown, ask the provider before sending anything.
+    let received: number | "complete" | null = null
+    let failures = 0
+    while (received !== "complete") {
+      try {
+        if (received === null) received = await queryReceivedBytes(upload.uploadUrl, total)
+        if (received === "complete") break
+        onProgress?.(received, total)
+
+        const end = Math.min(received + chunkBytes, total)
+        handle.offset = received
+        const response = await expoFetch(upload.uploadUrl, {
+          method: "PUT",
+          headers: {
+            ...upload.uploadHeaders,
+            "Content-Range": `bytes ${received}-${end - 1}/${total}`,
+          },
+          body: handle.readBytes(end - received),
+          redirect: "manual",
+        })
+        received = receivedBytes(response)
+        failures = 0
+      } catch (error) {
+        if (error instanceof UploadSessionGoneError || failures >= retryDelaysMs.length) {
+          throw error
+        }
+        await new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), retryDelaysMs[failures])
+        })
+        failures += 1
+        received = null
+      }
+    }
+    onProgress?.(total, total)
+  } finally {
+    handle.close()
   }
 }
 
@@ -88,49 +170,41 @@ async function postUpload(
   }
 }
 
-function tusUpload(upload: CreateUploadUrlOutput, fileUri: string, mimeType: string) {
-  return new Promise<void>((resolve, reject) => {
-    const file = {
-      uri: fileUri,
-      name: fileUri.split("/").pop() ?? "upload.bin",
-      type: mimeType,
-    } as unknown as File
-    const uploadClient = new Upload(file, {
-      uploadUrl: upload.uploadMethod === "TUS" ? upload.uploadUrl : undefined,
-      endpoint: upload.uploadMethod === "TUS" ? undefined : upload.uploadUrl,
-      headers: upload.uploadHeaders,
-      metadata: {},
-      onError: (error) => reject(error),
-      onSuccess: () => resolve(),
-    })
-    uploadClient.start()
-  })
+type TransferOptions = {
+  onProgress?: (bytesUploaded: number, bytesTotal: number) => void
+}
+
+export async function transferUpload(
+  upload: CreateUploadUrlOutput,
+  fileUri: string,
+  mimeType: string,
+  options: TransferOptions = {}
+) {
+  if (upload.uploadMethod === "PUT") {
+    await resumablePut(upload, fileUri, options.onProgress)
+    return
+  }
+  const response = await fetch(fileUri)
+  const blob = await response.blob()
+  await postUpload(upload, blob, mimeType)
+}
+
+export function fileByteSize(fileUri: string) {
+  return new File(fileUri).size
 }
 
 export async function uploadImageFromUri(uri: string): Promise<MediaStatusOutput> {
   const compressedUri = await compressImage(uri)
-  const response = await fetch(compressedUri)
-  const blob = await response.blob()
-  const upload = await createUpload("image", "image/jpeg", blob.size)
-  if (upload.uploadMethod === "TUS") {
-    await tusUpload(upload, compressedUri, "image/jpeg")
-  } else {
-    await postUpload(upload, blob, "image/jpeg")
-  }
+  const upload = await createUpload("image", "image/jpeg", fileByteSize(compressedUri))
+  await transferUpload(upload, compressedUri, "image/jpeg")
   return waitForReady(upload.mediaId)
 }
 
 export async function uploadVideoFromUri(uri: string): Promise<MediaStatusOutput> {
-  const response = await fetch(uri)
-  const blob = await response.blob()
-  const upload = await createUpload("video", blob.type || "video/mp4", blob.size)
-  if (upload.uploadMethod === "TUS") {
-    await tusUpload(upload, uri, blob.type || "video/mp4")
-  } else if (upload.uploadMethod === "PUT") {
-    await putUpload(upload, blob)
-  } else {
-    await postUpload(upload, blob, blob.type || "video/mp4")
-  }
+  const file = new File(uri)
+  const mimeType = file.type || "video/mp4"
+  const upload = await createUpload("video", mimeType, file.size)
+  await transferUpload(upload, uri, mimeType)
   return waitForReady(upload.mediaId)
 }
 

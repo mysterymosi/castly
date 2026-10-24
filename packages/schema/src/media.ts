@@ -8,13 +8,13 @@ export const createUploadUrlInput = z.object({
   byteSize: z.number().int().positive().max(512 * 1024 * 1024).optional(),
 })
 
-export const mediaUploadMethodSchema = z.enum(["POST", "TUS", "PUT"])
+export const mediaUploadMethodSchema = z.enum(["POST", "PUT"])
 
 export const createUploadUrlOutput = z.object({
   mediaId: z.uuid(),
   uploadUrl: z.url(),
   uploadMethod: mediaUploadMethodSchema,
-  /** Extra headers for tus or authenticated POST uploads. */
+  /** Extra headers the client must send with the upload request(s). */
   uploadHeaders: z.record(z.string(), z.string()).default({}),
   expiresAt: z.string(),
 })

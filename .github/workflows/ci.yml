@@ -92,6 +92,7 @@ jobs:
         run: psql "$DATABASE_URL" -f packages/db/ci/postgres-auth-stub.sql
       - run: pnpm db:migrate
       - run: pnpm --filter @workspace/db db:assert-talent
+      - run: pnpm --filter @workspace/db db:assert-talent-search
       - run: pnpm db:provision-api-role
       - run: pnpm --filter api test:integration
 

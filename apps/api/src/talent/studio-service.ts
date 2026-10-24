@@ -1,6 +1,7 @@
 import {
   computeCompleteness,
   portfolioTemplates,
+  serializeTalent,
   type PortfolioTemplateId,
 } from "@workspace/core"
 import type { Db } from "@workspace/db"
@@ -16,7 +17,10 @@ import { randomUUID } from "node:crypto"
 
 import { and, asc, eq } from "drizzle-orm"
 
+import { getMediaStatuses } from "../media/service.js"
 import { StudioError } from "./errors.js"
+import { runQualityScoreJob } from "./quality-score-job.js"
+import { runSearchScoresJob } from "./search-scores-job.js"
 import {
   defaultSchemaVersion,
   defaultSectionConfig,
@@ -48,6 +52,20 @@ async function ensureProfile(db: Db, userId: string) {
       "profile_create_failed"
     )
   return created
+}
+
+/** Media ids referenced by section configs (hero, about, gallery, showreel, audio). */
+function sectionMediaIds(sections: { config: unknown }[]): string[] {
+  const ids: string[] = []
+  for (const section of sections) {
+    const cfg = section.config as {
+      mediaId?: string | null
+      mediaIds?: string[]
+    }
+    if (cfg.mediaId) ids.push(cfg.mediaId)
+    if (cfg.mediaIds) ids.push(...cfg.mediaIds)
+  }
+  return ids
 }
 
 function photoCountFromSections(
@@ -102,6 +120,10 @@ async function loadCompleteness(db: Db, userId: string) {
     })
     .where(eq(schema.talentProfiles.userId, userId))
 
+  if (Number(profile.completenessScore) !== result.score) {
+    await runSearchScoresJob(db, userId)
+  }
+
   return result
 }
 
@@ -117,6 +139,11 @@ export async function getStudioState(db: Db, userId: string) {
     .select({ skillId: schema.talentSkills.skillId })
     .from(schema.talentSkills)
     .where(eq(schema.talentSkills.talentId, userId))
+
+  const rateRows = await db
+    .select()
+    .from(schema.talentRates)
+    .where(eq(schema.talentRates.talentId, userId))
 
   const cities = await db
     .select({
@@ -143,36 +170,64 @@ export async function getStudioState(db: Db, userId: string) {
   const cardConfig = cardConfigSchema.parse(profile.cardConfig ?? {})
   const completeness = await loadCompleteness(db, userId)
 
-  return {
-    profile: {
-      userId: profile.userId,
-      slug: profile.slug,
-      displayName: profile.displayName,
-      headline: profile.headline,
-      bio: profile.bio,
-      cityId: profile.cityId,
-      cityName,
-      cardConfig,
-      quickStartCompletedAt:
-        profile.quickStartCompletedAt?.toISOString() ?? null,
-      completenessScore: completeness.score,
+  const talent = serializeTalent(
+    {
+      profile: {
+        userId: profile.userId,
+        slug: profile.slug,
+        displayName: profile.displayName,
+        headline: profile.headline,
+        bio: profile.bio,
+        cityId: profile.cityId,
+        cityName,
+        cardConfig,
+        status: profile.status,
+        publishedAt: profile.publishedAt,
+        quickStartCompletedAt: profile.quickStartCompletedAt,
+        completenessScore: completeness.score,
+        qualityScore: Number(profile.qualityScore),
+        rateVisibility: profile.rateVisibility,
+      },
+      // Config is migrated to the current version on read, so the version sent with it must be
+      // the current one too — writes only accept the current version.
+      sections: sections.map((s) => {
+        const current = readStoredPortfolioSection({
+          type: s.type as CoreSectionType,
+          schemaVersion: s.schemaVersion,
+          config: s.config,
+        })
+        return {
+          id: s.id,
+          type: s.type as CoreSectionType,
+          schemaVersion: current.schemaVersion,
+          position: s.position,
+          isVisible: s.isVisible,
+          config: current.config,
+        }
+      }),
+      skillIds: skillRows.map((r) => r.skillId),
+      rates: rateRows.map((r) => ({
+        kind: r.kind,
+        amountMin: r.amountMin === null ? null : Number(r.amountMin),
+        amountMax: r.amountMax === null ? null : Number(r.amountMax),
+        currency: r.currency,
+        negotiable: r.negotiable,
+      })),
     },
-    sections: sections.map((s) => ({
-      id: s.id,
-      type: s.type as CoreSectionType,
-      schemaVersion: s.schemaVersion,
-      position: s.position,
-      isVisible: s.isVisible,
-      config: readStoredPortfolioSection({
-        type: s.type as CoreSectionType,
-        schemaVersion: s.schemaVersion,
-        config: s.config,
-      }).config,
-    })),
-    skillIds: skillRows.map((r) => r.skillId),
+    { kind: "owner", userId },
+    {}
+  )
+
+  const mediaIds = new Set(sectionMediaIds(talent.sections))
+  if (cardConfig.leadMediaId) mediaIds.add(cardConfig.leadMediaId)
+  const media = await getMediaStatuses(db, userId, [...mediaIds])
+
+  return {
+    talent,
     completeness,
     cities,
     skills,
+    media,
   }
 }
 
@@ -512,6 +567,49 @@ export async function setTalentAttribute(
     })
 
   // Sensitive attributes never affect completeness — recompute without reading attribute values.
+  return getStudioState(db, userId)
+}
+
+export async function publishTalent(db: Db, userId: string) {
+  const profile = await ensureProfile(db, userId)
+  if (profile.status === "suspended") {
+    throw new StudioError("This profile is suspended", "profile_suspended")
+  }
+
+  const state = await getStudioState(db, userId)
+  if (!state.completeness.canPublish) {
+    throw new StudioError(
+      "Finish quick start before publishing",
+      "publish_not_ready"
+    )
+  }
+
+  await db
+    .update(schema.talentProfiles)
+    .set({
+      status: "live",
+      publishedAt: profile.publishedAt ?? new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.talentProfiles.userId, userId))
+
+  await runQualityScoreJob(db, userId)
+  await runSearchScoresJob(db, userId)
+  return getStudioState(db, userId)
+}
+
+export async function unpublishTalent(db: Db, userId: string) {
+  const profile = await ensureProfile(db, userId)
+  if (profile.status === "suspended") {
+    throw new StudioError("This profile is suspended", "profile_suspended")
+  }
+  if (profile.status === "draft") return getStudioState(db, userId)
+
+  await db
+    .update(schema.talentProfiles)
+    .set({ status: "draft", updatedAt: new Date() })
+    .where(eq(schema.talentProfiles.userId, userId))
+
   return getStudioState(db, userId)
 }
 

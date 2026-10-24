@@ -17,7 +17,7 @@ const examples = ["Lead in a Netflix Naija series", "Fluent Yorùbá and Pidgin"
 export default function HighlightsScreen() {
   const { state, run, pending, actionError } = useStudio()
   const [facts, setFacts] = useState<string[]>(() => {
-    const initial = [...(state?.profile.cardConfig.highlightFacts ?? [])]
+    const initial = [...(state?.talent.profile.cardConfig.highlightFacts ?? [])]
     while (initial.length < 3) initial.push("")
     return initial.slice(0, 3)
   })
@@ -25,7 +25,7 @@ export default function HighlightsScreen() {
   if (!state) return <LoadingState />
 
   function save(index: number, value: string) {
-    const saved = state!.profile.cardConfig.highlightFacts[index] ?? ""
+    const saved = state!.talent.profile.cardConfig.highlightFacts[index] ?? ""
     if (value === saved) return
     const next = [...facts]
     next[index] = value
@@ -61,9 +61,9 @@ export default function HighlightsScreen() {
       </View>
 
       <DecisionCardPreview
-        displayName={state.profile.displayName}
-        headline={state.profile.headline}
-        cardConfig={{ ...state.profile.cardConfig, highlightFacts: facts }}
+        displayName={state.talent.profile.displayName}
+        headline={state.talent.profile.headline}
+        cardConfig={{ ...state.talent.profile.cardConfig, highlightFacts: facts }}
       />
 
       <View className="gap-4">

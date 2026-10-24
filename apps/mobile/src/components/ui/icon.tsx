@@ -40,6 +40,7 @@ const icons = {
   money: { ios: "banknote", android: "payments", web: "payments" },
   list: { ios: "list.bullet", android: "list", web: "list" },
   film: { ios: "film", android: "movie", web: "movie" },
+  play: { ios: "play.fill", android: "play_arrow", web: "play_arrow" },
 } as const satisfies Record<string, SymbolViewProps["name"]>
 
 export type IconName = keyof typeof icons

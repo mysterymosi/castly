@@ -22,10 +22,14 @@ describe("computeCompleteness", () => {
     expect(withReel.score).toBeGreaterThan(without.score)
   })
 
-  it("does not use sensitive attributes — only explicit section/profile signals", () => {
+  it("does not use complexion, ethnicity, gender, or body measurements", () => {
     const baseline = computeCompleteness(quickStartBase)
     const same = computeCompleteness({ ...quickStartBase })
     expect(same.score).toBe(baseline.score)
+    const keys = Object.keys(quickStartBase)
+    for (const banned of ["complexion", "ethnicity", "gender", "height", "weight", "bust", "waist"]) {
+      expect(keys.some((key) => key.toLowerCase().includes(banned))).toBe(false)
+    }
   })
 
   it("marks quick start met when minimum fields satisfied", () => {

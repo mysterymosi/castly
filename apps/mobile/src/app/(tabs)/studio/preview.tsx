@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Platform, ScrollView, useWindowDimensions, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 
@@ -7,6 +7,7 @@ import { ScreenHeader } from "@/components/ui/screen-header"
 import { SegmentedControl } from "@/components/ui/segmented-control"
 import { EmptyState, LoadingState } from "@/components/ui/states"
 import { DecisionCardPreview } from "@/studio/decision-card-preview"
+import { mediaMetaFromStudio } from "@/studio/portfolio-media"
 import { PortfolioPreview } from "@/studio/portfolio-preview"
 import { useStudio } from "@/studio/studio-provider"
 
@@ -24,6 +25,7 @@ export default function PreviewScreen() {
   const pager = useRef<ScrollView>(null)
   const initial: Tab = params.tab === "card" ? "card" : "portfolio"
   const [tab, setTab] = useState<Tab>(initial)
+  const mediaMeta = useMemo(() => (state ? mediaMetaFromStudio(state.media) : {}), [state])
 
   useEffect(() => {
     if (initial === "card") {
@@ -40,7 +42,7 @@ export default function PreviewScreen() {
 
   if (!state) return <LoadingState />
 
-  const hasVisible = state.sections.some((s) => s.isVisible)
+  const hasVisible = state.talent.sections.some((s) => s.isVisible)
 
   return (
     <View className="flex-1 bg-bg" style={{ paddingTop: Platform.OS === "ios" ? 8 : insets.top }}>
@@ -58,7 +60,7 @@ export default function PreviewScreen() {
       >
         <View style={{ width }} className="flex-1 px-4" accessibilityLabel="Portfolio preview">
           {hasVisible ? (
-            <PortfolioPreview sections={state.sections} />
+            <PortfolioPreview sections={state.talent.sections} mediaMeta={mediaMeta} />
           ) : (
             <EmptyState icon="eye-off" title="Nothing visible yet" body="Visible sections will show here as bookers see them." />
           )}
@@ -70,9 +72,9 @@ export default function PreviewScreen() {
           accessibilityLabel="Decision card preview"
         >
           <DecisionCardPreview
-            displayName={state.profile.displayName}
-            headline={state.profile.headline}
-            cardConfig={state.profile.cardConfig}
+            displayName={state.talent.profile.displayName}
+            headline={state.talent.profile.headline}
+            cardConfig={state.talent.profile.cardConfig}
           />
         </ScrollView>
       </ScrollView>

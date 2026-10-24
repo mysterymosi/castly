@@ -51,8 +51,8 @@ const launchAccents = [
 ]
 
 const launchCities = [
-  { slug: "lagos", name: "Lagos" },
-  { slug: "abuja", name: "Abuja" },
+  { slug: "lagos", name: "Lagos", country: "NG", region: "south-west" },
+  { slug: "abuja", name: "Abuja", country: "NG", region: "north-central" },
 ]
 
 const connection = postgres(databaseUrl(), { max: 1 })
