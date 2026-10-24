@@ -12,6 +12,8 @@
 
 ### 3.1 Web section renderers
 
+**Status:** Done — `packages/portfolio-web` (`webSectionRegistry`, `PortfolioSections`, `sectionsFromDto`, `mediaMetaFromStatus`; fixtures at `@workspace/portfolio-web/fixtures`). Renderers are hook-free Server Components; media elements are injectable like native. List sections (credits, attributes, skills, languages, rates, availability) read rows from a `PortfolioContent` prop because section configs carry display options only — the page loader (3.2) and serializer (3.5) must supply it. Sections with nothing to show render nothing. CI runs `pnpm --filter @workspace/portfolio-web test`.
+
 `packages/portfolio-web`: stacked React renderers for every shipped section type, consuming the same validated + forward-migrated section list as native.
 
 **Acceptance.** A fixture portfolio renders all core types without client-side fetch of section JSON (RSC / server render).
