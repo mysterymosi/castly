@@ -17,7 +17,9 @@ import type {
  * Visible sections in position order, re-read through the schema registry so a stale row is
  * forward-migrated and validated before it is rendered.
  */
-export function sectionsFromDto(sections: TalentSectionDto[]): PortfolioSection[] {
+export function sectionsFromDto(
+  sections: (Omit<TalentSectionDto, "config"> & { config?: unknown })[]
+): PortfolioSection[] {
   return sections
     .filter((section) => section.isVisible)
     .sort((a, b) => a.position - b.position)

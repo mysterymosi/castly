@@ -10,7 +10,6 @@ import {
   cardConfigSchema,
   type CardConfig,
   type CoreSectionType,
-  readStoredPortfolioSection,
   validatePortfolioSectionWrite,
 } from "@workspace/schema"
 import { randomUUID } from "node:crypto"
@@ -19,6 +18,7 @@ import { and, asc, eq } from "drizzle-orm"
 
 import { getMediaStatuses } from "../media/service.js"
 import { StudioError } from "./errors.js"
+import { loadTalentRecord, sectionMediaIds } from "./record.js"
 import { runQualityScoreJob } from "./quality-score-job.js"
 import { runSearchScoresJob } from "./search-scores-job.js"
 import {
@@ -52,20 +52,6 @@ async function ensureProfile(db: Db, userId: string) {
       "profile_create_failed"
     )
   return created
-}
-
-/** Media ids referenced by section configs (hero, about, gallery, showreel, audio). */
-function sectionMediaIds(sections: { config: unknown }[]): string[] {
-  const ids: string[] = []
-  for (const section of sections) {
-    const cfg = section.config as {
-      mediaId?: string | null
-      mediaIds?: string[]
-    }
-    if (cfg.mediaId) ids.push(cfg.mediaId)
-    if (cfg.mediaIds) ids.push(...cfg.mediaIds)
-  }
-  return ids
 }
 
 function photoCountFromSections(
@@ -129,21 +115,6 @@ async function loadCompleteness(db: Db, userId: string) {
 
 export async function getStudioState(db: Db, userId: string) {
   const profile = await ensureProfile(db, userId)
-  const sections = await db
-    .select()
-    .from(schema.portfolioSections)
-    .where(eq(schema.portfolioSections.talentId, userId))
-    .orderBy(asc(schema.portfolioSections.position))
-
-  const skillRows = await db
-    .select({ skillId: schema.talentSkills.skillId })
-    .from(schema.talentSkills)
-    .where(eq(schema.talentSkills.talentId, userId))
-
-  const rateRows = await db
-    .select()
-    .from(schema.talentRates)
-    .where(eq(schema.talentRates.talentId, userId))
 
   const cities = await db
     .select({
@@ -163,63 +134,13 @@ export async function getStudioState(db: Db, userId: string) {
     .from(schema.skills)
     .where(eq(schema.skills.active, true))
 
-  const cityName = profile.cityId
-    ? (cities.find((c) => c.id === profile.cityId)?.name ?? null)
-    : null
-
-  const cardConfig = cardConfigSchema.parse(profile.cardConfig ?? {})
   const completeness = await loadCompleteness(db, userId)
-
-  const talent = serializeTalent(
-    {
-      profile: {
-        userId: profile.userId,
-        slug: profile.slug,
-        displayName: profile.displayName,
-        headline: profile.headline,
-        bio: profile.bio,
-        cityId: profile.cityId,
-        cityName,
-        cardConfig,
-        status: profile.status,
-        publishedAt: profile.publishedAt,
-        quickStartCompletedAt: profile.quickStartCompletedAt,
-        completenessScore: completeness.score,
-        qualityScore: Number(profile.qualityScore),
-        rateVisibility: profile.rateVisibility,
-      },
-      // Config is migrated to the current version on read, so the version sent with it must be
-      // the current one too — writes only accept the current version.
-      sections: sections.map((s) => {
-        const current = readStoredPortfolioSection({
-          type: s.type as CoreSectionType,
-          schemaVersion: s.schemaVersion,
-          config: s.config,
-        })
-        return {
-          id: s.id,
-          type: s.type as CoreSectionType,
-          schemaVersion: current.schemaVersion,
-          position: s.position,
-          isVisible: s.isVisible,
-          config: current.config,
-        }
-      }),
-      skillIds: skillRows.map((r) => r.skillId),
-      rates: rateRows.map((r) => ({
-        kind: r.kind,
-        amountMin: r.amountMin === null ? null : Number(r.amountMin),
-        amountMax: r.amountMax === null ? null : Number(r.amountMax),
-        currency: r.currency,
-        negotiable: r.negotiable,
-      })),
-    },
-    { kind: "owner", userId },
-    {}
-  )
+  const record = await loadTalentRecord(db, profile, completeness.score)
+  const talent = serializeTalent(record, { kind: "owner", userId }, {})
 
   const mediaIds = new Set(sectionMediaIds(talent.sections))
-  if (cardConfig.leadMediaId) mediaIds.add(cardConfig.leadMediaId)
+  const { leadMediaId } = talent.profile.cardConfig
+  if (leadMediaId) mediaIds.add(leadMediaId)
   const media = await getMediaStatuses(db, userId, [...mediaIds])
 
   return {

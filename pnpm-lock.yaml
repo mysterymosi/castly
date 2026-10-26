@@ -305,12 +305,21 @@ importers:
 
   apps/web:
     dependencies:
+      '@trpc/client':
+        specifier: ^11.19.0
+        version: 11.19.0(@trpc/server@11.19.0(typescript@5.9.3))(typescript@5.9.3)
       '@workspace/portfolio-web':
         specifier: workspace:*
         version: link:../../packages/portfolio-web
+      '@workspace/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
       '@workspace/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      api:
+        specifier: workspace:*
+        version: link:../api
       lucide-react:
         specifier: ^1.47.0
         version: 1.47.0(react@19.2.4)

@@ -5,6 +5,7 @@ export type StudioErrorCode =
   | "profile_create_failed"
   | "publish_not_ready"
   | "profile_suspended"
+  | "talent_not_found"
 
 export class StudioError extends Error {
   readonly code: StudioErrorCode

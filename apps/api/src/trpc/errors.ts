@@ -6,6 +6,7 @@ import { OtpRateLimited } from "../auth/rate-limit.js"
 import { AuthRejected, OtpDeliveryFailed } from "../auth/supabase.js"
 import { MediaError } from "../media/errors.js"
 import { StudioError } from "../talent/errors.js"
+import { PublicReadRateLimited } from "../talent/public-rate-limit.js"
 
 const mediaCode = {
   media_not_found: "NOT_FOUND",
@@ -24,6 +25,7 @@ const studioCode = {
   profile_create_failed: "INTERNAL_SERVER_ERROR",
   publish_not_ready: "PRECONDITION_FAILED",
   profile_suspended: "FORBIDDEN",
+  talent_not_found: "NOT_FOUND",
 } as const
 
 /** Map known domain failures to tRPC codes. Unexpected errors stay 500 and keep their cause. */
@@ -49,7 +51,7 @@ export function throwTrpc(error: unknown): never {
       cause: error,
     })
   }
-  if (error instanceof OtpRateLimited) {
+  if (error instanceof OtpRateLimited || error instanceof PublicReadRateLimited) {
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",
       message: error.message,

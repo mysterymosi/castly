@@ -20,6 +20,8 @@
 
 ### 3.2 Vanity URL and SSR page
 
+**Status:** Done — API `talent.public.bySlug` / `talent.public.liveSlugs` (`apps/api/src/talent/public-service.ts`; anonymous `serializeTalent`, ready media only; draft, suspended, unknown, and malformed slugs are all `NOT_FOUND`). The talent-record loader is shared with the studio (`apps/api/src/talent/record.ts`). Web `apps/web/app/[slug]/page.tsx` is ISR (`revalidate = 60`, empty `generateStaticParams`); drafts are a real, cached 404. The API calls web `POST /api/revalidate` (`CASTLY_REVALIDATE_SECRET`) after every talent mutation and when media turns ready, so changes show on the next visit — M7 suspension must call `revalidatePublicPortfolio` too. `talent.public.*` is limited to 60 req/min per IP; the web server sends `CASTLY_WEB_API_KEY` and gets its own 1,200/min bucket. Mixed-case slugs 308 to the stored slug; canonical via `metadataBase` (`NEXT_PUBLIC_SITE_URL`). `robots.ts`; `sitemap.ts` renders per request from a 10-minute data cache (capped at 50k URLs). Web reads the API at `CASTLY_API_URL`. Integration test `src/talent/public.integration.test.ts`.
+
 `apps/web` route `/{slug}` (and `castly.app/{slug}` in prod). 404 for draft/suspended. Server-render the section list. Canonical URL. `robots.txt` and sitemap of live slugs.
 
 **Acceptance.** `curl` of a live slug returns 200 HTML containing the talent's display name and headline. A draft slug returns 404.

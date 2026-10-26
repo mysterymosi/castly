@@ -12,8 +12,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@trpc/client": "^11.19.0",
     "@workspace/portfolio-web": "workspace:*",
+    "@workspace/schema": "workspace:*",
     "@workspace/ui": "workspace:*",
+    "api": "workspace:*",
     "lucide-react": "^1.47.0",
     "next": "16.3.3",
     "next-themes": "^0.4.6",
