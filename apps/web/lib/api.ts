@@ -52,6 +52,9 @@ export const getPublicPortfolio = cache(async (slug: string) => {
   }
 })
 
+/** A live portfolio as the web app receives it (JSON-serialised API output). */
+export type PublicPortfolioResult = NonNullable<Awaited<ReturnType<typeof getPublicPortfolio>>>
+
 /** Cached in Next's data cache; `/api/revalidate` drops it when a talent publishes or unpublishes. */
 export function getLiveTalentSlugs() {
   return cachedApi.talent.public.liveSlugs.query()

@@ -8,6 +8,7 @@ import Link from "next/link"
 import { notFound, permanentRedirect } from "next/navigation"
 
 import { getPublicPortfolio } from "@/lib/api"
+import { portfolioMetadata } from "@/lib/portfolio-metadata"
 
 // ISR: each slug renders on its first visit, then is served from cache and re-rendered in the
 // background at most once a minute. The API calls `/api/revalidate` on every talent change, so
@@ -22,29 +23,11 @@ export function generateStaticParams() {
 
 type Props = { params: Promise<{ slug: string }> }
 
-function describe(profile: {
-  headline: string | null
-  bio: string | null
-  cityName: string | null
-}): string | undefined {
-  const lead = [profile.headline, profile.cityName].filter(Boolean).join(" · ")
-  const text = [lead, profile.bio].filter(Boolean).join(". ")
-  if (!text) return undefined
-  return text.length > 160 ? `${text.slice(0, 157).trimEnd()}…` : text
-}
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   const portfolio = await getPublicPortfolio(slug)
   if (!portfolio) return {}
-  const { profile } = portfolio.talent
-  return {
-    title: profile.headline
-      ? `${profile.displayName} — ${profile.headline}`
-      : profile.displayName,
-    description: describe(profile),
-    alternates: { canonical: `/${profile.slug}` },
-  }
+  return portfolioMetadata(portfolio)
 }
 
 export default async function TalentPortfolioPage({ params }: Props) {

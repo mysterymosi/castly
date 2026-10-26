@@ -23,6 +23,7 @@ export async function POST(request: Request) {
   }
   // Drops the cached page and the fetches it made; the next visit re-renders it.
   revalidatePath(`/${slug.data}`)
+  revalidatePath(`/api/og/${slug.data}`)
   revalidatePath("/sitemap.xml")
   return Response.json({ revalidated: true })
 }

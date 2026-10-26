@@ -28,6 +28,8 @@
 
 ### 3.3 OG and Twitter tags
 
+**Status:** Built; WhatsApp check pending a public URL. `apps/web/lib/portfolio-metadata.ts` builds title, description (≤160 chars), canonical, `og:*` (`type=profile`, `og:url` = stored slug) and Twitter `summary_large_image`. Image: first ready photo's `og` variant (card lead → hero → gallery → about), else the card lead's poster if the talent chose a video (Mux cropped to 1200×630), else a generated name card at `/api/og/{slug}` (ISR, dropped by `/api/revalidate`). The public payload now includes the card lead media. Tags are in `<head>` for WhatsApp's crawler and browsers alike (ISR prerender; `WhatsApp` is also in Next's HTML-limited bot list). Unit tests in `apps/web` (`pnpm --filter web test`, in CI) instead of Playwright — the check is HTML, not browser behaviour.
+
 `og:title`, `og:description`, `og:image` using the `og` variant, `og:url`. Twitter card `summary_large_image`.
 
 **Acceptance.** Playwright (or opengraph.xyz plus a recorded WhatsApp screenshot) shows title, description, and image. Pasting the link into WhatsApp produces a rich preview — this is the exit-gate check, not optional.

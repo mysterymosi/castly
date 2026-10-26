@@ -44,12 +44,12 @@ export async function getPublicPortfolio(db: Db, slug: string) {
     return name ? [{ id, name }] : []
   })
 
-  // Only media the serialized (visible) sections reference, and only once it is ready.
-  const statuses = await getMediaStatuses(
-    db,
-    profile.userId,
-    sectionMediaIds(talent.sections)
-  )
+  // Only media the serialized (visible) sections or the card lead reference, once ready. The
+  // card lead is the talent's chosen share image for the page's link preview.
+  const mediaIds = new Set(sectionMediaIds(talent.sections))
+  const { leadMediaId } = talent.profile.cardConfig
+  if (leadMediaId) mediaIds.add(leadMediaId)
+  const statuses = await getMediaStatuses(db, profile.userId, [...mediaIds])
   const media = Object.fromEntries(
     Object.entries(statuses).filter(([, m]) => m.status === "ready")
   )
