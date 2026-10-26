@@ -37,11 +37,6 @@ function talentCaller(userId: string) {
 }
 
 async function ensureCityId() {
-  const [existing] = await db
-    .select({ id: schema.cities.id })
-    .from(schema.cities)
-    .limit(1)
-  if (existing) return existing.id
   const slug = `publish-city-${randomUUID().slice(0, 8)}`
   const [created] = await db
     .insert(schema.cities)
@@ -53,12 +48,7 @@ async function ensureCityId() {
 }
 
 async function ensureSkillIds() {
-  const rows = await db
-    .select({ id: schema.skills.id })
-    .from(schema.skills)
-    .limit(3)
-  if (rows.length >= 3) return rows.map((row) => row.id)
-  const ids = rows.map((row) => row.id)
+  const ids: string[] = []
   while (ids.length < 3) {
     const slug = `publish-skill-${randomUUID().slice(0, 8)}`
     const [created] = await db
