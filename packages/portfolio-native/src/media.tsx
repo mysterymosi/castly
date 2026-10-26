@@ -4,9 +4,27 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react"
+import type { MediaStatusOutput } from "@workspace/schema"
 import { View } from "react-native"
 
 import type { SectionMediaMeta } from "./types"
+
+/** Renderer media meta from media status rows: card variant for images, poster + HLS for video. */
+export function mediaMetaFromStatus(media: Record<string, MediaStatusOutput>): SectionMediaMeta {
+  const meta: SectionMediaMeta = {}
+  for (const [id, item] of Object.entries(media)) {
+    meta[id] = {
+      width: item.width ?? undefined,
+      height: item.height ?? undefined,
+      durationMs: item.durationMs ?? undefined,
+      imageUrl: item.variants?.card ?? null,
+      posterUrl: item.posterUrl,
+      playbackUrl: item.playbackUrl,
+      blurhash: item.blurhash,
+    }
+  }
+  return meta
+}
 
 export type PortfolioImageProps = {
   uri: string

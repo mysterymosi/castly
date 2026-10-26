@@ -49,8 +49,10 @@ export const fixtureMedia: Record<string, MediaStatusOutput> = {
     variants: null,
   },
   [fixtureMediaIds.processing]: {
+    // Not ready: the API sends no delivery URLs until processing finishes.
     ...image(fixtureMediaIds.processing),
     status: "processing",
+    variants: null,
   },
 }
 
@@ -58,15 +60,18 @@ let position = 0
 const section = (
   type: TalentSectionDto["type"],
   config: unknown,
-  { schemaVersion = 1, isVisible = true } = {}
-): TalentSectionDto => ({
-  id: id(++position),
-  type,
-  schemaVersion,
-  position,
-  isVisible,
-  config,
-})
+  { schemaVersion = 1, isVisible = true, at }: { schemaVersion?: number; isVisible?: boolean; at?: number } = {}
+): TalentSectionDto => {
+  position += 1
+  return {
+    id: id(position),
+    type,
+    schemaVersion,
+    position: at ?? position,
+    isVisible,
+    config,
+  }
+}
 
 export const fixtureSections: TalentSectionDto[] = [
   // Stored at v1: the renderer must receive it forward-migrated to v2.
@@ -151,3 +156,70 @@ export const fixtureContent: PortfolioContent = {
     { month: "2027-02", status: "available" },
   ],
 }
+
+export type FixturePortfolio = {
+  name: string
+  sections: TalentSectionDto[]
+  media: Record<string, MediaStatusOutput>
+  content: PortfolioContent
+  now: Date
+}
+
+/** Text only: no media, no profile rows, rates hidden from the viewer. */
+const sparse: FixturePortfolio = {
+  name: "sparse",
+  sections: [
+    section("hero", { style: "minimal", mediaId: null, headline: "Voice artist", showBadges: false }, { schemaVersion: 2 }),
+    section("about", {}),
+    section("gallery", { mediaIds: [], layout: "grid" }),
+    section("showreel", { mediaId: null }),
+    section("credits", { signatureOnly: false }),
+    section("skills", {}),
+    section("rates", { showCurrency: true }),
+  ],
+  media: {},
+  content: { skills: [{ name: "Narration" }] },
+  now: fixtureNow,
+}
+
+/** Positions out of array order, and the non-default config branches. */
+const reordered: FixturePortfolio = {
+  name: "reordered",
+  sections: [
+    section("credits", { signatureOnly: true }, { at: 40 }),
+    section("languages", { showAccents: false }, { at: 10 }),
+    section("hero", {
+      style: "split",
+      mediaId: fixtureMediaIds.gallery[0],
+      headline: "Dancer",
+      subtitle: "Abuja",
+      showBadges: false,
+    }, { schemaVersion: 2, at: 0 }),
+    section("availability", { horizonMonths: 1 }, { at: 30 }),
+    section("gallery", { mediaIds: [fixtureMediaIds.gallery[2], fixtureMediaIds.gallery[1]], layout: "masonry" }, { at: 20 }),
+    section("rates", { showCurrency: false }, { at: 50 }),
+    section("skills", {}, { at: 5, isVisible: false }),
+  ],
+  media: fixtureMedia,
+  content: {
+    ...fixtureContent,
+    rates: [
+      { kind: "project", amountMin: null, amountMax: 2_000_000, currency: "NGN", negotiable: false },
+      { kind: "half_day", amountMin: null, amountMax: null, currency: "NGN", negotiable: true },
+    ],
+  },
+  now: fixtureNow,
+}
+
+/** Every fixture portfolio; the parity suite runs each through both renderers. */
+export const fixturePortfolios: FixturePortfolio[] = [
+  {
+    name: "complete",
+    sections: fixtureSections,
+    media: fixtureMedia,
+    content: fixtureContent,
+    now: fixtureNow,
+  },
+  sparse,
+  reordered,
+]

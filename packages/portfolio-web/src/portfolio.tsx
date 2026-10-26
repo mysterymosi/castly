@@ -1,8 +1,4 @@
-import {
-  readStoredPortfolioSection,
-  type PortfolioSection,
-  type TalentSectionDto,
-} from "@workspace/schema"
+import { readVisibleSections, type PortfolioSection } from "@workspace/schema"
 
 import { defaultMediaComponents } from "./media"
 import { isWebSectionType, webSectionRegistry } from "./registry"
@@ -13,24 +9,8 @@ import type {
   PortfolioRenderContext,
 } from "./types"
 
-/**
- * Visible sections in position order, re-read through the schema registry so a stale row is
- * forward-migrated and validated before it is rendered.
- */
-export function sectionsFromDto(
-  sections: (Omit<TalentSectionDto, "config"> & { config?: unknown })[]
-): PortfolioSection[] {
-  return sections
-    .filter((section) => section.isVisible)
-    .sort((a, b) => a.position - b.position)
-    .map((section) =>
-      readStoredPortfolioSection({
-        type: section.type,
-        schemaVersion: section.schemaVersion,
-        config: section.config,
-      })
-    )
-}
+/** Visible sections in position order, forward-migrated and validated (shared with native). */
+export const sectionsFromDto = readVisibleSections
 
 export function renderPortfolioSection(
   section: PortfolioSection,

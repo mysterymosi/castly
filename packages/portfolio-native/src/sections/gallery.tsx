@@ -26,7 +26,9 @@ function GallerySection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config:
     <SectionShell cardWidth={cardWidth}>
       <SectionTitle>Gallery</SectionTitle>
       {ids.length === 0 ? (
-        <Text className="font-body text-footnote text-textMuted">No photos yet</Text>
+        <Text testID="portfolio-placeholder" className="font-body text-footnote text-textMuted">
+          No photos yet
+        </Text>
       ) : (
         <View className="flex-row flex-wrap gap-2">
           {ids.map((id) => (

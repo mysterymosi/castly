@@ -1,12 +1,12 @@
 import type {
   CoreSectionConfigMap,
   CoreSectionType,
+  PortfolioContent,
   PortfolioSection,
-  TalentRateDto,
 } from "@workspace/schema"
 import type { ComponentType, ReactElement } from "react"
 
-export type { CoreSectionConfigMap, CoreSectionType, PortfolioSection }
+export type { CoreSectionConfigMap, CoreSectionType, PortfolioContent, PortfolioSection }
 
 /** Ready media referenced by the sections, keyed by media id. */
 export type PortfolioMediaMeta = Record<
@@ -24,31 +24,6 @@ export type PortfolioMediaMeta = Record<
     playbackUrl?: string | null
   }
 >
-
-/**
- * Profile data the list sections display. Section configs only carry display options, so the
- * page loader supplies the rows. Everything here is already filtered for the viewer: a missing
- * `rates` means the viewer may not see rates, and the rates section renders nothing.
- */
-export type PortfolioContent = {
-  credits?: {
-    title: string
-    roleName?: string | null
-    productionCompany?: string | null
-    year?: number | null
-    type?: string | null
-    link?: string | null
-    isSignature: boolean
-    verified: boolean
-  }[]
-  attributes?: { label: string; value: string }[]
-  skills?: { name: string }[]
-  languages?: { name: string; fluency?: string | null }[]
-  accents?: { name: string }[]
-  rates?: TalentRateDto[]
-  /** `month` is `YYYY-MM`. */
-  availability?: { month: string; status: "available" | "partial" | "booked" }[]
-}
 
 export type PortfolioImageProps = {
   src: string

@@ -12,7 +12,7 @@
 
 ### 3.1 Web section renderers
 
-**Status:** Done — `packages/portfolio-web` (`webSectionRegistry`, `PortfolioSections`, `sectionsFromDto`, `mediaMetaFromStatus`; fixtures at `@workspace/portfolio-web/fixtures`). Renderers are hook-free Server Components; media elements are injectable like native. List sections (credits, attributes, skills, languages, rates, availability) read rows from a `PortfolioContent` prop because section configs carry display options only — the page loader (3.2) and serializer (3.5) must supply it. Sections with nothing to show render nothing. CI runs `pnpm --filter @workspace/portfolio-web test`.
+**Status:** Done — `packages/portfolio-web` (`webSectionRegistry`, `PortfolioSections`, `sectionsFromDto`, `mediaMetaFromStatus`; fixtures at `@workspace/portfolio-web/fixtures`). Renderers are hook-free Server Components; media elements are injectable like native. List sections (credits, attributes, skills, languages, rates, availability) read rows from a `PortfolioContent` prop (type and selectors now in `@workspace/schema`, see 3.4) because section configs carry display options only — the page loader (3.2) and serializer (3.5) must supply it. Sections with nothing to show render nothing. CI runs `pnpm --filter @workspace/portfolio-web test`.
 
 `packages/portfolio-web`: stacked React renderers for every shipped section type, consuming the same validated + forward-migrated section list as native.
 
@@ -35,6 +35,8 @@
 **Acceptance.** Playwright (or opengraph.xyz plus a recorded WhatsApp screenshot) shows title, description, and image. Pasting the link into WhatsApp produces a rich preview — this is the exit-gate check, not optional.
 
 ### 3.4 Renderer parity snapshots
+
+**Status:** Done — `packages/portfolio-parity` (CI: `pnpm --filter @workspace/portfolio-parity test`). Each fixture portfolio (`fixturePortfolios` in `@workspace/portfolio-web/fixtures`: complete, sparse, reordered) is rendered by both packages to HTML (native via a react-native → DOM stub), reduced to per-section `{type, texts, mediaIds}` with headings, placeholders, and styling dropped, and compared for equality; empty sections are ignored on both sides. Two self-tests prove a dropped credit and a reordered section fail the check. To make this meaningful, list-section rules moved to `@workspace/schema` (`portfolio/content.ts`: `PortfolioContent`, `readVisibleSections`, `select*`, labels) and native list sections now render real rows when given `content` (placeholder rows otherwise — the studio preview still passes none). Native `estimateHeight` counts content rows.
 
 Same fixture portfolios through native and web extractors. Compare **semantic content** (section types, text, media ids, order), not pixels.
 

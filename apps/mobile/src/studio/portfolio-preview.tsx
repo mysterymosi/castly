@@ -6,7 +6,7 @@ import {
   renderStudioSection,
   type SectionMediaMeta,
 } from "@workspace/portfolio-native"
-import type { PortfolioSection, TalentSectionDto } from "@workspace/schema"
+import { readVisibleSections, type TalentSectionDto } from "@workspace/schema"
 import { useMemo, useState } from "react"
 import { View } from "react-native"
 
@@ -18,19 +18,9 @@ type Props = {
   mediaMeta?: SectionMediaMeta
 }
 
-function toPortfolioSection(section: TalentSectionDto): PortfolioSection {
-  return {
-    type: section.type,
-    schemaVersion: section.schemaVersion,
-    config: section.config,
-  } as PortfolioSection
-}
-
 export function PortfolioPreview({ sections, mediaMeta = {} }: Props) {
-  const visible = useMemo(
-    () => sections.filter((s) => s.isVisible).sort((a, b) => a.position - b.position),
-    [sections],
-  )
+  // Same ordering, migration, and validation as the web page (shared with the parity suite).
+  const visible = useMemo(() => readVisibleSections(sections), [sections])
   // Lazy initialisers so the timestamps are read once, on mount.
   const [mountedAt] = useState(() => Date.now())
   const [requestedAt] = useState(() => takePreviewRequestedAt())
@@ -57,8 +47,7 @@ export function PortfolioPreview({ sections, mediaMeta = {} }: Props) {
               sections: visible.length,
             })
           }}
-          renderItem={({ item }) => {
-            const section = toPortfolioSection(item)
+          renderItem={({ item: section }) => {
             const height = estimateSectionHeight(section, mediaMeta)
             return (
               <View className="self-center overflow-hidden" style={{ height, width: CARD_WIDTH, maxWidth: "100%" }}>

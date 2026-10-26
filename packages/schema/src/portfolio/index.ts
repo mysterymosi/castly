@@ -21,3 +21,16 @@ export {
   type SectionTypeDefinition,
   type StoredPortfolioSectionRow,
 } from "./registry"
+export {
+  creditDetail,
+  portfolioLabels,
+  readVisibleSections,
+  selectAttributes,
+  selectAvailability,
+  selectCredits,
+  selectLanguages,
+  selectRates,
+  selectSkills,
+  type PortfolioContent,
+  type PortfolioCredit,
+} from "./content"

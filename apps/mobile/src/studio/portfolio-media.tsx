@@ -1,8 +1,9 @@
-import type {
-  PortfolioImageProps,
-  PortfolioMediaComponents,
-  PortfolioVideoProps,
-  SectionMediaMeta,
+import {
+  mediaMetaFromStatus,
+  type PortfolioImageProps,
+  type PortfolioMediaComponents,
+  type PortfolioVideoProps,
+  type SectionMediaMeta,
 } from "@workspace/portfolio-native"
 import type { StudioState } from "@workspace/schema"
 import { useEvent } from "expo"
@@ -17,19 +18,7 @@ import { Icon } from "@/components/ui/icon"
 export function mediaMetaFromStudio(
   media: StudioState["media"]
 ): SectionMediaMeta {
-  const meta: SectionMediaMeta = {}
-  for (const [id, item] of Object.entries(media)) {
-    meta[id] = {
-      width: item.width ?? undefined,
-      height: item.height ?? undefined,
-      durationMs: item.durationMs ?? undefined,
-      imageUrl: item.variants?.card ?? null,
-      posterUrl: item.posterUrl,
-      playbackUrl: item.playbackUrl,
-      blurhash: item.blurhash,
-    }
-  }
-  return meta
+  return mediaMetaFromStatus(media)
 }
 
 function PortfolioImage({ uri, blurhash, width, height }: PortfolioImageProps) {

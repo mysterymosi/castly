@@ -24,6 +24,10 @@ export async function revalidatePublicPortfolio(db: Db, userId: string) {
   // Never published: there is no cached public page to drop.
   if (!profile?.publishedAt) return
 
+  // AbortController rather than AbortSignal.timeout: mobile type-checks this file via the
+  // router type, and React Native's lib has no AbortSignal.timeout.
+  const abort = new AbortController()
+  const timer = setTimeout(() => abort.abort(), 3_000)
   const response = await fetch(`${webUrl.replace(/\/$/, "")}/api/revalidate`, {
     method: "POST",
     headers: {
@@ -31,8 +35,8 @@ export async function revalidatePublicPortfolio(db: Db, userId: string) {
       "content-type": "application/json",
     },
     body: JSON.stringify({ slug: profile.slug }),
-    signal: AbortSignal.timeout(3_000),
-  })
+    signal: abort.signal,
+  }).finally(() => clearTimeout(timer))
   if (!response.ok) {
     throw new Error(`web revalidate returned ${response.status}`)
   }
