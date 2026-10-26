@@ -13,6 +13,9 @@ const adult = "1990-01-01"
 const seededUserIds: string[] = []
 const createdCityIds: string[] = []
 const createdSkillIds: string[] = []
+const createdLanguageIds: string[] = []
+const createdAccentIds: string[] = []
+const createdAttributeDefinitionIds: string[] = []
 
 const stubAuth: AuthClient = {
   requestOtp: async () => {},
@@ -65,6 +68,48 @@ async function ensureSkillIds() {
   return ids
 }
 
+const tag = () => randomUUID().slice(0, 8)
+
+/** Profile rows for every list section, including attributes the public must never see. */
+async function seedListRows(userId: string) {
+  await db.insert(schema.credits).values([
+    { talentId: userId, title: "The Lagoon", roleName: "Lead", year: 2025, isSignature: true, verifiedAt: new Date() },
+    { talentId: userId, title: "Market Day", year: 2023, sort: 1 },
+  ])
+
+  const [yoruba] = await db
+    .insert(schema.languages)
+    .values({ slug: `public-lang-${tag()}`, name: "Yoruba" })
+    .returning({ id: schema.languages.id })
+  const [lagos] = await db
+    .insert(schema.accents)
+    .values({ slug: `public-accent-${tag()}`, name: "Lagos" })
+    .returning({ id: schema.accents.id })
+  if (!yoruba || !lagos) throw new Error("taxonomy insert failed")
+  createdLanguageIds.push(yoruba.id)
+  createdAccentIds.push(lagos.id)
+  await db.insert(schema.talentLanguages).values({ talentId: userId, languageId: yoruba.id, fluency: "native" })
+  await db.insert(schema.talentAccents).values({ talentId: userId, accentId: lagos.id })
+
+  const definitions = await db
+    .insert(schema.attributeDefinitions)
+    .values([
+      { key: `public_height_${tag()}`, label: "Height", dataType: "number", tier: "standard" },
+      { key: `public_build_${tag()}`, label: "Build", dataType: "text", tier: "standard" },
+      { key: `public_heritage_${tag()}`, label: "Heritage", dataType: "text", tier: "sensitive" },
+    ])
+    .returning({ id: schema.attributeDefinitions.id, label: schema.attributeDefinitions.label })
+  createdAttributeDefinitionIds.push(...definitions.map((d) => d.id))
+  const definitionId = (label: string) => definitions.find((d) => d.label === label)!.id
+  await db.insert(schema.talentAttributes).values([
+    { talentId: userId, definitionId: definitionId("Height"), valueNum: "172" },
+    { talentId: userId, definitionId: definitionId("Build"), valueText: "Athletic", isVisible: false },
+    { talentId: userId, definitionId: definitionId("Heritage"), valueText: "Sensitive value" },
+  ])
+
+  await db.insert(schema.talentAvailability).values({ talentId: userId, month: "2026-11", status: "partial" })
+}
+
 /** A live talent with a hidden about section, a public rate, and a rates section. */
 async function publishedTalent(label: string) {
   const userId = await seedAuthUser(label, adult)
@@ -115,6 +160,22 @@ describe("talent.public", () => {
       const id = createdSkillIds.pop()
       if (id) await db.delete(schema.skills).where(eq(schema.skills.id, id))
     }
+    while (createdLanguageIds.length > 0) {
+      const id = createdLanguageIds.pop()
+      if (id) await db.delete(schema.languages).where(eq(schema.languages.id, id))
+    }
+    while (createdAccentIds.length > 0) {
+      const id = createdAccentIds.pop()
+      if (id) await db.delete(schema.accents).where(eq(schema.accents.id, id))
+    }
+    while (createdAttributeDefinitionIds.length > 0) {
+      const id = createdAttributeDefinitionIds.pop()
+      if (id) {
+        await db
+          .delete(schema.attributeDefinitions)
+          .where(eq(schema.attributeDefinitions.id, id))
+      }
+    }
     while (createdCityIds.length > 0) {
       const id = createdCityIds.pop()
       if (id) await db.delete(schema.cities).where(eq(schema.cities.id, id))
@@ -132,7 +193,7 @@ describe("talent.public", () => {
     expect(portfolio.talent.profile).not.toHaveProperty("completenessScore")
     expect(portfolio.talent.sections.every((s) => s.isVisible)).toBe(true)
     expect(JSON.stringify(portfolio)).not.toContain("Hidden draft bio")
-    expect(portfolio.skills.map((s) => s.name).sort()).toEqual([
+    expect(portfolio.talent.content.skills.map((s) => s.name)).toEqual([
       "Improvisation",
       "Stage combat",
       "Voice",
@@ -158,6 +219,49 @@ describe("talent.public", () => {
     const portfolio = await anonymous.talent.public.bySlug({ slug })
     expect(portfolio.talent).not.toHaveProperty("rates")
     expect(portfolio.talent.sections.map((s) => s.type)).not.toContain("rates")
+    expect(JSON.stringify(portfolio)).not.toContain("150000")
+
+    // The owner's studio (the mobile preview) still has the rate and the rates section.
+    const studio = await caller(userId).talent.studio.get()
+    expect(studio.talent.rates).toEqual([expect.objectContaining({ kind: "day", amountMin: 150000 })])
+    expect(studio.talent.sections.map((s) => s.type)).toContain("rates")
+  })
+
+  it("sends public list rows and drops hidden or sensitive attributes", async () => {
+    const { userId, slug } = await publishedTalent("public-rows")
+    await seedListRows(userId)
+
+    const { content } = (await anonymous.talent.public.bySlug({ slug })).talent
+    expect(content.credits.map((c) => [c.title, c.verified])).toEqual([
+      ["The Lagoon", true],
+      ["Market Day", false],
+    ])
+    expect(content.languages).toEqual([{ name: "Yoruba", fluency: "native" }])
+    expect(content.accents).toEqual([{ name: "Lagos" }])
+    expect(content.availability).toEqual([{ month: "2026-11", status: "partial" }])
+    expect(content.attributes).toEqual([{ label: "Height", value: "172" }])
+
+    const payload = JSON.stringify(await anonymous.talent.public.bySlug({ slug }))
+    expect(payload).not.toContain("Athletic")
+    expect(payload).not.toContain("Sensitive value")
+    expect(payload).not.toContain("Heritage")
+  })
+
+  it("leaves quarantined media out of the public payload", async () => {
+    const { userId, slug } = await publishedTalent("public-quarantine")
+    const before = await anonymous.talent.public.bySlug({ slug })
+    const [quarantined] = Object.keys(before.media)
+    expect(quarantined).toBeDefined()
+
+    await db
+      .update(schema.mediaAssets)
+      .set({ status: "quarantined" })
+      .where(eq(schema.mediaAssets.id, quarantined!))
+    const after = await anonymous.talent.public.bySlug({ slug })
+    expect(after.media).not.toHaveProperty(quarantined!)
+    // The owner can still see it in the studio, flagged, to replace it.
+    const studio = await caller(userId).talent.studio.get()
+    expect(studio.media[quarantined!]?.status).toBe("quarantined")
   })
 
   it("returns NOT_FOUND for draft, suspended, and unknown slugs", async () => {

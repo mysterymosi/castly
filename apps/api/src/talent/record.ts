@@ -1,4 +1,4 @@
-import type { TalentRecord } from "@workspace/core"
+import type { TalentAttributeRow, TalentRecord } from "@workspace/core"
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
 import {
@@ -6,7 +6,7 @@ import {
   type CoreSectionType,
   readStoredPortfolioSection,
 } from "@workspace/schema"
-import { asc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, sql } from "drizzle-orm"
 
 type ProfileRow = typeof schema.talentProfiles.$inferSelect
 
@@ -22,6 +22,100 @@ export function sectionMediaIds(sections: { config: unknown }[]): string[] {
     if (cfg.mediaIds) ids.push(...cfg.mediaIds)
   }
   return ids
+}
+
+/** Display text for a stored attribute value, or null when nothing is set. */
+function attributeValue(row: {
+  valueText: string | null
+  valueNum: string | null
+  valueBool: boolean | null
+}): string | null {
+  if (row.valueText?.trim()) return row.valueText.trim()
+  if (row.valueNum !== null) return String(Number(row.valueNum))
+  if (row.valueBool !== null) return row.valueBool ? "Yes" : "No"
+  return null
+}
+
+/** List-section rows. Visibility rules are applied by `serializeTalent`, not here. */
+async function loadContent(db: Db, userId: string): Promise<TalentRecord["content"]> {
+  const credits = await db
+    .select()
+    .from(schema.credits)
+    .where(eq(schema.credits.talentId, userId))
+    .orderBy(asc(schema.credits.sort), sql`${schema.credits.year} desc nulls last`)
+
+  const attributeRows = await db
+    .select({
+      label: schema.attributeDefinitions.label,
+      tier: schema.attributeDefinitions.tier,
+      isVisible: schema.talentAttributes.isVisible,
+      valueText: schema.talentAttributes.valueText,
+      valueNum: schema.talentAttributes.valueNum,
+      valueBool: schema.talentAttributes.valueBool,
+    })
+    .from(schema.talentAttributes)
+    .innerJoin(
+      schema.attributeDefinitions,
+      eq(schema.talentAttributes.definitionId, schema.attributeDefinitions.id)
+    )
+    .where(
+      and(
+        eq(schema.talentAttributes.talentId, userId),
+        eq(schema.attributeDefinitions.active, true)
+      )
+    )
+    .orderBy(asc(schema.attributeDefinitions.label))
+
+  const skills = await db
+    .select({ name: schema.skills.name })
+    .from(schema.talentSkills)
+    .innerJoin(schema.skills, eq(schema.talentSkills.skillId, schema.skills.id))
+    .where(eq(schema.talentSkills.talentId, userId))
+    .orderBy(asc(schema.skills.name))
+
+  const languages = await db
+    .select({ name: schema.languages.name, fluency: schema.talentLanguages.fluency })
+    .from(schema.talentLanguages)
+    .innerJoin(schema.languages, eq(schema.talentLanguages.languageId, schema.languages.id))
+    .where(eq(schema.talentLanguages.talentId, userId))
+    // Strongest first: native, fluent, conversational, basic.
+    .orderBy(desc(schema.talentLanguages.fluency), asc(schema.languages.name))
+
+  const accents = await db
+    .select({ name: schema.accents.name })
+    .from(schema.talentAccents)
+    .innerJoin(schema.accents, eq(schema.talentAccents.accentId, schema.accents.id))
+    .where(eq(schema.talentAccents.talentId, userId))
+    .orderBy(asc(schema.accents.name))
+
+  const availability = await db
+    .select({ month: schema.talentAvailability.month, status: schema.talentAvailability.status })
+    .from(schema.talentAvailability)
+    .where(eq(schema.talentAvailability.talentId, userId))
+    .orderBy(asc(schema.talentAvailability.month))
+
+  return {
+    credits: credits.map((c) => ({
+      title: c.title,
+      roleName: c.roleName,
+      productionCompany: c.productionCompany,
+      year: c.year,
+      type: c.type,
+      link: c.link,
+      isSignature: c.isSignature,
+      verified: c.verifiedAt !== null,
+    })),
+    attributes: attributeRows.flatMap((row): TalentAttributeRow[] => {
+      const value = attributeValue(row)
+      // `prohibited` cannot be stored (DB check); narrowing keeps the type honest.
+      if (value === null || row.tier === "prohibited") return []
+      return [{ label: row.label, value, isVisible: row.isVisible, tier: row.tier }]
+    }),
+    skills,
+    languages,
+    accents,
+    availability,
+  }
 }
 
 /**
@@ -99,5 +193,6 @@ export async function loadTalentRecord(
       currency: r.currency,
       negotiable: r.negotiable,
     })),
+    content: await loadContent(db, userId),
   }
 }

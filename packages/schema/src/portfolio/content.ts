@@ -1,4 +1,4 @@
-import type { TalentRateDto, TalentSectionDto } from "../talent/dto"
+import type { TalentContentDto, TalentRateDto, TalentSectionDto } from "../talent/dto"
 import type { CoreSectionConfigMap } from "./config-types"
 import { readStoredPortfolioSection, type PortfolioSection } from "./registry"
 
@@ -9,9 +9,9 @@ import { readStoredPortfolioSection, type PortfolioSection } from "./registry"
  */
 
 /**
- * Profile data the list sections display. Section configs only carry display options, so the
- * loader supplies the rows. Everything here is already filtered for the viewer: a missing
- * `rates` means the viewer may not see rates, and the rates section renders nothing.
+ * Profile data the list sections display: the DTO's `content` plus `rates`. Everything is already
+ * filtered for the viewer: a missing `rates` means the viewer may not see rates, and the rates
+ * section renders nothing. Fields are optional so a renderer can be given only some rows.
  */
 export type PortfolioContent = {
   credits?: {
@@ -31,6 +31,18 @@ export type PortfolioContent = {
   rates?: TalentRateDto[]
   /** `month` is `YYYY-MM`. */
   availability?: { month: string; status: "available" | "partial" | "booked" }[]
+}
+
+/** Compile-time check: whatever the serializer sends is always renderable. */
+const _dtoContentIsRenderable = (content: TalentContentDto): PortfolioContent => content
+void _dtoContentIsRenderable
+
+/** The renderers' content for a serialized talent. */
+export function portfolioContentFromDto(talent: {
+  content: TalentContentDto
+  rates?: TalentRateDto[]
+}): PortfolioContent {
+  return { ...talent.content, rates: talent.rates }
 }
 
 export type PortfolioCredit = NonNullable<PortfolioContent["credits"]>[number]

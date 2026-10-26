@@ -60,6 +60,29 @@ function talent(rateVisibility: TalentRateVisibility): TalentRecord {
     rates: [
       { kind: "day", amountMin: 50000, amountMax: 80000, currency: "NGN", negotiable: true },
     ],
+    content: {
+      credits: [
+        {
+          title: "The Lagoon",
+          roleName: "Lead",
+          productionCompany: null,
+          year: 2025,
+          type: "Film",
+          link: null,
+          isSignature: true,
+          verified: false,
+        },
+      ],
+      attributes: [
+        { label: "Height", value: "172 cm", isVisible: true, tier: "standard" },
+        { label: "Playing age", value: "25–32", isVisible: false, tier: "standard" },
+        { label: "Ethnicity", value: "Yoruba", isVisible: true, tier: "sensitive" },
+      ],
+      skills: [{ name: "Stage combat" }],
+      languages: [{ name: "Yoruba", fluency: "native" }],
+      accents: [{ name: "Lagos" }],
+      availability: [{ month: "2026-11", status: "available" }],
+    },
   }
 }
 
@@ -117,5 +140,23 @@ describe("serializeTalent", () => {
     expect(() => serializeTalent(talent("public"), { kind: "owner", userId: otherId }, {})).toThrow(
       TalentOwnershipMismatch,
     )
+  })
+
+  it("sends only visible, standard-tier attributes — to every viewer, the owner included", () => {
+    for (const viewer of [owner, booker, verifiedBooker, anonymous]) {
+      const dto = serializeTalent(talent("public"), viewer, {})
+      expect(dto.content.attributes).toEqual([{ label: "Height", value: "172 cm" }])
+      expect(JSON.stringify(dto)).not.toContain("Ethnicity")
+      expect(JSON.stringify(dto)).not.toContain("Playing age")
+    }
+  })
+
+  it("passes the public list rows through unchanged", () => {
+    const dto = serializeTalent(talent("public"), anonymous, {})
+    expect(dto.content.credits.map((c) => c.title)).toEqual(["The Lagoon"])
+    expect(dto.content.languages).toEqual([{ name: "Yoruba", fluency: "native" }])
+    expect(dto.content.accents).toEqual([{ name: "Lagos" }])
+    expect(dto.content.availability).toEqual([{ month: "2026-11", status: "available" }])
+    expect(talentDtoSchema.safeParse(dto).success).toBe(true)
   })
 })

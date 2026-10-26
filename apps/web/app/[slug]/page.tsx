@@ -3,6 +3,7 @@ import {
   PortfolioSections,
   sectionsFromDto,
 } from "@workspace/portfolio-web"
+import { portfolioContentFromDto } from "@workspace/schema"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound, permanentRedirect } from "next/navigation"
@@ -35,7 +36,7 @@ export default async function TalentPortfolioPage({ params }: Props) {
   const portfolio = await getPublicPortfolio(slug)
   if (!portfolio) notFound()
 
-  const { talent, skills, media } = portfolio
+  const { talent, media } = portfolio
   const { profile } = talent
   // One URL per talent: `/Tunde-Adeyemi` and `/tunde-adeyemi` resolve to the stored slug.
   if (slug !== profile.slug) permanentRedirect(`/${profile.slug}`)
@@ -55,7 +56,7 @@ export default async function TalentPortfolioPage({ params }: Props) {
       <PortfolioSections
         sections={sectionsFromDto(talent.sections)}
         mediaMeta={mediaMetaFromStatus(media)}
-        content={{ skills, rates: talent.rates }}
+        content={portfolioContentFromDto(talent)}
       />
       <footer className="text-muted-foreground mx-auto mt-12 w-full max-w-3xl px-4 text-sm sm:px-6">
         Portfolio on <Link href="/" className="text-foreground font-medium">Castly</Link>

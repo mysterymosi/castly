@@ -23,6 +23,7 @@ export {
 } from "./registry"
 export {
   creditDetail,
+  portfolioContentFromDto,
   portfolioLabels,
   readVisibleSections,
   selectAttributes,

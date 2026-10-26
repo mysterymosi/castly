@@ -44,6 +44,8 @@ Same fixture portfolios through native and web extractors. Compare **semantic co
 
 ### 3.5 Public serialize rules
 
+**Status:** Done — the talent DTO carries `content` (`talentContentDtoSchema`: credits, attributes, skills, languages, accents, availability) loaded in `apps/api/src/talent/record.ts`; `serializeTalent` applies the rules: hidden rates and the rates section omitted for non-owners, hidden sections omitted, attributes only when visible and `standard` tier for every viewer (sensitive never reaches a portfolio; M8 adds role-gated matching, not display). The public service still sends `ready` media only (quarantined excluded; the owner's studio keeps seeing it, flagged). `portfolioContentFromDto` feeds both the web page and the mobile studio preview, so the owner sees their real rates and rows on mobile even when `rate_visibility = 'hidden'`. The public payload's separate `skills` field was folded into `content.skills`. Covered by `packages/core` serializer tests and `apps/api/src/talent/public.integration.test.ts` (rows, attribute rules, quarantine, owner-vs-public rates).
+
 Public viewer: no hidden rates, no unpublished sections, no quarantined media (quarantine is a no-op until M7; still filter `status = 'ready'`).
 
 **Acceptance.** A portfolio with `rate_visibility = 'hidden'` omits the rates block on the public page and includes it when the owner is logged in on mobile.

@@ -1,7 +1,7 @@
 import { serializeTalent } from "@workspace/core"
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
-import { and, asc, desc, eq, inArray } from "drizzle-orm"
+import { and, asc, desc, eq } from "drizzle-orm"
 
 import { getMediaStatuses } from "../media/service.js"
 import { StudioError } from "./errors.js"
@@ -31,19 +31,6 @@ export async function getPublicPortfolio(db: Db, slug: string) {
   )
   const talent = serializeTalent(record, { kind: "anonymous" }, {})
 
-  const skillRows =
-    talent.skillIds.length > 0
-      ? await db
-          .select({ id: schema.skills.id, name: schema.skills.name })
-          .from(schema.skills)
-          .where(inArray(schema.skills.id, talent.skillIds))
-      : []
-  const skillName = new Map(skillRows.map((s) => [s.id, s.name]))
-  const skills = talent.skillIds.flatMap((id) => {
-    const name = skillName.get(id)
-    return name ? [{ id, name }] : []
-  })
-
   // Only media the serialized (visible) sections or the card lead reference, once ready. The
   // card lead is the talent's chosen share image for the page's link preview.
   const mediaIds = new Set(sectionMediaIds(talent.sections))
@@ -54,7 +41,7 @@ export async function getPublicPortfolio(db: Db, slug: string) {
     Object.entries(statuses).filter(([, m]) => m.status === "ready")
   )
 
-  return { talent, skills, media }
+  return { talent, media }
 }
 
 export async function listLiveTalentSlugs(db: Db) {

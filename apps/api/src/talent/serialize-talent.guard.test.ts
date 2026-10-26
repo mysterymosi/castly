@@ -35,16 +35,31 @@ const handBuiltProfile = {
   qualityScore: 0,
 }
 
+const emptyContent = {
+  credits: [],
+  attributes: [],
+  skills: [],
+  languages: [],
+  accents: [],
+  availability: [],
+}
+
 // @ts-expect-error a hand-built owner payload lacks the SerializedTalent brand
 const handBuiltOwner: OwnerTalentDto = {
   profile: handBuiltProfile,
   sections: [],
   skillIds: [],
+  content: emptyContent,
   rates: [],
 }
 
 // @ts-expect-error a hand-built public payload lacks the SerializedTalent brand
-const handBuiltPublic: TalentDto = { profile: handBuiltProfile, sections: [], skillIds: [] }
+const handBuiltPublic: TalentDto = {
+  profile: handBuiltProfile,
+  sections: [],
+  skillIds: [],
+  content: emptyContent,
+}
 
 /** Field names that only a talent payload carries. */
 const talentFieldNames = ["displayName", "rateVisibility", "qualityScore"]
@@ -92,6 +107,7 @@ describe("serializeTalent is the only way out", () => {
       sections: [],
       skillIds: [],
       rates: [],
+      content: emptyContent,
     }
     const dto: OwnerTalentDto = serializeTalent(record, { kind: "owner", userId: record.profile.userId }, {})
     expect(ownerTalentDtoSchema.safeParse(dto).success).toBe(true)

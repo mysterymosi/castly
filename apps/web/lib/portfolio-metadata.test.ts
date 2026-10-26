@@ -50,11 +50,11 @@ function portfolio(
     }),
     skillIds: [],
     rates: [],
+    content: { credits: [], attributes: [], skills: [], languages: [], accents: [], availability: [] },
   }
   // Parsed through the API's output schema, as the web app receives it.
   return publicPortfolioSchema.parse({
     talent: serializeTalent(record, { kind: "anonymous" }, {}),
-    skills: [],
     media: overrides.media ?? fixtureMedia,
   })
 }

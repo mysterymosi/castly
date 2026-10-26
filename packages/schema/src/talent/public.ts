@@ -17,8 +17,6 @@ export const publicPortfolioInput = z.object({
 /** A live talent as an anonymous web visitor sees it. */
 export const publicPortfolioSchema = z.object({
   talent: talentDtoSchema,
-  /** Names for `talent.skillIds`, in the same order. */
-  skills: z.array(z.object({ id: z.uuid(), name: z.string() })),
   /** Ready media referenced by the visible sections and the card lead, keyed by media id. */
   media: z.record(z.uuid(), mediaStatusOutput),
 })

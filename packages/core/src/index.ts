@@ -15,6 +15,7 @@ export {
   TalentOwnershipMismatch,
   type OwnerViewer,
   type SerializeTalentContext,
+  type TalentAttributeRow,
   type TalentRecord,
   type TalentRateVisibility,
   type TalentViewer,

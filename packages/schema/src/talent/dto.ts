@@ -24,6 +24,36 @@ export const talentRateDtoSchema = z.object({
   negotiable: z.boolean(),
 })
 
+/**
+ * Rows the list sections display, already filtered for the viewer by `serializeTalent`
+ * (attributes: visible, standard tier only). Rates travel separately in `rates`, which is
+ * absent when the viewer may not see them.
+ */
+export const talentContentDtoSchema = z.object({
+  credits: z.array(
+    z.object({
+      title: z.string(),
+      roleName: z.string().nullable(),
+      productionCompany: z.string().nullable(),
+      year: z.number().int().nullable(),
+      type: z.string().nullable(),
+      link: z.string().nullable(),
+      isSignature: z.boolean(),
+      verified: z.boolean(),
+    })
+  ),
+  attributes: z.array(z.object({ label: z.string(), value: z.string() })),
+  skills: z.array(z.object({ name: z.string() })),
+  languages: z.array(z.object({ name: z.string(), fluency: z.string().nullable() })),
+  accents: z.array(z.object({ name: z.string() })),
+  availability: z.array(
+    z.object({
+      month: z.string().regex(/^\d{4}-\d{2}$/),
+      status: z.enum(["available", "partial", "booked"]),
+    })
+  ),
+})
+
 export const talentSectionDtoSchema = z.object({
   id: z.uuid(),
   type: z.enum(corePortfolioSectionTypes),
@@ -65,6 +95,7 @@ export const talentDtoSchema = z
     }),
     sections: z.array(talentSectionDtoSchema),
     skillIds: z.array(z.uuid()),
+    content: talentContentDtoSchema,
     rates: z.array(talentRateDtoSchema).optional(),
   })
   .brand<typeof serializedTalentBrand, "inout">()
@@ -75,11 +106,13 @@ export const ownerTalentDtoSchema = z
     profile: z.object({ ...publicProfileShape, ...ownerProfileShape }),
     sections: z.array(talentSectionDtoSchema),
     skillIds: z.array(z.uuid()),
+    content: talentContentDtoSchema,
     rates: z.array(talentRateDtoSchema),
   })
   .brand<typeof serializedTalentBrand, "inout">()
 
 export type TalentRateDto = z.infer<typeof talentRateDtoSchema>
 export type TalentSectionDto = z.infer<typeof talentSectionDtoSchema>
+export type TalentContentDto = z.infer<typeof talentContentDtoSchema>
 export type TalentDto = z.input<typeof talentDtoSchema>
 export type OwnerTalentDto = z.input<typeof ownerTalentDtoSchema>
