@@ -5,7 +5,11 @@ export const SECTION_HORIZONTAL_PADDING = 16
 export const SECTION_VERTICAL_PADDING = 12
 export const SECTION_TITLE_HEIGHT = 28
 export const LIST_ROW_HEIGHT = 44
+/** Rows with a second line (credit detail, negotiable rate). */
+export const TWO_LINE_ROW_HEIGHT = 56
 export const TAG_ROW_HEIGHT = 36
+/** Skill chips per row when estimating wrapped chip rows at card width. */
+export const TAGS_PER_ROW = 3
 
 /** Default media aspect ratios when `mediaMeta` has no dimensions. */
 export const DEFAULT_HERO_ASPECT = 5 / 4

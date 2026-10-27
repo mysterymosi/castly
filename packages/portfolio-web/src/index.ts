@@ -1,2 +1,19 @@
-/** Web section renderers arrive in M3. */
-export const webRendererCount = 0
+export { defaultMediaComponents, mediaMetaFromStatus } from "./media"
+export {
+  PortfolioSections,
+  renderPortfolioSection,
+  sectionsFromDto,
+} from "./portfolio"
+export { isWebSectionType, webSectionRegistry } from "./registry"
+export type {
+  CoreSectionType,
+  PortfolioContent,
+  PortfolioImageProps,
+  PortfolioMediaComponents,
+  PortfolioMediaMeta,
+  PortfolioRenderContext,
+  PortfolioVideoProps,
+  WebSectionProps,
+  WebSectionRegistry,
+  WebSectionRenderer,
+} from "./types"

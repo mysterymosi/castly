@@ -1,3 +1,4 @@
+import { portfolioContentFromDto } from "@workspace/schema"
 import { router, useLocalSearchParams } from "expo-router"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Platform, ScrollView, useWindowDimensions, View } from "react-native"
@@ -60,7 +61,11 @@ export default function PreviewScreen() {
       >
         <View style={{ width }} className="flex-1 px-4" accessibilityLabel="Portfolio preview">
           {hasVisible ? (
-            <PortfolioPreview sections={state.talent.sections} mediaMeta={mediaMeta} />
+            <PortfolioPreview
+              sections={state.talent.sections}
+              mediaMeta={mediaMeta}
+              content={portfolioContentFromDto(state.talent)}
+            />
           ) : (
             <EmptyState icon="eye-off" title="Nothing visible yet" body="Visible sections will show here as bookers see them." />
           )}

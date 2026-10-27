@@ -12,7 +12,12 @@ import {
 } from "./sections/list-sections"
 import { heroRenderer } from "./sections/hero"
 import { showreelRenderer } from "./sections/showreel"
-import type { CoreSectionType, SectionMediaMeta, StudioSectionRegistry } from "./types"
+import type {
+  CoreSectionType,
+  PortfolioContent,
+  SectionMediaMeta,
+  StudioSectionRegistry,
+} from "./types"
 import type { PortfolioSection } from "@workspace/schema"
 
 /** Studio may only import core section types that ship with height estimators. */
@@ -38,8 +43,12 @@ export function assertStudioSectionType(type: string): CoreSectionType {
   return type as CoreSectionType
 }
 
-export function estimateSectionHeight(section: PortfolioSection, mediaMeta: SectionMediaMeta): number {
+export function estimateSectionHeight(
+  section: PortfolioSection,
+  mediaMeta: SectionMediaMeta,
+  options: { content?: PortfolioContent; now?: Date } = {},
+): number {
   const type = assertStudioSectionType(section.type)
   const renderer = studioSectionRegistry[type]
-  return renderer.estimateHeight(section.config as never, mediaMeta)
+  return renderer.estimateHeight(section.config as never, mediaMeta, options.content, options.now)
 }

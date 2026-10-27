@@ -1,6 +1,7 @@
 import type {
   CardConfig,
   OwnerTalentDto,
+  TalentContentDto,
   TalentDto,
   TalentRateDto,
   TalentSectionDto,
@@ -12,6 +13,14 @@ import type {
  * surface a hidden value. M8 adds sensitive-attribute rules on `viewer` tier and `context`.
  */
 export type TalentRateVisibility = "public" | "verified_bookers" | "hidden"
+
+/** An attribute value with what decides who may see it. `prohibited` rows cannot exist (DB check). */
+export type TalentAttributeRow = {
+  label: string
+  value: string
+  isVisible: boolean
+  tier: "standard" | "sensitive"
+}
 
 /** Already loaded and migrated by the caller; section configs must be at their current version. */
 export type TalentRecord = {
@@ -34,6 +43,8 @@ export type TalentRecord = {
   sections: TalentSectionDto[]
   skillIds: string[]
   rates: TalentRateDto[]
+  /** List-section rows; attributes are filtered here, the rest are public. */
+  content: Omit<TalentContentDto, "attributes"> & { attributes: TalentAttributeRow[] }
 }
 
 export type OwnerViewer = { kind: "owner"; userId: string }
@@ -62,6 +73,17 @@ export class TalentOwnershipMismatch extends Error {
 function isOwner(talent: TalentRecord, viewer: TalentViewer) {
   if (viewer.kind === "anonymous") return false
   return viewer.userId === talent.profile.userId
+}
+
+/**
+ * Attributes on a portfolio: visible, standard tier only — for every viewer, the owner included,
+ * so the studio preview shows what others see. Sensitive attributes never reach a portfolio;
+ * M8 adds role-gated sensitive matching for verified bookers, not display.
+ */
+function portfolioAttributes(talent: TalentRecord): TalentContentDto["attributes"] {
+  return talent.content.attributes
+    .filter((attribute) => attribute.isVisible && attribute.tier === "standard")
+    .map(({ label, value }) => ({ label, value }))
 }
 
 function canSeeRates(talent: TalentRecord, viewer: TalentViewer) {
@@ -124,6 +146,7 @@ export function serializeTalent(
       (section) => (owner || section.isVisible) && (rates || section.type !== "rates"),
     ),
     skillIds: talent.skillIds,
+    content: { ...talent.content, attributes: portfolioAttributes(talent) },
   }
   if (rates) dto.rates = talent.rates
 

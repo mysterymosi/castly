@@ -4,6 +4,7 @@ import { schema, type Db } from "@workspace/db"
 import type { CreateUploadUrlInput, MediaStatusOutput } from "@workspace/schema"
 import { and, eq, inArray, isNull } from "drizzle-orm"
 
+import { schedulePublicPortfolioRevalidate } from "../talent/web-revalidate.js"
 import { createCloudflareImageUpload } from "./cloudflare.js"
 import { maybeSyncCloudflareAsset } from "./cloudflare-sync.js"
 import { assertCloudflareDeliveryConfig, mediaBackend, mediaPublicBaseUrl } from "./config.js"
@@ -235,6 +236,9 @@ export async function applyMediaReadyEvent(db: Db, event: MediaProviderReadyEven
     .insert(schema.mediaModerationJobs)
     .values({ mediaId: event.mediaId, status: "pending" })
     .onConflictDoNothing({ target: schema.mediaModerationJobs.mediaId })
+
+  // A section may already reference this media; the public page should now show it.
+  schedulePublicPortfolioRevalidate(db, rows[0].ownerId)
 }
 
 function toMediaStatus(row: typeof schema.mediaAssets.$inferSelect): MediaStatusOutput {

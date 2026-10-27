@@ -1,0 +1,22 @@
+{
+  "name": "@workspace/portfolio-parity",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@workspace/config": "workspace:*",
+    "@workspace/portfolio-native": "workspace:*",
+    "@workspace/portfolio-web": "workspace:*",
+    "@workspace/schema": "workspace:*",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "typescript": "^5",
+    "vitest": "^4.0.16"
+  }
+}

@@ -12,11 +12,15 @@
 
 ### 3.1 Web section renderers
 
+**Status:** Done — `packages/portfolio-web` (`webSectionRegistry`, `PortfolioSections`, `sectionsFromDto`, `mediaMetaFromStatus`; fixtures at `@workspace/portfolio-web/fixtures`). Renderers are hook-free Server Components; media elements are injectable like native. List sections (credits, attributes, skills, languages, rates, availability) read rows from a `PortfolioContent` prop (type and selectors now in `@workspace/schema`, see 3.4) because section configs carry display options only — the page loader (3.2) and serializer (3.5) must supply it. Sections with nothing to show render nothing. CI runs `pnpm --filter @workspace/portfolio-web test`.
+
 `packages/portfolio-web`: stacked React renderers for every shipped section type, consuming the same validated + forward-migrated section list as native.
 
 **Acceptance.** A fixture portfolio renders all core types without client-side fetch of section JSON (RSC / server render).
 
 ### 3.2 Vanity URL and SSR page
+
+**Status:** Done — API `talent.public.bySlug` / `talent.public.liveSlugs` (`apps/api/src/talent/public-service.ts`; anonymous `serializeTalent`, ready media only; draft, suspended, unknown, and malformed slugs are all `NOT_FOUND`). The talent-record loader is shared with the studio (`apps/api/src/talent/record.ts`). Web `apps/web/app/[slug]/page.tsx` is ISR (`revalidate = 60`, empty `generateStaticParams`); drafts are a real, cached 404. The API calls web `POST /api/revalidate` (`CASTLY_REVALIDATE_SECRET`) after every talent mutation and when media turns ready, so changes show on the next visit — M7 suspension must call `revalidatePublicPortfolio` too. `talent.public.*` is limited to 60 req/min per IP; the web server sends `CASTLY_WEB_API_KEY` and gets its own 1,200/min bucket. Mixed-case slugs 308 to the stored slug; canonical via `metadataBase` (`NEXT_PUBLIC_SITE_URL`). `robots.ts`; `sitemap.ts` renders per request from a 10-minute data cache (capped at 50k URLs). Web reads the API at `CASTLY_API_URL`. Integration test `src/talent/public.integration.test.ts`.
 
 `apps/web` route `/{slug}` (and `castly.app/{slug}` in prod). 404 for draft/suspended. Server-render the section list. Canonical URL. `robots.txt` and sitemap of live slugs.
 
@@ -24,17 +28,23 @@
 
 ### 3.3 OG and Twitter tags
 
+**Status:** Built; WhatsApp check pending a public URL. `apps/web/lib/portfolio-metadata.ts` builds title, description (≤160 chars), canonical, `og:*` (`type=profile`, `og:url` = stored slug) and Twitter `summary_large_image`. Image: first ready photo's `og` variant (card lead → hero → gallery → about), else the card lead's poster if the talent chose a video (Mux cropped to 1200×630), else a generated name card at `/api/og/{slug}` (ISR, dropped by `/api/revalidate`). The public payload now includes the card lead media. Tags are in `<head>` for WhatsApp's crawler and browsers alike (ISR prerender; `WhatsApp` is also in Next's HTML-limited bot list). Unit tests in `apps/web` (`pnpm --filter web test`, in CI) instead of Playwright — the check is HTML, not browser behaviour.
+
 `og:title`, `og:description`, `og:image` using the `og` variant, `og:url`. Twitter card `summary_large_image`.
 
 **Acceptance.** Playwright (or opengraph.xyz plus a recorded WhatsApp screenshot) shows title, description, and image. Pasting the link into WhatsApp produces a rich preview — this is the exit-gate check, not optional.
 
 ### 3.4 Renderer parity snapshots
 
+**Status:** Done — `packages/portfolio-parity` (CI: `pnpm --filter @workspace/portfolio-parity test`). Each fixture portfolio (`fixturePortfolios` in `@workspace/portfolio-web/fixtures`: complete, sparse, reordered) is rendered by both packages to HTML (native via a react-native → DOM stub), reduced to per-section `{type, texts, mediaIds}` with headings, placeholders, and styling dropped, and compared for equality; empty sections are ignored on both sides. Two self-tests prove a dropped credit and a reordered section fail the check. To make this meaningful, list-section rules moved to `@workspace/schema` (`portfolio/content.ts`: `PortfolioContent`, `readVisibleSections`, `select*`, labels) and native list sections now render real rows when given `content` (placeholder rows otherwise — the studio preview still passes none). Native `estimateHeight` counts content rows.
+
 Same fixture portfolios through native and web extractors. Compare **semantic content** (section types, text, media ids, order), not pixels.
 
 **Acceptance.** CI fails if web drops a credit that native shows, or reorders sections. Presentation differences are allowed.
 
 ### 3.5 Public serialize rules
+
+**Status:** Done — the talent DTO carries `content` (`talentContentDtoSchema`: credits, attributes, skills, languages, accents, availability) loaded in `apps/api/src/talent/record.ts`; `serializeTalent` applies the rules: hidden rates and the rates section omitted for non-owners, hidden sections omitted, attributes only when visible and `standard` tier for every viewer (sensitive never reaches a portfolio; M8 adds role-gated matching, not display). The public service still sends `ready` media only (quarantined excluded; the owner's studio keeps seeing it, flagged). `portfolioContentFromDto` feeds both the web page and the mobile studio preview, so the owner sees their real rates and rows on mobile even when `rate_visibility = 'hidden'`. The public payload's separate `skills` field was folded into `content.skills`. Covered by `packages/core` serializer tests and `apps/api/src/talent/public.integration.test.ts` (rows, attribute rules, quarantine, owner-vs-public rates).
 
 Public viewer: no hidden rates, no unpublished sections, no quarantined media (quarantine is a no-op until M7; still filter `status = 'ready'`).
 

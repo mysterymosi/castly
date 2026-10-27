@@ -1,10 +1,13 @@
 import {
   applyTemplateInput,
   completeQuickStartInput,
+  liveTalentSlugsSchema,
   createPlaceholderPhotosInput,
   createSectionInput,
   deleteSectionInput,
   placeholderPhotosResultSchema,
+  publicPortfolioInput,
+  publicPortfolioSchema,
   reorderSectionsInput,
   setTalentAttributeInput,
   setTalentSkillsInput,
@@ -14,7 +17,9 @@ import {
 } from "@workspace/schema"
 
 import { callProcedure } from "../trpc/errors.js"
-import { router, talentProcedure } from "../trpc/trpc.js"
+import { publicProcedure, router, talentProcedure } from "../trpc/trpc.js"
+import { consumePublicRead } from "./public-rate-limit.js"
+import { getPublicPortfolio, listLiveTalentSlugs } from "./public-service.js"
 import {
   applyTemplate,
   completeQuickStart,
@@ -30,14 +35,42 @@ import {
   updateSection,
   updateStudioProfile,
 } from "./studio-service.js"
+import { schedulePublicPortfolioRevalidate } from "./web-revalidate.js"
+
+/** Anonymous portfolio reads, rate limited per client IP (or the web server's own bucket). */
+const publicReadProcedure = publicProcedure.use(async ({ ctx, next }) => {
+  await callProcedure(async () => consumePublicRead(ctx.ip, ctx.webKey))
+  return next()
+})
+
+/** Every talent write can change the public page, so a success refreshes the web cache. */
+const talentMutation = talentProcedure.use(async ({ ctx, next }) => {
+  const result = await next()
+  if (result.ok) schedulePublicPortfolioRevalidate(ctx.db, ctx.userId)
+  return result
+})
 
 export const talentRouter = router({
+  /** Anonymous reads for the public web portfolio (`castly.app/{slug}`). */
+  public: router({
+    bySlug: publicReadProcedure
+      .input(publicPortfolioInput)
+      .output(publicPortfolioSchema)
+      .query(({ ctx, input }) => {
+        return callProcedure(() => getPublicPortfolio(ctx.db, input.slug))
+      }),
+
+    liveSlugs: publicReadProcedure.output(liveTalentSlugsSchema).query(({ ctx }) => {
+      return callProcedure(() => listLiveTalentSlugs(ctx.db))
+    }),
+  }),
+
   studio: router({
     get: talentProcedure.output(studioStateSchema).query(({ ctx }) => {
       return callProcedure(() => getStudioState(ctx.db, ctx.userId))
     }),
 
-    updateProfile: talentProcedure
+    updateProfile: talentMutation
       .input(updateStudioProfileInput)
       .output(studioStateSchema)
       .mutation(({ ctx, input }) => {
@@ -46,15 +79,15 @@ export const talentRouter = router({
         )
       }),
 
-    publish: talentProcedure.output(studioStateSchema).mutation(({ ctx }) => {
+    publish: talentMutation.output(studioStateSchema).mutation(({ ctx }) => {
       return callProcedure(() => publishTalent(ctx.db, ctx.userId))
     }),
 
-    unpublish: talentProcedure.output(studioStateSchema).mutation(({ ctx }) => {
+    unpublish: talentMutation.output(studioStateSchema).mutation(({ ctx }) => {
       return callProcedure(() => unpublishTalent(ctx.db, ctx.userId))
     }),
 
-    completeQuickStart: talentProcedure
+    completeQuickStart: talentMutation
       .input(completeQuickStartInput)
       .output(studioStateSchema)
       .mutation(({ ctx, input }) => {
@@ -63,7 +96,7 @@ export const talentRouter = router({
         )
       }),
 
-    createPlaceholderPhotos: talentProcedure
+    createPlaceholderPhotos: talentMutation
       .input(createPlaceholderPhotosInput)
       .output(placeholderPhotosResultSchema)
       .mutation(({ ctx, input }) => {
@@ -79,7 +112,7 @@ export const talentRouter = router({
   }),
 
   sections: router({
-    create: talentProcedure
+    create: talentMutation
       .input(createSectionInput)
       .output(studioStateSchema)
       .mutation(({ ctx, input }) => {
@@ -89,14 +122,14 @@ export const talentRouter = router({
         })
       }),
 
-    update: talentProcedure
+    update: talentMutation
       .input(updateSectionInput)
       .output(studioStateSchema)
       .mutation(({ ctx, input }) => {
         return callProcedure(() => updateSection(ctx.db, ctx.userId, input))
       }),
 
-    reorder: talentProcedure
+    reorder: talentMutation
       .input(reorderSectionsInput)
       .output(studioStateSchema)
       .mutation(({ ctx, input }) => {
@@ -105,7 +138,7 @@ export const talentRouter = router({
         )
       }),
 
-    delete: talentProcedure
+    delete: talentMutation
       .input(deleteSectionInput)
       .output(studioStateSchema)
       .mutation(({ ctx, input }) => {
@@ -114,7 +147,7 @@ export const talentRouter = router({
         )
       }),
 
-    applyTemplate: talentProcedure
+    applyTemplate: talentMutation
       .input(applyTemplateInput)
       .output(studioStateSchema)
       .mutation(({ ctx, input }) => {
@@ -125,7 +158,7 @@ export const talentRouter = router({
   }),
 
   skills: router({
-    set: talentProcedure
+    set: talentMutation
       .input(setTalentSkillsInput)
       .output(studioStateSchema)
       .mutation(({ ctx, input }) => {
@@ -136,7 +169,7 @@ export const talentRouter = router({
   }),
 
   attributes: router({
-    set: talentProcedure
+    set: talentMutation
       .input(setTalentAttributeInput)
       .output(studioStateSchema)
       .mutation(({ ctx, input }) => {

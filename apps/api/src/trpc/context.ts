@@ -11,6 +11,8 @@ export type Context = {
   ip: string
   requestId: string
   authorization: string | null
+  /** `x-castly-web-key`: identifies the web app's server so it gets its own rate-limit bucket. */
+  webKey?: string | null
   auth: AuthClient
   verifyAccessToken: typeof verifyAccessToken
   userId?: string
@@ -34,6 +36,7 @@ export function createContext(req: Request): Context {
     ip: clientIp(req),
     requestId: requestIdFrom(req),
     authorization: req.headers.get("authorization"),
+    webKey: req.headers.get("x-castly-web-key"),
     auth: supabaseAuth,
     verifyAccessToken,
   }

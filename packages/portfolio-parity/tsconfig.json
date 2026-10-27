@@ -1,0 +1,8 @@
+{
+  "extends": "@workspace/config/shared-source.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  },
+  "include": ["src", "test", "../portfolio-native/src/nativewind-env.d.ts"],
+  "exclude": ["node_modules"]
+}

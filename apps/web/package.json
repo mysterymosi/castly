@@ -9,10 +9,15 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@trpc/client": "^11.19.0",
+    "@workspace/portfolio-web": "workspace:*",
+    "@workspace/schema": "workspace:*",
     "@workspace/ui": "workspace:*",
+    "api": "workspace:*",
     "lucide-react": "^1.47.0",
     "next": "16.3.3",
     "next-themes": "^0.4.6",
@@ -25,9 +30,11 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@workspace/config": "workspace:*",
+    "@workspace/core": "workspace:*",
     "@workspace/eslint-config": "workspace:^",
     "@workspace/typescript-config": "workspace:*",
     "eslint": "^9",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.16"
   }
 }

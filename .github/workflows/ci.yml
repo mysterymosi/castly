@@ -55,6 +55,9 @@ jobs:
       - run: pnpm --filter @workspace/core test
       - run: pnpm --filter @workspace/schema test
       - run: pnpm --filter @workspace/portfolio-native test
+      - run: pnpm --filter @workspace/portfolio-web test
+      - run: pnpm --filter @workspace/portfolio-parity test
+      - run: pnpm --filter web test
       - run: pnpm --filter api test:unit
 
   integration-test:

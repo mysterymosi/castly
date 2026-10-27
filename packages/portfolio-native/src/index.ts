@@ -1,5 +1,6 @@
 export { CARD_WIDTH } from "./constants"
 export {
+  mediaMetaFromStatus,
   PortfolioMediaProvider,
   type PortfolioImageProps,
   type PortfolioMediaComponents,
@@ -15,6 +16,7 @@ export {
 export type {
   CoreSectionType,
   NativeSectionRenderer,
+  PortfolioContent,
   SectionMediaMeta,
   SectionRendererProps,
   StudioSectionRegistry,

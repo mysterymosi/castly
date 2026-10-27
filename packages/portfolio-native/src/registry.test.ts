@@ -1,7 +1,12 @@
 import { corePortfolioSectionTypes } from "@workspace/schema"
 import { describe, expect, it } from "vitest"
 
-import { CARD_WIDTH } from "./constants"
+import {
+  CARD_WIDTH,
+  LIST_ROW_HEIGHT,
+  SECTION_TITLE_HEIGHT,
+  TWO_LINE_ROW_HEIGHT,
+} from "./constants"
 import { estimateSectionHeight, studioSectionRegistry } from "./registry"
 
 const emptyMeta = {}
@@ -44,5 +49,18 @@ describe("studioSectionRegistry", () => {
       expect(height, section.type).toBeGreaterThan(0)
       expect(height, section.type).toBeLessThan(CARD_WIDTH * 20)
     }
+  })
+
+  it("sizes list sections from content rows when content is given", () => {
+    const credits = { type: "credits" as const, schemaVersion: 1 as const, config: { signatureOnly: false, limit: 2 } }
+    const content = {
+      credits: [1, 2, 3].map((n) => ({ title: `Film ${n}`, isSignature: false, verified: false })),
+    }
+    // Limit 2 of 3 credits, two-line rows.
+    expect(estimateSectionHeight(credits, emptyMeta, { content })).toBe(
+      SECTION_TITLE_HEIGHT + 2 * TWO_LINE_ROW_HEIGHT + 24
+    )
+    // Without content the studio skeleton is sized from config alone.
+    expect(estimateSectionHeight(credits, emptyMeta)).toBe(SECTION_TITLE_HEIGHT + 2 * LIST_ROW_HEIGHT + 24)
   })
 })

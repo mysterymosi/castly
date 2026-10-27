@@ -3,6 +3,7 @@ import { z } from "zod"
 export * from "./portfolio/index"
 export * from "./talent/studio"
 export * from "./talent/dto"
+export * from "./talent/public"
 export * from "./media"
 
 export const healthSchema = z.object({
