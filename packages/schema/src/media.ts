@@ -16,6 +16,11 @@ export const createUploadUrlOutput = z.object({
   uploadMethod: mediaUploadMethodSchema,
   /** Extra headers the client must send with the upload request(s). */
   uploadHeaders: z.record(z.string(), z.string()).default({}),
+  /**
+   * PUT in Content-Range chunks the provider tracks (Mux). Otherwise send the whole file in
+   * one `uploadMethod` request (Cloudflare Images POST, Supabase Storage signed PUT).
+   */
+  resumable: z.boolean().default(false),
   expiresAt: z.string(),
 })
 

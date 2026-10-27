@@ -28,6 +28,7 @@ function sessionFromIntent(intent: UploadIntent): CreateUploadUrlOutput | null {
     uploadUrl: intent.upload.uploadUrl,
     uploadMethod: intent.upload.uploadMethod,
     uploadHeaders: intent.upload.uploadHeaders,
+    resumable: intent.upload.resumable ?? intent.upload.uploadMethod === "PUT",
     expiresAt: intent.upload.expiresAt,
   }
 }
@@ -178,6 +179,7 @@ export class UploadQueueProcessor {
         uploadUrl: created.uploadUrl,
         uploadMethod: created.uploadMethod,
         uploadHeaders: created.uploadHeaders,
+        resumable: created.resumable,
         expiresAt: created.expiresAt,
       },
       phase: "uploading",
@@ -216,9 +218,9 @@ export class UploadQueueProcessor {
     const session = sessionFromIntent(working)
     if (!session) throw new Error("Upload session missing")
 
-    // A POST can't be resumed and its URL is single-use. If the previous run's POST
-    // landed before the app died, the server has already moved past `pending`.
-    if (resuming && session.uploadMethod === "POST") {
+    // A single-request upload can't be resumed and its URL is single-use. If the previous
+    // run's request landed before the app died, the server has already moved past `pending`.
+    if (resuming && !session.resumable) {
       const status = await mediaApi.status(session.mediaId)
       if (status.status !== "pending") return
     }

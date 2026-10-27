@@ -1,6 +1,7 @@
 import { schema } from "@workspace/db"
 
 import { cfImagesDeliveryBase, mediaBackend } from "./config.js"
+import { supabaseImageUrl } from "./supabase-storage.js"
 
 type MediaProvider = typeof schema.mediaAssets.$inferSelect.provider
 
@@ -8,7 +9,7 @@ const imageVariants = ["card", "thumb", "full", "og"] as const
 
 export type ImageVariants = Record<(typeof imageVariants)[number], string>
 
-export function imageVariantsForRef(providerRef: string): ImageVariants {
+export function imageVariantsForRef(provider: MediaProvider, providerRef: string): ImageVariants {
   if (mediaBackend() === "local") {
     const base = `https://media.local.castly/${providerRef}`
     return {
@@ -17,6 +18,11 @@ export function imageVariantsForRef(providerRef: string): ImageVariants {
       full: `${base}/full`,
       og: `${base}/og`,
     }
+  }
+  if (provider === "supabase") {
+    // No transforms on the free plan: every variant is the uploaded original.
+    const url = supabaseImageUrl(providerRef)
+    return { card: url, thumb: url, full: url, og: url }
   }
   const base = cfImagesDeliveryBase()
   return {

@@ -7,7 +7,12 @@ import { and, eq, inArray, isNull } from "drizzle-orm"
 import { schedulePublicPortfolioRevalidate } from "../talent/web-revalidate.js"
 import { createCloudflareImageUpload } from "./cloudflare.js"
 import { maybeSyncCloudflareAsset } from "./cloudflare-sync.js"
-import { assertCloudflareDeliveryConfig, mediaBackend, mediaPublicBaseUrl } from "./config.js"
+import {
+  assertCloudflareDeliveryConfig,
+  imageProvider,
+  mediaBackend,
+  mediaPublicBaseUrl,
+} from "./config.js"
 import {
   imageVariantsForRef,
   videoPlaybackUrl,
@@ -18,6 +23,7 @@ import { createMuxVideoUpload } from "./mux.js"
 import { muxConfigured } from "./mux-client.js"
 import { syncMuxVideoIfReady } from "./mux-sync.js"
 import type { MediaProviderReadyEvent } from "./provider-events.js"
+import { createSupabaseImageUpload, maybeSyncSupabaseImage } from "./supabase-storage.js"
 import { hashUploadSecret, newUploadSecret } from "./token.js"
 
 const uploadTtlMs = 60 * 60 * 1000
@@ -36,23 +42,24 @@ export async function createUploadUrl(
 
   const mediaId = randomUUID()
   const backend = mediaBackend()
-  const provider = input.kind === "image" ? "cf_images" : "mux"
+  const provider = input.kind === "image" ? imageProvider() : "mux"
 
   let uploadUrl: string
   let uploadMethod: "POST" | "PUT" = input.kind === "video" ? "PUT" : "POST"
   let uploadHeaders: Record<string, string> = {}
+  let resumable = false
   let providerRef: string | null = null
 
   await db.insert(schema.mediaAssets).values({
     id: mediaId,
     ownerId: userId,
     kind: input.kind,
-    provider: backend === "cloudflare" ? provider : "supabase",
+    provider: backend === "remote" ? provider : "supabase",
     providerRef: backend === "local" ? `local-${mediaId}` : null,
     status: "pending",
   })
 
-  if (backend === "cloudflare") {
+  if (backend === "remote") {
     if (input.kind === "video" && !muxConfigured()) {
       throw new MediaError(
         "invalid_kind",
@@ -60,15 +67,22 @@ export async function createUploadUrl(
       )
     }
     const created =
-      input.kind === "image"
-        ? await createCloudflareImageUpload({
-            mediaId,
-            contentType: input.contentType,
-          })
-        : await createMuxVideoUpload(mediaId)
+      input.kind === "video"
+        ? await createMuxVideoUpload(mediaId)
+        : provider === "supabase"
+          ? await createSupabaseImageUpload({
+              mediaId,
+              ownerId: userId,
+              contentType: input.contentType,
+            })
+          : await createCloudflareImageUpload({
+              mediaId,
+              contentType: input.contentType,
+            })
     uploadUrl = created.uploadUrl
     uploadMethod = created.uploadMethod
     uploadHeaders = created.uploadHeaders
+    resumable = input.kind === "video"
     providerRef = created.providerRef
     await db
       .update(schema.mediaAssets)
@@ -96,6 +110,7 @@ export async function createUploadUrl(
     uploadUrl,
     uploadMethod,
     uploadHeaders,
+    resumable,
     expiresAt,
   }
 }
@@ -118,9 +133,11 @@ export async function getMediaStatus(
   mediaId: string
 ): Promise<MediaStatusOutput> {
   let row = await loadOwnedMedia(db, userId, mediaId)
-  if (mediaBackend() === "cloudflare") {
+  if (mediaBackend() === "remote") {
     if (row.provider === "mux") {
       await syncMuxVideoIfReady(db, row)
+    } else if (row.provider === "supabase") {
+      await maybeSyncSupabaseImage(db, row)
     } else {
       await maybeSyncCloudflareAsset(db, row)
     }
@@ -243,10 +260,8 @@ export async function applyMediaReadyEvent(db: Db, event: MediaProviderReadyEven
 
 function toMediaStatus(row: typeof schema.mediaAssets.$inferSelect): MediaStatusOutput {
   const providerRef = row.providerRef
-  if (row.status === "ready" && providerRef && mediaBackend() === "cloudflare") {
-    if (row.kind === "image") {
-      assertCloudflareDeliveryConfig("image")
-    }
+  if (row.status === "ready" && providerRef && row.provider === "cf_images") {
+    assertCloudflareDeliveryConfig()
   }
   const playbackUrl =
     row.kind === "video" && row.status === "ready" && providerRef
@@ -254,7 +269,7 @@ function toMediaStatus(row: typeof schema.mediaAssets.$inferSelect): MediaStatus
       : null
   const variants =
     row.kind === "image" && row.status === "ready" && providerRef
-      ? imageVariantsForRef(providerRef)
+      ? imageVariantsForRef(row.provider, providerRef)
       : null
 
   return {
