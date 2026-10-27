@@ -12,6 +12,8 @@
 
 ### 4.1 Booker schema
 
+**Status:** Done — `packages/db/src/schema/booker.ts`, migration `0008_booker_core_schema.sql`. Enums `booker_vertical` (PRD §6.2 list), `project_type` (also `typical_project_types[]`), `verification_tier` (`phone|id|professional`, reusable by M7 `verifications`), `project_status` (`active|archived`). Projects and shortlists belong to `booker_profiles`, not bare users. `roles`: `is_published` false by default with `published_at` required exactly when true; `brief` is NULL or non-blank (so "has a brief" is `brief IS NOT NULL`); `requirements` must be a JSON object; shoot window as `shoot_starts_on`/`shoot_ends_on`; non-negative ordered rate range. `shortlists` is unique on `(booker_id, role_id)` NULLS NOT DISTINCT — one per role plus one general list — and cascades with its role. RLS default-deny on all five tables. CI runs `pnpm --filter @workspace/db db:assert-booker`. Not here: `vertical_category_weights` (4.3), `saved_filters` (M8).
+
 `booker_profiles` (vertical, company_name, cac_number nullable, city_id, typical_project_types, `verification_tier` defaulting to phone). `projects`, `roles` (`brief`, `requirements jsonb`, `is_published` default false). `shortlists` and `shortlist_entries` created empty-ready so M5 does not migrate under itself.
 
 **Acceptance.** Migrations apply. A role defaults to unpublished.

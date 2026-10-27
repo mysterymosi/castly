@@ -15,6 +15,7 @@
     "db:assert-prohibited": "tsx src/assert-prohibited-tier.ts",
     "db:assert-rls": "tsx src/assert-rls.ts",
     "db:assert-talent": "tsx src/assert-talent-schema.ts",
+    "db:assert-booker": "tsx src/assert-booker-schema.ts",
     "db:assert-talent-search": "tsx src/assert-talent-search.ts",
     "typecheck": "tsc --noEmit"
   },
