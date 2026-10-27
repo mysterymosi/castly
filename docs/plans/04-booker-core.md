@@ -20,6 +20,8 @@
 
 ### 4.2 Booker signup and vertical profiling
 
+**Status:** Built; device path pending a manual run. API `booker.getProfile | updateProfile | submitVerification` (`apps/api/src/booker/`), all on `bookerProcedure`, which checks the `user_modes` row server-side — the integration test sends spoofed `mode`/`x-mode` headers on a real request and gets FORBIDDEN. `updateProfile` is a full-replace upsert (vertical, optional company, active city, ≥1 unique project type); `getProfile` returns `{ profile | null, cities }`. `submitVerification` records `booker_profiles.verification_requested_at` (migration `0009`), idempotently, without changing the tier — M7's `verifications` rows replace it. Contracts and labels in `packages/schema/src/booker.ts`; schema enums are compile-checked against the DB enums. Mobile: `app/booker-setup.tsx` (full-screen stepper: kind of work → company → location → project types), opened right after enabling booker mode and from Account → "Booker profile" for edits. No verification UI yet (stub is API-only). Tests: `src/booker/booker.integration.test.ts` (in `test:integration`).
+
 After OTP, if the user enables booker mode: pick vertical (Casting director / Producer / Director / Brand or agency / Event planner / Photographer / Content creator / Other), optional company, location, typical project types.
 
 `booker.getProfile` / `updateProfile`. `submitVerification` is a stub that records intent; the real flow is M7.

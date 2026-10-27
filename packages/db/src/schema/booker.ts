@@ -67,6 +67,11 @@ export const bookerProfiles = pgTable(
       .notNull()
       .default(sql`'{}'::project_type[]`),
     verificationTier: verificationTier("verification_tier").notNull().default("phone"),
+    /**
+     * When the booker asked to be verified (`booker.submitVerification`, a stub until M7).
+     * M7's `verifications` rows replace this as the source of truth.
+     */
+    verificationRequestedAt: timestamptz("verification_requested_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },

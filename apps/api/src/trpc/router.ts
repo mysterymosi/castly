@@ -9,6 +9,7 @@ import {
   verifyOtpInput,
 } from "@workspace/schema"
 
+import { bookerRouter } from "../booker/router.js"
 import { mediaRouter } from "../media/router.js"
 import { talentRouter } from "../talent/router.js"
 import { assertAdult } from "../auth/age.js"
@@ -120,6 +121,7 @@ const authRouter = router({
 })
 
 export const appRouter = router({
+  booker: bookerRouter,
   media: mediaRouter,
   talent: talentRouter,
   health: publicProcedure.output(healthSchema).query(() => {

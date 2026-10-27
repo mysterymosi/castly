@@ -64,6 +64,13 @@
       "when": 1793141054870,
       "tag": "0008_booker_core_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793142350692,
+      "tag": "0009_booker_verification_request",
+      "breakpoints": true
     }
   ]
 }

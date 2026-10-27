@@ -45,6 +45,8 @@ export default function AccountScreen() {
       await authApi.enableMode(mode)
       await refreshMe()
       haptics.success()
+      // Booker mode is only useful once we know what kind of work they do (PRD §6.2).
+      if (mode === "booker") router.push("/booker-setup")
     } catch (caught) {
       haptics.error()
       setError(errorMessage(caught, "Could not enable that mode"))
@@ -125,7 +127,16 @@ export default function AccountScreen() {
                     iconPosition="right"
                     onPress={() => router.navigate("/studio")}
                   />
-                ) : null
+                ) : (
+                  <Button
+                    label="Booker profile"
+                    variant="secondary"
+                    size="md"
+                    icon="arrow-right"
+                    iconPosition="right"
+                    onPress={() => router.push("/booker-setup")}
+                  />
+                )
               ) : (
                 <Button
                   label={`Enable ${info.title.toLowerCase()} mode`}
