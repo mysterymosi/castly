@@ -9,6 +9,7 @@ import {
   cities,
   languages,
   skills,
+  verticalCategoryWeights,
 } from "./schema/index.js"
 
 const launchCategories = [
@@ -54,6 +55,26 @@ const launchCities = [
   { slug: "lagos", name: "Lagos", country: "NG", region: "south-west" },
   { slug: "abuja", name: "Abuja", country: "NG", region: "north-central" },
 ]
+
+/**
+ * PRD §6.2 / §7.2.3 cold-start leanings, mapped onto the launch categories. Presenters, stylists,
+ * MCs, DJs, and hype men have no category yet: ops add their weights when those categories land.
+ * "director" leans music-video (dancers, models, stylists ≈ makeup & hair). "other" has no rows,
+ * so it gets a vertical-neutral deck. Insert-only: re-seeding never overwrites an ops edit.
+ */
+const launchVerticalWeights: Record<
+  (typeof verticalCategoryWeights.$inferInsert)["bookerVertical"],
+  Record<string, number>
+> = {
+  casting_director: { actors: 1, models: 0.7 },
+  producer: { actors: 1, models: 0.6, "makeup-and-hair": 0.4, "photographers-cinematographers": 0.4 },
+  director: { dancers: 1, models: 0.8, actors: 0.7, "makeup-and-hair": 0.5 },
+  brand_or_agency: { models: 1, actors: 0.7, "photographers-cinematographers": 0.5, "makeup-and-hair": 0.4 },
+  event_planner: { dancers: 1, models: 0.6 },
+  photographer: { models: 1, "makeup-and-hair": 0.7, actors: 0.4 },
+  content_creator: { actors: 0.8, dancers: 0.8, models: 0.6 },
+  other: {},
+}
 
 const connection = postgres(databaseUrl(), { max: 1 })
 const db = drizzle(connection)
@@ -113,5 +134,22 @@ await db
   ])
   .onConflictDoNothing({ target: attributeDefinitions.key })
 
-console.log(`Seeded ${launchCategories.length} launch categories and reference taxonomy.`)
+await db
+  .insert(verticalCategoryWeights)
+  .values(
+    Object.entries(launchVerticalWeights).flatMap(([vertical, weights]) =>
+      Object.entries(weights).map(([slug, weight]) => {
+        const categoryId = idBySlug.get(slug)
+        if (!categoryId) throw new Error(`Missing launch category ${slug}`)
+        return {
+          bookerVertical: vertical as keyof typeof launchVerticalWeights,
+          categoryId,
+          weight: String(weight),
+        }
+      }),
+    ),
+  )
+  .onConflictDoNothing()
+
+console.log(`Seeded ${launchCategories.length} launch categories, reference taxonomy, and vertical weights.`)
 await connection.end()

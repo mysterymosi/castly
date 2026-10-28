@@ -1,4 +1,4 @@
-export type BookerErrorCode = "unknown_city" | "profile_required"
+export type BookerErrorCode = "unknown_city" | "profile_required" | "unknown_category"
 
 export class BookerError extends Error {
   readonly code: BookerErrorCode

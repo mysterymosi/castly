@@ -51,6 +51,30 @@ export const verificationTier = pgEnum("verification_tier", ["phone", "id", "pro
 
 export const projectStatus = pgEnum("project_status", ["active", "archived"])
 
+/**
+ * Cold-start deck mapping (PRD §7.2.3 item 1, TECH_SPEC §5.9): how strongly a vertical's default
+ * deck leans toward a category, 0–1. Data, not code — ops edit it without a deploy, and ranking
+ * reads it rather than branching on the vertical. A missing row means no preference (0).
+ */
+export const verticalCategoryWeights = pgTable(
+  "vertical_category_weights",
+  {
+    bookerVertical: bookerVertical("booker_vertical").notNull(),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+    weight: numeric("weight", { precision: 4, scale: 3 }).notNull(),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.bookerVertical, table.categoryId] }),
+    index("vertical_category_weights_category_id_idx").on(table.categoryId),
+    index("vertical_category_weights_updated_by_idx").on(table.updatedBy),
+    check("vertical_category_weights_range", sql`${table.weight} >= 0 AND ${table.weight} <= 1`),
+  ],
+)
+
 export const bookerProfiles = pgTable(
   "booker_profiles",
   {

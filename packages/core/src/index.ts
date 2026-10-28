@@ -22,3 +22,4 @@ export {
 } from "./serialize-talent.js"
 export { portfolioTemplates, portfolioTemplateIds, type PortfolioTemplateId } from "./portfolio-templates.js"
 export { releaseFromEnv } from "./release.js"
+export { verticalCategoryMatch, type VerticalCategoryWeights } from "./vertical-category-match.js"

@@ -97,3 +97,30 @@ export type ProjectType = z.infer<typeof projectTypeSchema>
 export type BookerProfile = z.infer<typeof bookerProfileSchema>
 export type BookerProfileState = z.infer<typeof bookerProfileStateSchema>
 export type UpdateBookerProfileInput = z.input<typeof updateBookerProfileInput>
+
+/** `admin.verticalWeights.list`: every vertical × category cell, with stored weights. */
+export const verticalWeightsStateSchema = z.object({
+  verticals: z.array(z.object({ value: bookerVerticalSchema, label: z.string() })),
+  categories: z.array(
+    z.object({ id: z.uuid(), slug: z.string(), name: z.string(), active: z.boolean() })
+  ),
+  /** Stored rows only; a missing (vertical, category) pair means weight 0. */
+  weights: z.array(
+    z.object({
+      vertical: bookerVerticalSchema,
+      categoryId: z.uuid(),
+      weight: z.number().min(0).max(1),
+      updatedBy: z.uuid().nullable(),
+      updatedAt: z.string(),
+    })
+  ),
+})
+
+/** Sets one cell. 0 is stored explicitly so an edit is visible as an edit. */
+export const updateVerticalWeightInput = z.object({
+  vertical: bookerVerticalSchema,
+  categoryId: z.uuid(),
+  weight: z.number().min(0).max(1).multipleOf(0.001),
+})
+
+export type VerticalWeightsState = z.infer<typeof verticalWeightsStateSchema>

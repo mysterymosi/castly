@@ -50,4 +50,5 @@ export const rlsTables = [
   "roles",
   "shortlists",
   "shortlist_entries",
+  "vertical_category_weights",
 ] as const

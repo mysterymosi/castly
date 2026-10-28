@@ -30,6 +30,8 @@ After OTP, if the user enables booker mode: pick vertical (Casting director / Pr
 
 ### 4.3 Vertical → category weights
 
+**Status:** Done (API; admin UI deferred until the admin app has sign-in). Table `vertical_category_weights` (`booker_vertical`, `category_id`, `weight` 0–1, `updated_by`, `updated_at`; PK vertical+category; RLS default-deny; migration `0010`). Seeded in `packages/db/src/seed.ts`, insert-only so ops edits survive re-seeding, mapped onto the five launch categories (presenters, stylists, MCs, DJs, hype men have no category yet — ops add weights when they do); `other` has no rows (neutral deck). `admin.verticalWeights.list | update` behind `adminProcedure`, recording `updated_by`. The deck reads `loadVerticalCategoryWeights(db, vertical)` (`apps/api/src/booker/vertical-weights.ts`, uncached) and scores with the pure `verticalCategoryMatch(categoryIds, weights)` in `packages/core`; a core test fails if any vertical name appears in core source. Integration test `src/admin/vertical-weights.integration.test.ts` proves an admin edit is what the reader returns next.
+
 Seed `vertical_category_weights` from PRD §6.2 / §7.2.3: casting director → actors, models, presenters; music-video-adjacent director → dancers, models, stylists; etc. Admin-editable table, no hardcoded map in ranking code.
 
 Minimal admin mutation `admin.verticalWeights` (list + update) behind `admin` middleware, even if the UI is a simple table page.

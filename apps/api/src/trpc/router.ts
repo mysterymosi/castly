@@ -9,6 +9,7 @@ import {
   verifyOtpInput,
 } from "@workspace/schema"
 
+import { adminRouter } from "../admin/router.js"
 import { bookerRouter } from "../booker/router.js"
 import { mediaRouter } from "../media/router.js"
 import { talentRouter } from "../talent/router.js"
@@ -121,6 +122,7 @@ const authRouter = router({
 })
 
 export const appRouter = router({
+  admin: adminRouter,
   booker: bookerRouter,
   media: mediaRouter,
   talent: talentRouter,

@@ -32,6 +32,7 @@ const studioCode = {
 const bookerCode = {
   unknown_city: "BAD_REQUEST",
   profile_required: "PRECONDITION_FAILED",
+  unknown_category: "BAD_REQUEST",
 } as const
 
 /** Map known domain failures to tRPC codes. Unexpected errors stay 500 and keep their cause. */
