@@ -1,5 +1,9 @@
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
+import {
+  isTaxonomyAttributeKey,
+  type TaxonomyAttributeKey,
+} from "@workspace/schema"
 import type {
   createProjectInput,
   createRoleInput,
@@ -179,6 +183,13 @@ function requirementShapeError(
   }
 }
 
+/** Active slugs for a taxonomy-backed attribute: the values a requirement may name. */
+async function taxonomySlugs(db: Db, key: TaxonomyAttributeKey): Promise<string[]> {
+  const table = key === "languages" ? schema.languages : schema.accents
+  const rows = await db.select({ slug: table.slug }).from(table).where(eq(table.active, true))
+  return rows.map((row) => row.slug)
+}
+
 /**
  * Requirements are keyed by active attribute definitions and shaped by their data type. A
  * sensitive-tier attribute is only accepted on a role with a written brief (PRD §7.3.1): the
@@ -205,7 +216,10 @@ async function validateRequirements(db: Db, requirements: RoleRequirements, brie
   for (const key of keys) {
     const definition = byKey.get(key)
     if (!definition) throw new ProjectError(`Unknown attribute "${key}"`, "invalid_requirement")
-    const problem = requirementShapeError(key, definition.dataType, requirements[key]!, definition.options)
+    const options = isTaxonomyAttributeKey(key)
+      ? await taxonomySlugs(db, key)
+      : definition.options
+    const problem = requirementShapeError(key, definition.dataType, requirements[key]!, options)
     if (problem) throw new ProjectError(problem, "invalid_requirement")
     if (definition.tier !== "standard" && brief === null) {
       throw new ProjectError(
@@ -292,10 +306,13 @@ export async function roleFormOptions(db: Db): Promise<RoleFormOptions> {
     .from(schema.attributeDefinitions)
     .where(eq(schema.attributeDefinitions.active, true))
     .orderBy(asc(schema.attributeDefinitions.label))
-  return {
-    categories,
-    attributes: attributes.flatMap((a) =>
-      a.tier === "prohibited" ? [] : [{ ...a, tier: a.tier, options: a.options ?? null }],
-    ),
-  }
+  const resolved = await Promise.all(
+    attributes.map(async (a) => {
+      if (a.tier === "prohibited") return []
+      // Taxonomy-backed keys take their options from the live table, not the definition.
+      const options = isTaxonomyAttributeKey(a.key) ? await taxonomySlugs(db, a.key) : a.options
+      return [{ ...a, tier: a.tier, options: options ?? null }]
+    }),
+  )
+  return { categories, attributes: resolved.flat() }
 }

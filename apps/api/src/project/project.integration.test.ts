@@ -14,6 +14,7 @@ const seededUserIds: string[] = []
 const createdCityIds: string[] = []
 const createdCategoryIds: string[] = []
 const createdAttributeKeys: string[] = []
+const createdLanguageIds: string[] = []
 
 const brief =
   "Warm, confident lead for a bank's national TV spot. She explains a savings product to camera " +
@@ -77,6 +78,26 @@ async function newAttributes() {
   return { height, look }
 }
 
+/**
+ * The `languages` definition comes from the seed, which CI does not run: create it when missing
+ * and only clean up what this test created.
+ */
+async function ensureLanguagesDefinition() {
+  const inserted = await db
+    .insert(schema.attributeDefinitions)
+    .values({ key: "languages", label: "Languages", dataType: "multi_select", tier: "standard" })
+    .onConflictDoNothing({ target: schema.attributeDefinitions.key })
+    .returning({ key: schema.attributeDefinitions.key })
+  if (inserted.length > 0) createdAttributeKeys.push("languages")
+  const slug = `test-yoruba-${tag()}`
+  const [language] = await db
+    .insert(schema.languages)
+    .values({ slug, name: "Yoruba (test)" })
+    .returning({ id: schema.languages.id })
+  createdLanguageIds.push(language!.id)
+  return slug
+}
+
 const noRoleExtras = {
   categoryId: null,
   shootStartsOn: null,
@@ -95,6 +116,9 @@ describe("project and role CRUD", () => {
       await db
         .delete(schema.attributeDefinitions)
         .where(inArray(schema.attributeDefinitions.key, createdAttributeKeys.splice(0)))
+    }
+    for (const id of createdLanguageIds.splice(0)) {
+      await db.delete(schema.languages).where(eq(schema.languages.id, id))
     }
     for (const id of createdCategoryIds.splice(0)) {
       await db.delete(schema.categories).where(eq(schema.categories.id, id))
@@ -258,5 +282,35 @@ describe("project and role CRUD", () => {
     await expect(api.project.create({ name: "Too early" })).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
     })
+  })
+
+  it("requires languages from the languages table, not a loose attribute", async () => {
+    const { api } = await newBooker("project-languages")
+    const yoruba = await ensureLanguagesDefinition()
+    const project = await api.project.create({ name: "Bank commercial — March" })
+    const base = { projectId: project.id, ...noRoleExtras, name: "Lead actress, 25–30, Yoruba-speaking", brief }
+
+    const created = await api.role.create({
+      ...base,
+      requirements: {
+        languages: { anyOf: [yoruba] },
+      },
+    })
+    expect(created.roles[0]?.requirements).toEqual({ languages: { anyOf: [yoruba] } })
+
+    await expect(
+      api.role.create({ ...base, requirements: { languages: { anyOf: ["klingon"] } } })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("klingon") })
+
+    const options = await api.role.formOptions()
+    expect(options.attributes.find((a) => a.key === "languages")?.options).toContain(yoruba)
+
+    // Talents set languages through their own list; the attribute setter refuses the key.
+    const talent = await newUser("project-languages-talent")
+    const talentApi = caller(talent)
+    await talentApi.auth.enableMode({ mode: "talent" })
+    await expect(
+      talentApi.talent.attributes.set({ definitionKey: "languages", valueText: yoruba })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" })
   })
 })

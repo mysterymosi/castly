@@ -10,6 +10,7 @@ import {
   cardConfigSchema,
   type CardConfig,
   type CoreSectionType,
+  isTaxonomyAttributeKey,
   validatePortfolioSectionWrite,
 } from "@workspace/schema"
 import { randomUUID } from "node:crypto"
@@ -467,6 +468,12 @@ export async function setTalentAttribute(
     .limit(1)
   if (!definition)
     throw new StudioError("Unknown attribute", "unknown_attribute")
+  // Languages and accents have their own tables; one source of truth per value.
+  if (isTaxonomyAttributeKey(definition.key))
+    throw new StudioError(
+      `Set ${definition.label.toLowerCase()} from its own list, not as an attribute`,
+      "unknown_attribute"
+    )
 
   await db
     .insert(schema.talentAttributes)

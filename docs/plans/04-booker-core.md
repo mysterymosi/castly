@@ -50,6 +50,8 @@ A role with a non-empty brief is what M8 will treat as allowing sensitive filter
 
 ### 4.5 Taxonomy for on-camera attributes
 
+**Status:** Done — launch attributes live in `packages/db/src/seed-attributes.ts` (insert-only by key). Standard: height, hair, eye colour, visible tattoos/piercings, playing age (`playing_age_min` / `playing_age_max`; a role's "25–30" is `playing_age_min ≤ 30` and `playing_age_max ≥ 25`), dress size, shoe size, experience, languages, accents. Sensitive: ethnicity, complexion (neutral `light | medium | deep`), gender, bust/chest, waist, hips. `languages` / `accents` are taxonomy-backed (`taxonomyAttributeKeys` in `@workspace/schema`): requirement values are checked against the live `languages` / `accents` tables, `role.formOptions` lists their slugs, and `talent.attributes.set` refuses them (values stay in `talent_languages` / `talent_accents`). `apps/api/src/taxonomy/attribute-policy.test.ts` (in `test:unit`) encodes the §7.3.1 tiers and fails on any tier change or prohibited-looking key, label, or option. The CI prohibited guard now scans all of `packages/db/src`, including the seed. Open: `ethnicity` keeps its M1 options (race categories); PRD asks for self-selected heritage — decide with the §7.3.1 legal/casting review.
+
 Ensure `attribute_definitions` includes standard and sensitive keys used in briefs (height, age range, languages; complexion, gender, body measurements as sensitive). No prohibited keys.
 
 **Acceptance.** Seed is consistent with PRD §7.3.1 tiers. CI prohibited-attribute guard still passes.

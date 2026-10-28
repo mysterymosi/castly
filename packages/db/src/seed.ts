@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 
 import { databaseUrl } from "./env.js"
+import { launchAttributeDefinitions } from "./seed-attributes.js"
 import {
   accents,
   attributeDefinitions,
@@ -100,38 +101,12 @@ const allCategories = launchCategories.map((category) => {
 
 await db
   .insert(attributeDefinitions)
-  .values([
-    {
-      key: "height_cm",
-      label: "Height (cm)",
-      dataType: "number",
-      tier: "standard",
-      appliesToCategoryIds: onCamera,
-    },
-    {
-      key: "hair",
-      label: "Hair",
-      dataType: "select",
-      tier: "standard",
-      appliesToCategoryIds: onCamera,
-      options: ["black", "brown", "blonde", "coloured", "bald"],
-    },
-    {
-      key: "experience_years",
-      label: "Years of experience",
-      dataType: "number",
-      tier: "standard",
-      appliesToCategoryIds: allCategories,
-    },
-    {
-      key: "ethnicity",
-      label: "Ethnicity",
-      dataType: "select",
-      tier: "sensitive",
-      appliesToCategoryIds: onCamera,
-      options: ["black", "white", "mixed", "other", "prefer_not_to_say"],
-    },
-  ])
+  .values(
+    launchAttributeDefinitions.map(({ appliesTo, ...definition }) => ({
+      ...definition,
+      appliesToCategoryIds: appliesTo === "on_camera" ? onCamera : allCategories,
+    })),
+  )
   .onConflictDoNothing({ target: attributeDefinitions.key })
 
 await db
