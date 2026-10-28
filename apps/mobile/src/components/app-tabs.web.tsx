@@ -22,6 +22,9 @@ export default function AppTabs() {
           <TabTrigger name="studio" href="/studio" asChild>
             <TabButton icon="studio" label="Studio" />
           </TabTrigger>
+          <TabTrigger name="projects" href="/projects" asChild>
+            <TabButton icon="film" label="Projects" />
+          </TabTrigger>
           <TabTrigger name="account" href="/account" asChild>
             <TabButton icon="person" label="Account" />
           </TabTrigger>

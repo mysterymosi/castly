@@ -40,6 +40,8 @@ Minimal admin mutation `admin.verticalWeights` (list + update) behind `admin` mi
 
 ### 4.4 Projects and roles CRUD
 
+**Status:** Built; device path pending a manual run. API `project.list | get | create | update | archive` and `role.formOptions | create | update | publish` (`apps/api/src/project/`), all `bookerProcedure` and owner-scoped (another booker's project is NOT_FOUND). `project.list` returns active projects newest-first; `includeArchived` adds archived ones. Archive is idempotent and makes the project read-only. Briefs are trimmed and blank becomes NULL. `role.publish` always returns FORBIDDEN and no input accepts `isPublished` (a smuggled field is stripped) — until M7 + M9. `requirements` are validated against active `attribute_definitions`: known key, shape by data type (number → `{min,max}`, select/text → `{anyOf}` with listed options, boolean → `{equals}`), and sensitive-tier keys only on a role with a brief. Contracts in `packages/schema/src/project.ts`. Mobile: Projects tab (`app/(tabs)/projects/`: list with setup gating, new project, project detail with archive, role form with `@expo/ui` date pickers); requirements have no editor yet (M8 filters) but edits preserve them. Tests: `src/project/project.integration.test.ts`.
+
 `project.list | create | update | archive`. `role.create | update` with name, brief, category, shoot window, rate range, `requirements` jsonb aligned to attribute keys.
 
 A role with a non-empty brief is what M8 will treat as allowing sensitive filters. Store the brief as a real string; empty or whitespace is not a brief.

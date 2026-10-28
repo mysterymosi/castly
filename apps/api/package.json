@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run src/auth/age.test.ts src/auth/rate-limit.test.ts src/talent/public-rate-limit.test.ts src/auth/termii.test.ts src/auth/phone.test.ts src/observability/sentry.test.ts",
-    "test:integration": "vitest run --no-file-parallelism src/trpc/middleware.test.ts src/auth/router.test.ts src/media/media.integration.test.ts src/talent/publish.integration.test.ts src/talent/public.integration.test.ts src/talent/serialize-talent.guard.test.ts src/booker/booker.integration.test.ts src/admin/vertical-weights.integration.test.ts"
+    "test:integration": "vitest run --no-file-parallelism src/trpc/middleware.test.ts src/auth/router.test.ts src/media/media.integration.test.ts src/talent/publish.integration.test.ts src/talent/public.integration.test.ts src/talent/serialize-talent.guard.test.ts src/booker/booker.integration.test.ts src/admin/vertical-weights.integration.test.ts src/project/project.integration.test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",
