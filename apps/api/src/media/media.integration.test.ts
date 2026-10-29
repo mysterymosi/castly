@@ -121,8 +121,14 @@ describe("media pipeline (local backend)", () => {
   })
 })
 
-// Hits the local Supabase Storage; needs the bucket from `pnpm media:supabase-setup`.
-describe("media pipeline (supabase storage images)", () => {
+// Hits a real Supabase Storage (`supabase start` locally, plus the bucket from
+// `pnpm media:supabase-setup`). CI's integration job runs a bare Postgres container with no
+// Storage and no keys, so the suite only runs where Storage is configured.
+const supabaseStorageConfigured = Boolean(
+  process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY
+)
+
+describe.skipIf(!supabaseStorageConfigured)("media pipeline (supabase storage images)", () => {
   beforeAll(() => {
     process.env.CASTLY_MEDIA_BACKEND = "remote"
     process.env.CASTLY_IMAGE_PROVIDER = "supabase"
