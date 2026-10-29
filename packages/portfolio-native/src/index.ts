@@ -2,6 +2,8 @@ export { CARD_WIDTH } from "./constants"
 export {
   mediaMetaFromStatus,
   PortfolioMediaProvider,
+  PortfolioVideoGate,
+  type OpenGalleryImage,
   type PortfolioImageProps,
   type PortfolioMediaComponents,
   type PortfolioVideoProps,

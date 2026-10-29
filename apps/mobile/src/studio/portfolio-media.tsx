@@ -9,7 +9,7 @@ import type { StudioState } from "@workspace/schema"
 import { useEvent } from "expo"
 import { Image } from "expo-image"
 import { useVideoPlayer, VideoView } from "expo-video"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Pressable, View } from "react-native"
 
 import { Icon } from "@/components/ui/icon"
@@ -35,6 +35,9 @@ function PortfolioImage({ uri, blurhash, width, height }: PortfolioImageProps) {
   )
 }
 
+// Live HLS players. The deck allows one at a time (TECH_SPEC §10.2); dev builds warn on a second.
+let livePlayers = 0
+
 /**
  * HLS showreel. The player gets its source on mount, so the manifest and first segments load
  * with the preview (the 2.10 measurement includes that cost). Poster and a play button sit on top
@@ -52,6 +55,14 @@ function PortfolioVideo({
   })
   const [started, setStarted] = useState(false)
   const showCover = !started && !isPlaying
+
+  useEffect(() => {
+    livePlayers += 1
+    if (__DEV__ && livePlayers > 1) console.warn(`[media] ${livePlayers} HLS players mounted; expected one`)
+    return () => {
+      livePlayers -= 1
+    }
+  }, [])
 
   return (
     <View style={{ width, height }}>

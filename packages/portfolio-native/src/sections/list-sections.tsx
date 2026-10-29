@@ -15,8 +15,8 @@ import {
   CARD_WIDTH,
   LIST_ROW_HEIGHT,
   SECTION_TITLE_HEIGHT,
+  SECTION_HORIZONTAL_PADDING,
   TAG_ROW_HEIGHT,
-  TAGS_PER_ROW,
   TWO_LINE_ROW_HEIGHT,
 } from "../constants"
 import { SectionShell, SectionTitle } from "../section-shell"
@@ -46,7 +46,11 @@ function SkeletonRows({ title, rowCount, cardWidth = CARD_WIDTH }: { title: stri
     <SectionShell cardWidth={cardWidth}>
       <SectionTitle>{title}</SectionTitle>
       {Array.from({ length: rowCount }, (_, i) => (
-        <View key={i} className="justify-center border-b border-border" style={{ height: LIST_ROW_HEIGHT }}>
+        <View
+          key={i}
+          className={`justify-center ${i === 0 ? "" : "border-t border-border"}`}
+          style={{ height: LIST_ROW_HEIGHT }}
+        >
           <View className="h-3 rounded-sm bg-surfaceMuted" style={{ width: i % 2 ? "64%" : "88%" }} />
         </View>
       ))}
@@ -54,9 +58,23 @@ function SkeletonRows({ title, rowCount, cardWidth = CARD_WIDTH }: { title: stri
   )
 }
 
-function Row({ left, right, height = LIST_ROW_HEIGHT }: { left: ReactNode; right?: ReactNode; height?: number }) {
+/** A list row. Rows are divided like the web's `divide-y`: a rule above each but the first. */
+function Row({
+  left,
+  right,
+  height = LIST_ROW_HEIGHT,
+  first,
+}: {
+  left: ReactNode
+  right?: ReactNode
+  height?: number
+  first: boolean
+}) {
   return (
-    <View className="flex-row items-center justify-between gap-3 border-b border-border" style={{ height }}>
+    <View
+      className={`flex-row items-center justify-between gap-3 ${first ? "" : "border-t border-border"}`}
+      style={{ height }}
+    >
       <View className="min-w-0 flex-1">{left}</View>
       {right ? <View className="items-end">{right}</View> : null}
     </View>
@@ -97,6 +115,7 @@ function CreditsSection({ config, content, cardWidth = CARD_WIDTH }: SectionRend
         return (
           <Row
             key={`${credit.title}-${i}`}
+            first={i === 0}
             height={TWO_LINE_ROW_HEIGHT}
             left={
               <>
@@ -130,8 +149,9 @@ function AttributesSection({ content, cardWidth = CARD_WIDTH }: SectionRendererP
   return (
     <SectionShell cardWidth={cardWidth}>
       <SectionTitle>Attributes</SectionTitle>
-      {selectAttributes(content).map((attribute) => (
+      {selectAttributes(content).map((attribute, i) => (
         <Row
+          first={i === 0}
           key={attribute.label}
           left={<Secondary>{attribute.label}</Secondary>}
           right={<Primary>{attribute.value}</Primary>}
@@ -146,9 +166,36 @@ export const attributesRenderer: NativeSectionRenderer<AttributesConfig> = {
 }
 
 type SkillsConfig = CoreSectionConfigMap["skills"]
+/** Approximate width of a 13px label in the body font, per character, plus the chip's padding. */
+const CHIP_CHAR_WIDTH = 7.4
+const CHIP_PADDING = 24
+const CHIP_GAP = 8
+
+/**
+ * Rows the chips wrap into at card width, laid out greedily by estimated chip width. A fixed
+ * chips-per-row guess under-counts long names ("Contemporary dance") and clips the last row.
+ */
+function chipRows(names: string[], rowWidth: number): number {
+  let rows = 0
+  let used = 0
+  for (const name of names) {
+    const chip = Math.min(rowWidth, CHIP_PADDING + name.length * CHIP_CHAR_WIDTH)
+    if (rows === 0 || used + CHIP_GAP + chip > rowWidth) {
+      rows += 1
+      used = chip
+    } else {
+      used += CHIP_GAP + chip
+    }
+  }
+  return rows
+}
+
 export function estimateSkillsHeight(config: SkillsConfig, _mediaMeta: SectionMediaMeta, content?: PortfolioContent): number {
   const rows = content
-    ? Math.ceil(selectSkills(config, content).length / TAGS_PER_ROW)
+    ? chipRows(
+        selectSkills(config, content).map((skill) => skill.name),
+        CARD_WIDTH - SECTION_HORIZONTAL_PADDING * 2,
+      )
     : (config.highlightTop ?? 5)
   return listEstimate(rows * TAG_ROW_HEIGHT)
 }
@@ -208,8 +255,9 @@ function LanguagesSection({ config, content, cardWidth = CARD_WIDTH }: SectionRe
   return (
     <SectionShell cardWidth={cardWidth}>
       <SectionTitle>Languages</SectionTitle>
-      {languages.map((language) => (
+      {languages.map((language, i) => (
         <Row
+          first={i === 0}
           key={language.name}
           left={<Primary>{language.name}</Primary>}
           right={language.fluency ? <Secondary>{language.fluency}</Secondary> : null}
@@ -244,8 +292,9 @@ function RatesSection({ config, content, cardWidth = CARD_WIDTH }: SectionRender
   return (
     <SectionShell cardWidth={cardWidth}>
       <SectionTitle>Rates</SectionTitle>
-      {selectRates(config, content).map((rate) => (
+      {selectRates(config, content).map((rate, i) => (
         <Row
+          first={i === 0}
           key={rate.kind}
           height={TWO_LINE_ROW_HEIGHT}
           left={<Primary>{rate.label}</Primary>}
@@ -285,8 +334,9 @@ function AvailabilitySection({ config, content, now = new Date(), cardWidth = CA
   return (
     <SectionShell cardWidth={cardWidth}>
       <SectionTitle>Availability</SectionTitle>
-      {selectAvailability(config, content, now).map((entry) => (
+      {selectAvailability(config, content, now).map((entry, i) => (
         <Row
+          first={i === 0}
           key={entry.month}
           left={<Primary>{entry.label}</Primary>}
           right={<Secondary>{entry.statusLabel}</Secondary>}

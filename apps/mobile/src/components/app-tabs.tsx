@@ -26,6 +26,14 @@ export default function AppTabs() {
         />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="discover">
+        <NativeTabs.Trigger.Label>Discover</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: "rectangle.stack", selected: "rectangle.stack.fill" }}
+          md="style"
+        />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="projects">
         <NativeTabs.Trigger.Label>Projects</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: "folder", selected: "folder.fill" }} md="folder" />

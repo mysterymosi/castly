@@ -5,6 +5,7 @@ import { useFonts } from "expo-font"
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router"
 import * as SplashScreen from "expo-splash-screen"
 import { useEffect, useMemo } from "react"
+import { GestureHandlerRootView } from "react-native-gesture-handler"
 
 import "../global.css"
 
@@ -72,10 +73,12 @@ function RootNavigator() {
 export default function RootLayout() {
   // Outside the session so sign-out can clear the cache.
   return (
-    <QueryClientProvider client={queryClient}>
-      <SessionProvider>
-        <RootNavigator />
-      </SessionProvider>
-    </QueryClientProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <SessionProvider>
+          <RootNavigator />
+        </SessionProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   )
 }

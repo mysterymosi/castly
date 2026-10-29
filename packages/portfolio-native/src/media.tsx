@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useMemo,
   type ComponentType,
   type ReactNode,
 } from "react"
@@ -49,22 +50,36 @@ export type PortfolioMediaComponents = {
   Video: ComponentType<PortfolioVideoProps>
 }
 
-const PortfolioMediaContext = createContext<PortfolioMediaComponents | null>(
-  null
-)
+/** Opens a gallery's photos full screen, starting at `index`. */
+export type OpenGalleryImage = (mediaIds: string[], index: number) => void
+
+type PortfolioMediaValue = {
+  components: PortfolioMediaComponents
+  onOpenImage?: OpenGalleryImage
+}
+
+const PortfolioMediaContext = createContext<PortfolioMediaValue | null>(null)
 
 export function PortfolioMediaProvider({
   components,
+  onOpenImage,
   children,
 }: {
   components: PortfolioMediaComponents
+  /** When set, gallery photos are tappable and open through this. */
+  onOpenImage?: OpenGalleryImage
   children: ReactNode
 }) {
+  const value = useMemo(() => ({ components, onOpenImage }), [components, onOpenImage])
   return (
-    <PortfolioMediaContext.Provider value={components}>
+    <PortfolioMediaContext.Provider value={value}>
       {children}
     </PortfolioMediaContext.Provider>
   )
+}
+
+export function useOpenGalleryImage(): OpenGalleryImage | undefined {
+  return useContext(PortfolioMediaContext)?.onOpenImage
 }
 
 type MediaSlotProps = {
@@ -83,7 +98,7 @@ export function SectionImage({
   height,
   className = "rounded-lg",
 }: MediaSlotProps) {
-  const components = useContext(PortfolioMediaContext)
+  const components = useContext(PortfolioMediaContext)?.components
   const meta = mediaId ? mediaMeta[mediaId] : undefined
   return (
     <View
@@ -102,7 +117,25 @@ export function SectionImage({
   )
 }
 
-/** Video for `mediaId`, or `fallback` when there is no playback URL or no provider. */
+const PortfolioVideoGateContext = createContext(true)
+
+/**
+ * Whether videos under it may mount a player. A host with several videos on screen (the deck)
+ * gates all but one, so only one HLS player exists and nothing off-screen downloads a stream;
+ * gated videos show their poster. Ungated by default.
+ */
+export function PortfolioVideoGate({ active, children }: { active: boolean; children: ReactNode }) {
+  return (
+    <PortfolioVideoGateContext.Provider value={active}>
+      {children}
+    </PortfolioVideoGateContext.Provider>
+  )
+}
+
+/**
+ * Video for `mediaId`; its poster while gated (see `PortfolioVideoGate`); `fallback` when there
+ * is no playback URL or no provider.
+ */
 export function SectionVideo({
   mediaId,
   mediaMeta,
@@ -110,9 +143,26 @@ export function SectionVideo({
   height,
   fallback,
 }: Omit<MediaSlotProps, "className"> & { fallback: ReactNode }) {
-  const components = useContext(PortfolioMediaContext)
+  const components = useContext(PortfolioMediaContext)?.components
+  const active = useContext(PortfolioVideoGateContext)
   const meta = mediaId ? mediaMeta[mediaId] : undefined
   if (!components || !meta?.playbackUrl) return <>{fallback}</>
+  if (!active) {
+    if (!meta.posterUrl) return <>{fallback}</>
+    return (
+      <View
+        className="bg-inverse overflow-hidden rounded-lg"
+        style={{ width, height }}
+      >
+        <components.Image
+          uri={meta.posterUrl}
+          blurhash={meta.blurhash}
+          width={width}
+          height={height}
+        />
+      </View>
+    )
+  }
   return (
     <View
       className="bg-inverse overflow-hidden rounded-lg"

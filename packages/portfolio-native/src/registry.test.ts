@@ -5,6 +5,7 @@ import {
   CARD_WIDTH,
   LIST_ROW_HEIGHT,
   SECTION_TITLE_HEIGHT,
+  TAG_ROW_HEIGHT,
   TWO_LINE_ROW_HEIGHT,
 } from "./constants"
 import { estimateSectionHeight, studioSectionRegistry } from "./registry"
@@ -62,5 +63,19 @@ describe("studioSectionRegistry", () => {
     )
     // Without content the studio skeleton is sized from config alone.
     expect(estimateSectionHeight(credits, emptyMeta)).toBe(SECTION_TITLE_HEIGHT + 2 * LIST_ROW_HEIGHT + 24)
+  })
+
+  it("counts wrapped skill rows from the chip labels, not a fixed chips-per-row", () => {
+    const skills = { type: "skills" as const, schemaVersion: 1 as const, config: {} }
+    const short = { skills: ["Dance", "Runway", "Voice"].map((name) => ({ name })) }
+    const long = {
+      skills: ["Contemporary dance", "Runway", "Stage combat"].map((name) => ({ name })),
+    }
+    expect(estimateSectionHeight(skills, emptyMeta, { content: short })).toBe(
+      SECTION_TITLE_HEIGHT + TAG_ROW_HEIGHT + 24,
+    )
+    expect(estimateSectionHeight(skills, emptyMeta, { content: long })).toBe(
+      SECTION_TITLE_HEIGHT + 2 * TAG_ROW_HEIGHT + 24,
+    )
   })
 })
