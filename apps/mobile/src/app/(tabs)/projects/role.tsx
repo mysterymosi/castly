@@ -1,10 +1,17 @@
-import type { RoleFormOptions, RoleRequirements } from "@workspace/schema"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import {
+  projectDetailSchema,
+  roleFormOptionsSchema,
+  type Role,
+  type RoleFormOptions,
+  type RoleRequirements,
+} from "@workspace/schema"
 import { router, useLocalSearchParams } from "expo-router"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { View } from "react-native"
 
 import { errorMessage } from "@/auth/session-provider"
-import { projectApi } from "@/booker/project-api"
+import { cacheProjectDetail } from "@/booker/project-cache"
 import { Button } from "@/components/ui/button"
 import { Chip } from "@/components/ui/chip"
 import { DateField } from "@/components/ui/date-field"
@@ -14,6 +21,7 @@ import { ErrorState, InlineError, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
 import { TextField } from "@/components/ui/text-field"
 import { haptics } from "@/lib/haptics"
+import { trpcQuery } from "@/trpc/query-client"
 
 const BRIEF_MAX = 5000
 
@@ -26,66 +34,83 @@ function parseAmount(text: string): number | null {
 
 const amountText = (n: number | null) => (n === null ? "" : String(n))
 
-export default function RoleFormScreen() {
-  const { projectId, roleId } = useLocalSearchParams<{ projectId: string; roleId?: string }>()
-  const editing = !!roleId
-  const [options, setOptions] = useState<RoleFormOptions | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [name, setName] = useState("")
-  const [brief, setBrief] = useState("")
-  const [categoryId, setCategoryId] = useState<string | null>(null)
-  const [rateMin, setRateMin] = useState("")
-  const [rateMax, setRateMax] = useState("")
-  const [startsOn, setStartsOn] = useState<string | null>(null)
-  const [endsOn, setEndsOn] = useState<string | null>(null)
-  // Requirements are edited with filters (M8); keep whatever the role already has.
-  const [requirements, setRequirements] = useState<RoleRequirements>({})
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let current = true
-    Promise.all([projectApi.roleFormOptions(), roleId ? projectApi.get(projectId) : null]).then(
-      ([formOptions, project]) => {
-        if (!current) return
-        setOptions(formOptions)
-        const role = project?.roles.find((r) => r.id === roleId)
-        if (role) {
-          setName(role.name)
-          setBrief(role.brief ?? "")
-          setCategoryId(role.categoryId)
-          setRateMin(amountText(role.rateMin))
-          setRateMax(amountText(role.rateMax))
-          setStartsOn(role.shootStartsOn)
-          setEndsOn(role.shootEndsOn)
-          setRequirements(role.requirements)
-        }
-      },
-      (caught: unknown) => {
-        if (current) setLoadError(errorMessage(caught, "Could not load the role form"))
-      },
-    )
-    return () => {
-      current = false
-    }
-  }, [projectId, roleId])
-
-  const header = (
+function RoleHeader({ editing }: { editing: boolean }) {
+  return (
     <ScreenHeader
       title={editing ? "Edit role" : "New role"}
       backIcon="close"
       onBack={() => router.back()}
     />
   )
+}
 
+export default function RoleFormScreen() {
+  const { projectId, roleId } = useLocalSearchParams<{ projectId: string; roleId?: string }>()
+  const editing = !!roleId
+  const optionsQuery = useQuery(
+    trpcQuery.role.formOptions.queryOptions(undefined, { select: roleFormOptionsSchema.parse }),
+  )
+  const projectQuery = useQuery(
+    trpcQuery.project.get.queryOptions({ projectId }, { select: projectDetailSchema.parse }),
+  )
+
+  const options = optionsQuery.data
+  const project = projectQuery.data
+  if (options && project) {
+    return (
+      <RoleForm
+        projectId={projectId}
+        roleId={roleId}
+        options={options}
+        role={roleId ? project.roles.find((r) => r.id === roleId) : undefined}
+      />
+    )
+  }
+  const loadError = optionsQuery.error ?? projectQuery.error
   if (loadError) {
     return (
-      <Screen header={header} contentClassName="justify-center">
-        <ErrorState message={loadError} />
+      <Screen header={<RoleHeader editing={editing} />} contentClassName="justify-center">
+        <ErrorState message={errorMessage(loadError, "Could not load the role form")} />
       </Screen>
     )
   }
-  if (!options) return <LoadingState label="Loading role form" />
+  return <LoadingState label="Loading role form" />
+}
+
+/**
+ * Fields start from the saved role once, at mount: a background refetch of the project (after
+ * the app comes back to the foreground, say) never overwrites what the booker is typing.
+ */
+function RoleForm({
+  projectId,
+  roleId,
+  options,
+  role,
+}: {
+  projectId: string
+  roleId: string | undefined
+  options: RoleFormOptions
+  role: Role | undefined
+}) {
+  const editing = !!roleId
+  const [name, setName] = useState(role?.name ?? "")
+  const [brief, setBrief] = useState(role?.brief ?? "")
+  const [categoryId, setCategoryId] = useState<string | null>(role?.categoryId ?? null)
+  const [rateMin, setRateMin] = useState(amountText(role?.rateMin ?? null))
+  const [rateMax, setRateMax] = useState(amountText(role?.rateMax ?? null))
+  const [startsOn, setStartsOn] = useState<string | null>(role?.shootStartsOn ?? null)
+  const [endsOn, setEndsOn] = useState<string | null>(role?.shootEndsOn ?? null)
+  // Requirements are edited with filters (M8); keep whatever the role already has.
+  const [requirements] = useState<RoleRequirements>(role?.requirements ?? {})
+  const [error, setError] = useState<string | null>(null)
+  const createRole = useMutation(
+    trpcQuery.role.create.mutationOptions({ onSuccess: cacheProjectDetail }),
+  )
+  const updateRole = useMutation(
+    trpcQuery.role.update.mutationOptions({ onSuccess: cacheProjectDetail }),
+  )
+  const pending = createRole.isPending || updateRole.isPending
+  const header = <RoleHeader editing={editing} />
 
   const min = parseAmount(rateMin)
   const max = parseAmount(rateMax)
@@ -100,8 +125,7 @@ export default function RoleFormScreen() {
   const canSave = name.trim().length > 0 && !amountError && !dateError
 
   async function save() {
-    if (!canSave) return
-    setPending(true)
+    if (!canSave || pending) return
     setError(null)
     const fields = {
       name: name.trim(),
@@ -114,15 +138,13 @@ export default function RoleFormScreen() {
       requirements,
     }
     try {
-      if (roleId) await projectApi.updateRole({ roleId, ...fields })
-      else await projectApi.createRole({ projectId, ...fields })
+      if (roleId) await updateRole.mutateAsync({ roleId, ...fields })
+      else await createRole.mutateAsync({ projectId, ...fields })
       haptics.success()
       router.back()
     } catch (caught) {
       haptics.error()
       setError(errorMessage(caught, "Could not save the role"))
-    } finally {
-      setPending(false)
     }
   }
 

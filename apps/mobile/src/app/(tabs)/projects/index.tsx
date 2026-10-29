@@ -1,20 +1,23 @@
-import { projectTypeLabels, type ProjectSummary } from "@workspace/schema"
-import { router, useFocusEffect } from "expo-router"
-import { useCallback, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import {
+  bookerProfileStateSchema,
+  projectListSchema,
+  projectTypeLabels,
+  type ProjectSummary,
+} from "@workspace/schema"
+import { router } from "expo-router"
+import { useState } from "react"
 import { View } from "react-native"
 
 import { authApi } from "@/auth/client"
 import { errorMessage, useSession } from "@/auth/session-provider"
-import { bookerApi } from "@/booker/api"
-import { projectApi } from "@/booker/project-api"
 import { Button } from "@/components/ui/button"
 import { PressableCard } from "@/components/ui/card"
 import { Icon } from "@/components/ui/icon"
 import { Screen } from "@/components/ui/screen"
 import { EmptyState, ErrorState, InlineError, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
-
-type Loaded = { hasProfile: boolean; projects: ProjectSummary[] }
+import { queryClient, trpcQuery } from "@/trpc/query-client"
 
 function EnableBooker() {
   const { refreshMe } = useSession()
@@ -27,6 +30,7 @@ function EnableBooker() {
     try {
       await authApi.enableMode("booker")
       await refreshMe()
+      await queryClient.invalidateQueries(trpcQuery.booker.pathFilter())
       router.push("/booker-setup")
     } catch (caught) {
       setError(errorMessage(caught, "Could not enable booker mode"))
@@ -81,41 +85,36 @@ function ProjectRow({ project }: { project: ProjectSummary }) {
 export default function ProjectsScreen() {
   const { me } = useSession()
   const isBooker = !!me?.modes.includes("booker")
-  const [loaded, setLoaded] = useState<Loaded | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-
-  const load = useCallback(
-    (isCurrent: () => boolean) =>
-      Promise.all([bookerApi.getProfile(), projectApi.list()]).then(
-        ([profile, list]) => {
-          if (!isCurrent()) return
-          setLoadError(null)
-          setLoaded({ hasProfile: profile.profile !== null, projects: list.projects })
-        },
-        (caught: unknown) => {
-          if (isCurrent()) setLoadError(errorMessage(caught, "Could not load your projects"))
-        },
-      ),
-    [],
+  const profileQuery = useQuery(
+    trpcQuery.booker.getProfile.queryOptions(undefined, {
+      enabled: isBooker,
+      select: bookerProfileStateSchema.parse,
+    }),
   )
-
-  // Refresh whenever the tab regains focus (after creating, editing, or archiving).
-  useFocusEffect(
-    useCallback(() => {
-      if (!isBooker) return
-      let current = true
-      void load(() => current)
-      return () => {
-        current = false
-      }
-    }, [isBooker, load]),
+  const listQuery = useQuery(
+    trpcQuery.project.list.queryOptions(
+      { includeArchived: false },
+      { enabled: isBooker, select: projectListSchema.parse },
+    ),
   )
 
   if (!isBooker) return <EnableBooker />
-  if (loadError && !loaded) {
+
+  const loaded =
+    profileQuery.data && listQuery.data
+      ? { hasProfile: profileQuery.data.profile !== null, projects: listQuery.data.projects }
+      : null
+  const loadError = profileQuery.error ?? listQuery.error
+  if (!loaded && loadError) {
     return (
       <Screen edges={["top"]} contentClassName="justify-center">
-        <ErrorState message={loadError} onRetry={() => void load(() => true)} />
+        <ErrorState
+          message={errorMessage(loadError, "Could not load your projects")}
+          onRetry={() => {
+            void profileQuery.refetch()
+            void listQuery.refetch()
+          }}
+        />
       </Screen>
     )
   }

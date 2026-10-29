@@ -1,4 +1,6 @@
+import { useMutation, useQuery } from "@tanstack/react-query"
 import {
+  bookerProfileStateSchema,
   bookerVerticalLabels,
   bookerVerticals,
   projectTypeLabels,
@@ -8,12 +10,11 @@ import {
   type ProjectType,
 } from "@workspace/schema"
 import { router } from "expo-router"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { View } from "react-native"
 import { FadeInRight, FadeOutLeft } from "react-native-reanimated"
 
 import { errorMessage } from "@/auth/session-provider"
-import { bookerApi } from "@/booker/api"
 import { AnimatedView } from "@/components/ui/animated"
 import { Chip } from "@/components/ui/chip"
 import { NextBar } from "@/components/ui/next-bar"
@@ -24,6 +25,7 @@ import { ErrorState, InlineError, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
 import { TextField } from "@/components/ui/text-field"
 import { haptics } from "@/lib/haptics"
+import { queryClient, trpcQuery } from "@/trpc/query-client"
 
 const steps = ["vertical", "company", "city", "projects"] as const
 type Step = (typeof steps)[number]
@@ -43,59 +45,43 @@ function StepTitle({ title, body }: { title: string; body: string }) {
 
 /** PRD §6.2 booker profiling: what you do, company, location, typical project types. */
 export default function BookerSetupScreen() {
-  const [state, setState] = useState<BookerProfileState | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [stepIndex, setStepIndex] = useState(0)
-  const [vertical, setVertical] = useState<BookerVertical | null>(null)
-  const [companyName, setCompanyName] = useState("")
-  const [cityId, setCityId] = useState("")
-  const [types, setTypes] = useState<ProjectType[]>([])
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const profileQuery = useQuery(
+    trpcQuery.booker.getProfile.queryOptions(undefined, { select: bookerProfileStateSchema.parse }),
+  )
 
-  function apply(next: BookerProfileState) {
-    setState(next)
-    // Editing an existing profile starts from its saved values.
-    if (next.profile) {
-      setVertical(next.profile.vertical)
-      setCompanyName(next.profile.companyName ?? "")
-      setCityId(next.profile.cityId ?? "")
-      setTypes(next.profile.typicalProjectTypes)
-    }
-  }
-
-  function fail(caught: unknown) {
-    setLoadError(errorMessage(caught, "Could not load your booker profile"))
-  }
-
-  useEffect(() => {
-    let current = true
-    bookerApi.getProfile().then(
-      (next) => {
-        if (current) apply(next)
-      },
-      (caught: unknown) => {
-        if (current) fail(caught)
-      },
-    )
-    return () => {
-      current = false
-    }
-  }, [])
-
-  function retry() {
-    setLoadError(null)
-    bookerApi.getProfile().then(apply, fail)
-  }
-
-  if (loadError) {
+  if (profileQuery.data) return <BookerSetupForm state={profileQuery.data} />
+  if (profileQuery.error) {
     return (
       <Screen edges={["top", "bottom"]} contentClassName="justify-center">
-        <ErrorState message={loadError} onRetry={retry} />
+        <ErrorState
+          message={errorMessage(profileQuery.error, "Could not load your booker profile")}
+          onRetry={() => void profileQuery.refetch()}
+        />
       </Screen>
     )
   }
-  if (!state) return <LoadingState />
+  return <LoadingState />
+}
+
+/**
+ * Fields start from the saved profile once, at mount: a background refetch of the profile never
+ * overwrites what the booker is typing.
+ */
+function BookerSetupForm({ state }: { state: BookerProfileState }) {
+  const saved = state.profile
+  const [stepIndex, setStepIndex] = useState(0)
+  const [vertical, setVertical] = useState<BookerVertical | null>(saved?.vertical ?? null)
+  const [companyName, setCompanyName] = useState(saved?.companyName ?? "")
+  const [cityId, setCityId] = useState(saved?.cityId ?? "")
+  const [types, setTypes] = useState<ProjectType[]>(saved?.typicalProjectTypes ?? [])
+  const [error, setError] = useState<string | null>(null)
+  const updateProfile = useMutation(
+    trpcQuery.booker.updateProfile.mutationOptions({
+      // The response is the new profile state: write it into the cache instead of refetching.
+      onSuccess: (data) => queryClient.setQueryData(trpcQuery.booker.getProfile.queryKey(), data),
+    }),
+  )
+  const pending = updateProfile.isPending
 
   const step: Step = steps[stepIndex]!
   const editing = state.profile !== null
@@ -125,10 +111,9 @@ export default function BookerSetupScreen() {
 
   async function save() {
     if (!vertical || !canContinue.projects) return
-    setPending(true)
     setError(null)
     try {
-      await bookerApi.updateProfile({
+      await updateProfile.mutateAsync({
         vertical,
         companyName: companyName.trim() || null,
         cityId,
@@ -140,8 +125,6 @@ export default function BookerSetupScreen() {
     } catch (caught) {
       haptics.error()
       setError(errorMessage(caught, "Could not save your booker profile"))
-    } finally {
-      setPending(false)
     }
   }
 

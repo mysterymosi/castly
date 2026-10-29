@@ -3,6 +3,7 @@ import { createContext, use, useCallback, useEffect, useMemo, useState, type Rea
 
 import { authApi } from "@/auth/client"
 import { clearSession, currentUser, saveSession } from "@/auth/session"
+import { queryClient } from "@/trpc/query-client"
 
 type SessionStatus = "loading" | "signedOut" | "signedIn"
 
@@ -50,6 +51,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await clearSession()
+    // Nothing cached for this user may show up for the next one.
+    queryClient.clear()
     setMe(null)
     setDraft({ email: "" })
     setStatus("signedOut")

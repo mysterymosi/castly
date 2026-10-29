@@ -25,6 +25,7 @@ import { CompletenessMeter } from "@/studio/completeness-meter"
 import { DecisionCardPreview } from "@/studio/decision-card-preview"
 import { sectionMeta, templates } from "@/studio/section-meta"
 import { useStudio } from "@/studio/studio-provider"
+import { queryClient, trpcQuery } from "@/trpc/query-client"
 
 function SectionHeading({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
@@ -58,6 +59,7 @@ function EnableTalent() {
     try {
       await authApi.enableMode("talent")
       await refreshMe()
+      await queryClient.invalidateQueries(trpcQuery.talent.pathFilter())
     } catch (caught) {
       setError(errorMessage(caught, "Could not enable talent mode"))
     } finally {

@@ -3,24 +3,30 @@ import { studioStateSchema, type StudioState } from "@workspace/schema"
 import { logMeasure, measureEnabled } from "@/lib/measure"
 import { invoke, trpc } from "@/trpc/client"
 
-function asStudioState(data: unknown): StudioState {
+/**
+ * `talent.studio.get`, timed for the M2.10 measurement log. Unwrapped (no `invoke`) so it can be
+ * the studio query's `queryFn`: errors stay `TRPCClientError`, which the retry policy reads.
+ */
+export async function fetchStudioState() {
+  const startedAt = Date.now()
+  const data = await trpc.talent.studio.get.query()
+  if (measureEnabled) {
+    logMeasure("studio.get", {
+      ms: Math.round(Date.now() - startedAt),
+      jsonBytes: JSON.stringify(data).length,
+      mediaCount: Object.keys(data.media).length,
+    })
+  }
+  return data
+}
+
+export function asStudioState(data: unknown): StudioState {
   return studioStateSchema.parse(data)
 }
 
 export const studioApi = {
   get() {
-    return invoke(async () => {
-      const startedAt = Date.now()
-      const data = await trpc.talent.studio.get.query()
-      if (measureEnabled) {
-        logMeasure("studio.get", {
-          ms: Math.round(Date.now() - startedAt),
-          jsonBytes: JSON.stringify(data).length,
-          mediaCount: Object.keys(data.media).length,
-        })
-      }
-      return asStudioState(data)
-    })
+    return invoke(async () => asStudioState(await fetchStudioState()))
   },
   updateProfile(
     input: Parameters<typeof trpc.talent.studio.updateProfile.mutate>[0]

@@ -1,10 +1,11 @@
+import { useMutation } from "@tanstack/react-query"
 import { projectTypeLabels, projectTypes, type ProjectType } from "@workspace/schema"
 import { router } from "expo-router"
 import { useState } from "react"
 import { View } from "react-native"
 
 import { errorMessage } from "@/auth/session-provider"
-import { projectApi } from "@/booker/project-api"
+import { cacheProjectDetail } from "@/booker/project-cache"
 import { Button } from "@/components/ui/button"
 import { Chip } from "@/components/ui/chip"
 import { Screen } from "@/components/ui/screen"
@@ -13,19 +14,22 @@ import { InlineError } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
 import { TextField } from "@/components/ui/text-field"
 import { haptics } from "@/lib/haptics"
+import { trpcQuery } from "@/trpc/query-client"
 
 export default function NewProjectScreen() {
   const [name, setName] = useState("")
   const [type, setType] = useState<ProjectType | null>(null)
-  const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const createProject = useMutation(
+    trpcQuery.project.create.mutationOptions({ onSuccess: cacheProjectDetail }),
+  )
+  const pending = createProject.isPending
 
   async function create() {
-    if (!name.trim()) return
-    setPending(true)
+    if (!name.trim() || pending) return
     setError(null)
     try {
-      const project = await projectApi.create({ name: name.trim(), type })
+      const project = await createProject.mutateAsync({ name: name.trim(), type })
       haptics.success()
       // Swap the sheet for the new project's page; back returns to the list.
       router.dismiss()
@@ -33,8 +37,6 @@ export default function NewProjectScreen() {
     } catch (caught) {
       haptics.error()
       setError(errorMessage(caught, "Could not create the project"))
-    } finally {
-      setPending(false)
     }
   }
 

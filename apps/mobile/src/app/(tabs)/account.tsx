@@ -12,6 +12,7 @@ import { Screen } from "@/components/ui/screen"
 import { InlineError } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
 import { haptics } from "@/lib/haptics"
+import { queryClient, trpcQuery } from "@/trpc/query-client"
 
 type Mode = "talent" | "booker"
 
@@ -44,6 +45,9 @@ export default function AccountScreen() {
     try {
       await authApi.enableMode(mode)
       await refreshMe()
+      await queryClient.invalidateQueries(
+        mode === "booker" ? trpcQuery.booker.pathFilter() : trpcQuery.talent.pathFilter(),
+      )
       haptics.success()
       // Booker mode is only useful once we know what kind of work they do (PRD §6.2).
       if (mode === "booker") router.push("/booker-setup")

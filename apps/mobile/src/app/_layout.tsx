@@ -1,5 +1,6 @@
 import "@/observability/sentry-init"
 
+import { QueryClientProvider } from "@tanstack/react-query"
 import { useFonts } from "expo-font"
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router"
 import * as SplashScreen from "expo-splash-screen"
@@ -10,6 +11,7 @@ import "../global.css"
 import { SessionProvider, useSession } from "@/auth/session-provider"
 import { useTokens } from "@/hooks/use-tokens"
 import { appFonts } from "@/theme/fonts"
+import { queryClient } from "@/trpc/query-client"
 import { motion } from "@workspace/ui-tokens"
 
 void SplashScreen.preventAutoHideAsync()
@@ -68,9 +70,12 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  // Outside the session so sign-out can clear the cache.
   return (
-    <SessionProvider>
-      <RootNavigator />
-    </SessionProvider>
+    <QueryClientProvider client={queryClient}>
+      <SessionProvider>
+        <RootNavigator />
+      </SessionProvider>
+    </QueryClientProvider>
   )
 }

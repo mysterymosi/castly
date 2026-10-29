@@ -1,10 +1,11 @@
-import { projectTypeLabels, type ProjectDetail, type Role } from "@workspace/schema"
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router"
-import { useCallback, useState } from "react"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { projectDetailSchema, projectTypeLabels, type Role } from "@workspace/schema"
+import { router, useLocalSearchParams } from "expo-router"
+import { useState } from "react"
 import { Alert, View } from "react-native"
 
 import { errorMessage } from "@/auth/session-provider"
-import { projectApi } from "@/booker/project-api"
+import { cacheProjectDetail } from "@/booker/project-cache"
 import { Button } from "@/components/ui/button"
 import { PressableCard } from "@/components/ui/card"
 import { Tag } from "@/components/ui/chip"
@@ -13,6 +14,7 @@ import { ScreenHeader } from "@/components/ui/screen-header"
 import { EmptyState, ErrorState, InlineError, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
 import { haptics } from "@/lib/haptics"
+import { trpcQuery } from "@/trpc/query-client"
 
 const money = (amount: number, currency: string) =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount)
@@ -67,60 +69,39 @@ function RoleCard({ role, editable }: { role: Role; editable: boolean }) {
 
 export default function ProjectScreen() {
   const { projectId } = useLocalSearchParams<{ projectId: string }>()
-  const [project, setProject] = useState<ProjectDetail | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [archiving, setArchiving] = useState(false)
+  const projectQuery = useQuery(
+    trpcQuery.project.get.queryOptions({ projectId }, { select: projectDetailSchema.parse }),
+  )
+  const archiveProject = useMutation(
+    trpcQuery.project.archive.mutationOptions({ onSuccess: cacheProjectDetail }),
+  )
   const [error, setError] = useState<string | null>(null)
 
-  useFocusEffect(
-    useCallback(() => {
-      let current = true
-      projectApi.get(projectId).then(
-        (next) => {
-          if (!current) return
-          setLoadError(null)
-          setProject(next)
-        },
-        (caught: unknown) => {
-          if (current) setLoadError(errorMessage(caught, "Could not load this project"))
-        },
-      )
-      return () => {
-        current = false
-      }
-    }, [projectId]),
-  )
-
-  function retry() {
-    setLoadError(null)
-    projectApi.get(projectId).then(setProject, (caught: unknown) =>
-      setLoadError(errorMessage(caught, "Could not load this project")),
-    )
-  }
-
-  if (loadError && !project) {
+  const project = projectQuery.data
+  if (!project && projectQuery.error) {
     return (
       <Screen edges={["top"]} header={<ScreenHeader onBack={() => router.back()} />} contentClassName="justify-center">
-        <ErrorState message={loadError} onRetry={retry} />
+        <ErrorState
+          message={errorMessage(projectQuery.error, "Could not load this project")}
+          onRetry={() => void projectQuery.refetch()}
+        />
       </Screen>
     )
   }
   if (!project) return <LoadingState label="Loading project" />
 
   const active = project.status === "active"
+  const archiving = archiveProject.isPending
 
   async function archive() {
-    setArchiving(true)
     setError(null)
     try {
-      setProject(await projectApi.archive(project!.id))
+      await archiveProject.mutateAsync({ projectId })
       haptics.success()
       router.back()
     } catch (caught) {
       haptics.error()
       setError(errorMessage(caught, "Could not archive the project"))
-    } finally {
-      setArchiving(false)
     }
   }
 
