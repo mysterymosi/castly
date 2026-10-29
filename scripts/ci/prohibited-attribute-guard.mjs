@@ -9,7 +9,8 @@ import { join, relative } from "node:path"
 const ROOT = join(import.meta.dirname, "../..")
 
 const SCAN_ROOTS = [
-  join(ROOT, "packages/db/src/schema"),
+  // All of db/src: the schema, and the seed where attribute keys are actually defined.
+  join(ROOT, "packages/db/src"),
   join(ROOT, "packages/db/drizzle"),
   join(ROOT, "packages/schema/src"),
 ]

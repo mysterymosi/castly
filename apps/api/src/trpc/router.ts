@@ -9,7 +9,10 @@ import {
   verifyOtpInput,
 } from "@workspace/schema"
 
+import { adminRouter } from "../admin/router.js"
+import { bookerRouter } from "../booker/router.js"
 import { mediaRouter } from "../media/router.js"
+import { projectRouter, roleRouter } from "../project/router.js"
 import { talentRouter } from "../talent/router.js"
 import { assertAdult } from "../auth/age.js"
 import { otpLimiter } from "../auth/rate-limit.js"
@@ -120,7 +123,11 @@ const authRouter = router({
 })
 
 export const appRouter = router({
+  admin: adminRouter,
+  booker: bookerRouter,
   media: mediaRouter,
+  project: projectRouter,
+  role: roleRouter,
   talent: talentRouter,
   health: publicProcedure.output(healthSchema).query(() => {
     // Temporary M1 Sentry probe — set SENTRY_PROBE=1 in .env, restart API, then GET /trpc/health

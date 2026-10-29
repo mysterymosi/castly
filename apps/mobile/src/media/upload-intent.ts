@@ -19,7 +19,10 @@ export type UploadIntent = {
   mimeType: string
   goal: UploadIntentGoal
   mediaId?: string
-  upload?: Pick<CreateUploadUrlOutput, "uploadUrl" | "uploadMethod" | "uploadHeaders" | "expiresAt">
+  upload?: Pick<CreateUploadUrlOutput, "uploadUrl" | "uploadMethod" | "uploadHeaders" | "expiresAt"> & {
+    /** Missing on intents persisted before single-PUT image uploads; every PUT then was Mux. */
+    resumable?: boolean
+  }
   phase: UploadIntentPhase
   /** 0..1 upload bytes; processing uses values >= 0.95 */
   progress: number

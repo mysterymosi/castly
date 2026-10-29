@@ -54,6 +54,10 @@ function RootNavigator() {
         <Stack.Screen name="index" />
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen
+            name="booker-setup"
+            options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }}
+          />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="(auth)" options={{ animation: "fade" }} />

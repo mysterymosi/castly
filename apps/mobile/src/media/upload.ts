@@ -155,15 +155,20 @@ async function resumablePut(
   }
 }
 
-async function postUpload(
+/**
+ * Whole file in one request (Cloudflare Images POST, Supabase Storage signed PUT). Sends raw
+ * bytes through expo/fetch: React Native's fetch swaps our Content-Type for a file Blob's
+ * (empty) type, which Storage rejects as 415.
+ */
+async function singleRequestUpload(
   upload: CreateUploadUrlOutput,
-  body: Blob,
+  fileUri: string,
   contentType: string
 ) {
-  const response = await fetch(upload.uploadUrl, {
-    method: "POST",
+  const response = await expoFetch(upload.uploadUrl, {
+    method: upload.uploadMethod,
     headers: { ...upload.uploadHeaders, "Content-Type": contentType },
-    body,
+    body: await new File(fileUri).bytes(),
   })
   if (!response.ok) {
     throw new Error(`Upload failed (${response.status})`)
@@ -180,13 +185,11 @@ export async function transferUpload(
   mimeType: string,
   options: TransferOptions = {}
 ) {
-  if (upload.uploadMethod === "PUT") {
+  if (upload.resumable) {
     await resumablePut(upload, fileUri, options.onProgress)
     return
   }
-  const response = await fetch(fileUri)
-  const blob = await response.blob()
-  await postUpload(upload, blob, mimeType)
+  await singleRequestUpload(upload, fileUri, mimeType)
 }
 
 export function fileByteSize(fileUri: string) {

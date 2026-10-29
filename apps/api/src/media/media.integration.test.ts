@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 
 import { eq } from "drizzle-orm"
-import { afterEach, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 
 import { schema } from "@workspace/db"
 
@@ -118,5 +118,70 @@ describe("media pipeline (local backend)", () => {
     expect(status.status).toBe("ready")
     expect(status.playbackUrl).toContain(".m3u8")
     expect(status.posterUrl).toBe("https://cdn.example/poster.jpg")
+  })
+})
+
+// Hits a real Supabase Storage (`supabase start` locally, plus the bucket from
+// `pnpm media:supabase-setup`). CI's integration job runs a bare Postgres container with no
+// Storage and no keys, so the suite only runs where Storage is configured.
+const supabaseStorageConfigured = Boolean(
+  process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY
+)
+
+describe.skipIf(!supabaseStorageConfigured)("media pipeline (supabase storage images)", () => {
+  beforeAll(() => {
+    process.env.CASTLY_MEDIA_BACKEND = "remote"
+    process.env.CASTLY_IMAGE_PROVIDER = "supabase"
+  })
+
+  afterAll(() => {
+    process.env.CASTLY_MEDIA_BACKEND = "local"
+    delete process.env.CASTLY_IMAGE_PROVIDER
+  })
+
+  afterEach(async () => {
+    while (seededUserIds.length > 0) {
+      const id = seededUserIds.pop()
+      if (id) await deleteAuthUser(id)
+    }
+  })
+
+  it("uploads through a signed PUT and serves the original as every variant", async () => {
+    const userId = await seedAuthUser("media-supabase", adult)
+    seededUserIds.push(userId)
+    const api = talentCaller(userId)
+    await api.auth.enableMode({ mode: "talent" })
+
+    const created = await api.media.createUploadUrl({
+      kind: "image",
+      contentType: "image/png",
+    })
+    expect(created.uploadMethod).toBe("PUT")
+    expect(created.resumable).toBe(false)
+
+    const pending = await api.media.status({ mediaId: created.mediaId })
+    expect(pending.status).toBe("pending")
+
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64"
+    )
+    const upload = await fetch(created.uploadUrl, {
+      method: created.uploadMethod,
+      headers: created.uploadHeaders,
+      body: png,
+    })
+    expect(upload.ok).toBe(true)
+
+    const status = await api.media.status({ mediaId: created.mediaId })
+    expect(status.status).toBe("ready")
+    expect(status.width).toBe(1)
+    expect(status.height).toBe(1)
+    expect(status.variants?.card).toContain(`/storage/v1/object/public/media/images/${userId}/`)
+    expect(new Set(Object.values(status.variants ?? {})).size).toBe(1)
+
+    const served = await fetch(status.variants!.full)
+    expect(served.status).toBe(200)
+    expect(served.headers.get("content-type")).toBe("image/png")
   })
 })

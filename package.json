@@ -13,7 +13,8 @@
     "db:migrate": "pnpm --filter @workspace/db db:migrate",
     "db:provision-api-role": "pnpm --filter @workspace/db db:provision-api-role",
     "db:seed": "pnpm --filter @workspace/db db:seed",
-    "cf:media-setup": "pnpm exec tsx scripts/cloudflare-media-setup.ts"
+    "cf:media-setup": "pnpm exec tsx scripts/cloudflare-media-setup.ts",
+    "media:supabase-setup": "pnpm -F api exec tsx ../../scripts/supabase-media-setup.ts"
   },
   "devDependencies": {
     "@tanstack/intent": "^0.5.5",

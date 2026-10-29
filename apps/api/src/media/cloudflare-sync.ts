@@ -43,7 +43,7 @@ export async function maybeSyncCloudflareAsset(
 ) {
   if (row.status !== "pending" && row.status !== "processing") return
   if (!row.providerRef) return
-  if (row.kind === "image" && row.provider !== "supabase") {
+  if (row.kind === "image" && row.provider === "cf_images") {
     await syncCloudflareImageIfReady(db, row.id, row.providerRef)
   }
 }

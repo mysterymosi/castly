@@ -5,6 +5,9 @@ export * from "./talent/studio"
 export * from "./talent/dto"
 export * from "./talent/public"
 export * from "./media"
+export * from "./booker"
+export * from "./project"
+export * from "./attributes"
 
 export const healthSchema = z.object({
   ok: z.literal(true),

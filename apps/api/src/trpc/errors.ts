@@ -4,7 +4,9 @@ import { PortfolioSectionValidationError } from "@workspace/schema"
 import { InvalidDateOfBirth, UnderageError } from "../auth/age.js"
 import { OtpRateLimited } from "../auth/rate-limit.js"
 import { AuthRejected, OtpDeliveryFailed } from "../auth/supabase.js"
+import { BookerError } from "../booker/errors.js"
 import { MediaError } from "../media/errors.js"
+import { ProjectError } from "../project/errors.js"
 import { StudioError } from "../talent/errors.js"
 import { PublicReadRateLimited } from "../talent/public-rate-limit.js"
 
@@ -28,6 +30,23 @@ const studioCode = {
   talent_not_found: "NOT_FOUND",
 } as const
 
+const bookerCode = {
+  unknown_city: "BAD_REQUEST",
+  profile_required: "PRECONDITION_FAILED",
+  unknown_category: "BAD_REQUEST",
+} as const
+
+const projectCode = {
+  project_not_found: "NOT_FOUND",
+  role_not_found: "NOT_FOUND",
+  project_archived: "PRECONDITION_FAILED",
+  booker_profile_required: "PRECONDITION_FAILED",
+  unknown_category: "BAD_REQUEST",
+  invalid_requirement: "BAD_REQUEST",
+  sensitive_requires_brief: "BAD_REQUEST",
+  publish_unavailable: "FORBIDDEN",
+} as const
+
 /** Map known domain failures to tRPC codes. Unexpected errors stay 500 and keep their cause. */
 export function throwTrpc(error: unknown): never {
   if (error instanceof MediaError) {
@@ -40,6 +59,20 @@ export function throwTrpc(error: unknown): never {
   if (error instanceof StudioError) {
     throw new TRPCError({
       code: studioCode[error.code],
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof ProjectError) {
+    throw new TRPCError({
+      code: projectCode[error.code],
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof BookerError) {
+    throw new TRPCError({
+      code: bookerCode[error.code],
       message: error.message,
       cause: error,
     })

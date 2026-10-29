@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 
 import { databaseUrl } from "./env.js"
+import { launchAttributeDefinitions } from "./seed-attributes.js"
 import {
   accents,
   attributeDefinitions,
@@ -9,6 +10,7 @@ import {
   cities,
   languages,
   skills,
+  verticalCategoryWeights,
 } from "./schema/index.js"
 
 const launchCategories = [
@@ -55,6 +57,26 @@ const launchCities = [
   { slug: "abuja", name: "Abuja", country: "NG", region: "north-central" },
 ]
 
+/**
+ * PRD §6.2 / §7.2.3 cold-start leanings, mapped onto the launch categories. Presenters, stylists,
+ * MCs, DJs, and hype men have no category yet: ops add their weights when those categories land.
+ * "director" leans music-video (dancers, models, stylists ≈ makeup & hair). "other" has no rows,
+ * so it gets a vertical-neutral deck. Insert-only: re-seeding never overwrites an ops edit.
+ */
+const launchVerticalWeights: Record<
+  (typeof verticalCategoryWeights.$inferInsert)["bookerVertical"],
+  Record<string, number>
+> = {
+  casting_director: { actors: 1, models: 0.7 },
+  producer: { actors: 1, models: 0.6, "makeup-and-hair": 0.4, "photographers-cinematographers": 0.4 },
+  director: { dancers: 1, models: 0.8, actors: 0.7, "makeup-and-hair": 0.5 },
+  brand_or_agency: { models: 1, actors: 0.7, "photographers-cinematographers": 0.5, "makeup-and-hair": 0.4 },
+  event_planner: { dancers: 1, models: 0.6 },
+  photographer: { models: 1, "makeup-and-hair": 0.7, actors: 0.4 },
+  content_creator: { actors: 0.8, dancers: 0.8, models: 0.6 },
+  other: {},
+}
+
 const connection = postgres(databaseUrl(), { max: 1 })
 const db = drizzle(connection)
 
@@ -79,39 +101,30 @@ const allCategories = launchCategories.map((category) => {
 
 await db
   .insert(attributeDefinitions)
-  .values([
-    {
-      key: "height_cm",
-      label: "Height (cm)",
-      dataType: "number",
-      tier: "standard",
-      appliesToCategoryIds: onCamera,
-    },
-    {
-      key: "hair",
-      label: "Hair",
-      dataType: "select",
-      tier: "standard",
-      appliesToCategoryIds: onCamera,
-      options: ["black", "brown", "blonde", "coloured", "bald"],
-    },
-    {
-      key: "experience_years",
-      label: "Years of experience",
-      dataType: "number",
-      tier: "standard",
-      appliesToCategoryIds: allCategories,
-    },
-    {
-      key: "ethnicity",
-      label: "Ethnicity",
-      dataType: "select",
-      tier: "sensitive",
-      appliesToCategoryIds: onCamera,
-      options: ["black", "white", "mixed", "other", "prefer_not_to_say"],
-    },
-  ])
+  .values(
+    launchAttributeDefinitions.map(({ appliesTo, ...definition }) => ({
+      ...definition,
+      appliesToCategoryIds: appliesTo === "on_camera" ? onCamera : allCategories,
+    })),
+  )
   .onConflictDoNothing({ target: attributeDefinitions.key })
 
-console.log(`Seeded ${launchCategories.length} launch categories and reference taxonomy.`)
+await db
+  .insert(verticalCategoryWeights)
+  .values(
+    Object.entries(launchVerticalWeights).flatMap(([vertical, weights]) =>
+      Object.entries(weights).map(([slug, weight]) => {
+        const categoryId = idBySlug.get(slug)
+        if (!categoryId) throw new Error(`Missing launch category ${slug}`)
+        return {
+          bookerVertical: vertical as keyof typeof launchVerticalWeights,
+          categoryId,
+          weight: String(weight),
+        }
+      }),
+    ),
+  )
+  .onConflictDoNothing()
+
+console.log(`Seeded ${launchCategories.length} launch categories, reference taxonomy, and vertical weights.`)
 await connection.end()

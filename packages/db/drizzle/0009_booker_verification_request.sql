@@ -1,0 +1,1 @@
+ALTER TABLE "booker_profiles" ADD COLUMN "verification_requested_at" timestamp with time zone;
