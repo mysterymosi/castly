@@ -37,7 +37,24 @@ export const deckPreviewInput = z
 
 export const deckPreviewSchema = z.object({ cards: z.array(deckCardSchema) })
 
+/** A deck session, optionally for one of the booker's roles, with an optional card goal. */
+export const deckStartInput = z
+  .object({
+    roleId: z.uuid().nullable().default(null),
+    goalCount: z.number().int().min(1).max(500).nullable().default(null),
+  })
+  .default({ roleId: null, goalCount: null })
+
+/** The session `deck.next` (5.8) pages through, and how many cards its queue holds. */
+export const deckSessionSchema = z.object({
+  sessionId: z.uuid(),
+  roleId: z.uuid().nullable(),
+  goalCount: z.number().int().nullable(),
+  queued: z.number().int(),
+})
+
 export type CategoryKind = z.infer<typeof categoryKindSchema>
 export type DeckDecision = z.infer<typeof deckDecisionSchema>
 export type DeckCard = z.infer<typeof deckCardSchema>
 export type DeckPreview = z.infer<typeof deckPreviewSchema>
+export type DeckSession = z.infer<typeof deckSessionSchema>

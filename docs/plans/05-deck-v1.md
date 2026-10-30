@@ -61,6 +61,13 @@ Measure on 2GB Android, throttled 3G, against §25:
 
 ### 5.4 Deck session schema and `deck.start`
 
+**Status:** Built, started while the 5.3 device rows were still pending. Tables are in migration `0011_deck_sessions` (`packages/db/src/schema/deck.ts`), all with default-deny RLS. `deck_sessions` stores an integer `seed`. `deck_queue` has the primary key `(session_id, position)` and is unique per `(session, talent)`; `reasons` is a jsonb array of `{code, contribution}`. Each swipe gets one row, and an undo sets `undone_at`. `deck.start` (booker-only, `apps/api/src/deck/session.ts`) needs a finished booker profile, and accepts only the booker's own role. It runs stage 1 → `scoreCandidates` → `applyFairness` (`packages/core/src/deck.ts`) and writes the queue in one transaction. The stages are interim:
+- **Stage 1:** live talents other than the booker, by `quality_score` descending, with ties ordered by `md5(talent_id || seed)`.
+- **Stage 2:** quality only, with a stable sort, so tied talents keep stage 1's seeded order.
+- **Stage 3:** passes the order through unchanged.
+
+5.5–5.7 replace these behind the same signatures. The mobile app still uses `deck.preview` until `deck.next` (5.8). Acceptance is covered by `deck/session.integration.test.ts`: seeds 1 and 2 give different first-10 decks from a 15-talent tied pool, and seed 1 replays exactly.
+
 Tables: `deck_sessions` (optional `role_id`, `goal_count`, `seed`), `deck_queue`, `swipes`, `deck_impressions`, `talent_exposure_daily`, `profile_views`.
 
 `deck.start` creates a session, runs stages 1–3, writes `deck_queue`.

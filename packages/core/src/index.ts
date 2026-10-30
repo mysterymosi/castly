@@ -3,6 +3,13 @@ export function identity<T>(value: T): T {
   return value
 }
 
+export {
+  applyFairness,
+  scoreCandidates,
+  type DeckCandidate,
+  type DeckReason,
+  type ScoredCandidate,
+} from "./deck.js"
 export { computeCompleteness, type CompletenessInput, type CompletenessResult } from "./completeness.js"
 export { computeFreshnessScore, type FreshnessScoreInput } from "./freshness-score.js"
 export {

@@ -5,6 +5,7 @@ export * from "./talent.js"
 export * from "./media.js"
 export * from "./search.js"
 export * from "./booker.js"
+export * from "./deck.js"
 
 /**
  * Tables with RLS enabled and no policies (default-deny).
@@ -51,4 +52,10 @@ export const rlsTables = [
   "shortlists",
   "shortlist_entries",
   "vertical_category_weights",
+  "deck_sessions",
+  "deck_queue",
+  "swipes",
+  "deck_impressions",
+  "talent_exposure_daily",
+  "profile_views",
 ] as const
