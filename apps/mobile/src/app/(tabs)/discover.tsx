@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { bookerProfileStateSchema, deckPreviewSchema, type DeckCard } from "@workspace/schema"
-import { useCallback } from "react"
+import { useCallback, useEffect } from "react"
 import { Share, View } from "react-native"
 import { SafeAreaView } from "react-native-screens/experimental"
 
@@ -9,8 +9,10 @@ import { EnableBooker, FinishBookerProfile } from "@/booker/booker-gate"
 import { Screen } from "@/components/ui/screen"
 import { ErrorState, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
+import { DataSaverOffer, DataSaverToggle } from "@/deck/data-saver-controls"
 import { SwipeDeck } from "@/deck/swipe-deck"
 import { useTokens } from "@/hooks/use-tokens"
+import { markDeckOpened } from "@/lib/measure"
 import { trpcQuery } from "@/trpc/query-client"
 
 const SITE_URL = (process.env.EXPO_PUBLIC_SITE_URL ?? "https://castly.app").replace(/\/$/, "")
@@ -22,6 +24,7 @@ const SITE_URL = (process.env.EXPO_PUBLIC_SITE_URL ?? "https://castly.app").repl
 export default function DiscoverScreen() {
   const { me } = useSession()
   const { color } = useTokens()
+  useEffect(() => markDeckOpened(), [])
   const isBooker = !!me?.modes.includes("booker")
   const profileQuery = useQuery(
     trpcQuery.booker.getProfile.queryOptions(undefined, {
@@ -78,9 +81,11 @@ export default function DiscoverScreen() {
   return (
     // `style`, not className: NativeWind does not style this third-party view.
     <SafeAreaView edges={{ top: true, bottom: true }} style={{ flex: 1, backgroundColor: color.bg }}>
-      <View className="px-5 pb-3 pt-3">
+      <View className="flex-row items-center justify-between px-5 pb-3 pt-3">
         <Text variant="display-sm">Discover</Text>
+        <DataSaverToggle />
       </View>
+      <DataSaverOffer />
       <SwipeDeck
         cards={deckQuery.data.cards}
         onDecision={onDecision}

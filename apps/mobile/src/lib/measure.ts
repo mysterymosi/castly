@@ -26,3 +26,17 @@ export function takePreviewRequestedAt() {
   previewRequestedAt = null
   return at
 }
+
+let deckOpenedAt: number | null = null
+
+/** Call when Discover opens, so `deck.first_card` counts from there (fetch included). */
+export function markDeckOpened() {
+  if (measureEnabled) deckOpenedAt = Date.now()
+}
+
+/** Reads and clears the time set by `markDeckOpened`. */
+export function takeDeckOpenedAt() {
+  const at = deckOpenedAt
+  deckOpenedAt = null
+  return at
+}

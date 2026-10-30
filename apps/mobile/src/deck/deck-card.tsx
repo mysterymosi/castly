@@ -23,6 +23,7 @@ import { Tag } from "@/components/ui/chip"
 import { Icon } from "@/components/ui/icon"
 import { Text } from "@/components/ui/text"
 import { ImageViewer, type ImageViewerState } from "@/deck/image-viewer"
+import { useFrameMeter } from "@/lib/frame-meter"
 import { portfolioMediaComponents } from "@/studio/portfolio-media"
 
 type NativeGesture = ReturnType<typeof Gesture.Native>
@@ -352,6 +353,8 @@ export function DeckCard({
   const mediaMeta = useMemo(() => mediaMetaFromStatus(card.media), [card.media])
   const content = useMemo(() => portfolioContentFromDto(card.talent), [card.talent])
   const [expanded, setExpanded] = useState(() => opensMidPortfolio(card))
+  // §25 scroll budget, measured per scroll gesture (drag plus any fling) when measuring is on.
+  const scrollMeter = useFrameMeter("deck.scroll")
   const [activeVideo, setActiveVideo] = useState<string | null>(null)
   const items = useMemo<Item[]>(() => {
     // The lead block is the card's hero; a portfolio hero section would repeat it.
@@ -397,12 +400,22 @@ export function DeckCard({
               }
               markReady("list")
             }}
-            onScrollBeginDrag={() => setExpanded(true)}
+            onScrollBeginDrag={() => {
+              setExpanded(true)
+              scrollMeter.start()
+            }}
+            onScrollEndDrag={(event) => {
+              // Released without a fling: the scroll is over. A fling ends at momentum end.
+              if (Math.abs(event.nativeEvent.velocity?.y ?? 0) < 0.05) scrollMeter.stop()
+            }}
             viewabilityConfig={VIDEO_VIEWABILITY}
             onViewableItemsChanged={onViewableItemsChanged}
             extraData={activeVideo}
             onMomentumScrollBegin={() => scrollMomentum.set(true)}
-            onMomentumScrollEnd={() => scrollMomentum.set(false)}
+            onMomentumScrollEnd={() => {
+              scrollMomentum.set(false)
+              scrollMeter.stop()
+            }}
             renderItem={({ item }) => {
               if (item.kind === "lead") {
                 return (

@@ -25,6 +25,7 @@ import { Text } from "@/components/ui/text"
 import { cardId, DeckCard, DeckCardPreview } from "@/deck/deck-card"
 import { useDeckPrefetch } from "@/deck/prefetch"
 import { haptics } from "@/lib/haptics"
+import { logMeasure, takeDeckOpenedAt } from "@/lib/measure"
 
 export type DeckDecision = "pass" | "interested" | "save"
 
@@ -101,10 +102,26 @@ export function SwipeDeck({ cards, onDecision, onShare, onRestart }: Props) {
     scrollMomentum.set(false)
   }, [index, scrollMomentum])
 
+  // §25 timings (logged only when measuring): first card from Discover opening, and each
+  // card-to-card transition from the moment the old card has left to the new one fully mounted.
+  const committedAt = useRef<number | null>(null)
+  const onCardShown = useCallback((shownIndex: number) => {
+    const now = Date.now()
+    if (shownIndex === 0) {
+      const openedAt = takeDeckOpenedAt()
+      if (openedAt !== null) logMeasure("deck.first_card", { sinceOpenMs: now - openedAt })
+      return
+    }
+    if (committedAt.current === null) return
+    logMeasure("deck.transition", { ms: now - committedAt.current, index: shownIndex })
+    committedAt.current = null
+  }, [])
+
   const advance = useCallback(
     (decision: DeckDecision) => {
       const card = cards[index]
       if (card) onDecision(decision, card)
+      committedAt.current = Date.now()
       setIndex((i) => i + 1)
     },
     [cards, index, onDecision],
@@ -158,6 +175,7 @@ export function SwipeDeck({ cards, onDecision, onShare, onRestart }: Props) {
                   scrollMomentum={scrollMomentum}
                   onShare={() => onShare(card)}
                   onAction={exit}
+                  onShown={isTop ? () => onCardShown(index) : undefined}
                 />
               )
             })}
@@ -208,6 +226,7 @@ function DeckSlot({
   onCommit,
   onShare,
   onAction,
+  onShown,
 }: {
   card: DeckCardData
   isTop: boolean
@@ -225,6 +244,8 @@ function DeckSlot({
   onCommit: (decision: DeckDecision) => void
   onShare: () => void
   onAction: (decision: DeckDecision) => void
+  /** The full card is on screen (its portfolio laid out, its photo shown). */
+  onShown?: () => void
 }) {
   const [ready, setReady] = useState(false)
 
@@ -323,7 +344,10 @@ function DeckSlot({
                 scrollGesture={scrollGesture}
                 scrollMomentum={scrollMomentum}
                 onShare={onShare}
-                onReady={() => setReady(true)}
+                onReady={() => {
+                  setReady(true)
+                  onShown?.()
+                }}
               />
             </View>
           ) : null}
