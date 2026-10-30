@@ -62,7 +62,7 @@ Measure on 2GB Android, throttled 3G, against §25:
 ### 5.4 Deck session schema and `deck.start`
 
 **Status:** Built, started while the 5.3 device rows were still pending. Tables are in migration `0011_deck_sessions` (`packages/db/src/schema/deck.ts`), all with default-deny RLS. `deck_sessions` stores an integer `seed`. `deck_queue` has the primary key `(session_id, position)` and is unique per `(session, talent)`; `reasons` is a jsonb array of `{code, contribution}`. Each swipe gets one row, and an undo sets `undone_at`. `deck.start` (booker-only, `apps/api/src/deck/session.ts`) needs a finished booker profile, and accepts only the booker's own role. It runs stage 1 → `scoreCandidates` → `applyFairness` (`packages/core/src/deck.ts`) and writes the queue in one transaction. The stages are interim:
-- **Stage 1:** live talents other than the booker, by `quality_score` descending, with ties ordered by `md5(talent_id || seed)`.
+- **Stage 1:** live talents other than the booker, by `quality_score` descending, with ties ordered by `md5(talent_id || seed)`. Replaced by 5.5.
 - **Stage 2:** quality only, with a stable sort, so tied talents keep stage 1's seeded order.
 - **Stage 3:** passes the order through unchanged.
 
@@ -75,6 +75,31 @@ Tables: `deck_sessions` (optional `role_id`, `goal_count`, `seed`), `deck_queue`
 **Acceptance.** Starting two sessions with different seeds for the same booker does not produce identical first-10 talent ids when the pool is large enough.
 
 ### 5.5 Stage 1 — candidate generation
+
+**Status:** Built. `apps/api/src/deck/candidates.ts` has two parts:
+- **`resolveCandidateScope`** turns the booker, role and filters into a scope.
+- **`candidateQuery`** is one query over `talent_search`, capped at 500 rows, ordered by quality with the seeded tiebreak.
+
+Its hard filters:
+- **Status:** live, and not the booker's own profile.
+- **Country:** the booker's city's country.
+- **Category:** the role's category if it has one, plus any category filter. When neither names a category, the vertical's categories with weight above 0 apply. Each set includes its child categories.
+- **Swipes:** none in the last 30 days for the same role (or for no role), not undone. A talent passed for role A still appears for role B.
+- **Blocks:** neither side has blocked the other. These are two anti-joins, so each direction can use an index.
+- **Standard filters:** `deckFiltersSchema` (`packages/schema/src/deck.ts`) covers categories, cities, regions, skills, languages, accents, `rateDayMax`, `hasShowreel` and `minCredits`. A hidden or unset rate never fails `rateDayMax`.
+
+New schema in migration `0012_deck_candidate_filters`:
+- **`blocks` table**, laid out per TECH_SPEC §5.8. The block action itself ships in M7.6.
+- **`deck_sessions.filters`**, so a refill (5.8) re-runs the same scope.
+
+Attribute filters go through the one guard, `checkAttributeFilters` (`packages/core/src/sensitive-filter-guard.ts`), which reads tiers from `attribute_definitions`:
+- **Unknown keys** are rejected.
+- **Sensitive keys** are rejected unless the session's role has a brief. With a brief they are carried as `softAttributes` for `roleSoftMatch` (5.6) and never reach SQL.
+- **Standard attribute keys** (e.g. `height_cm`) are rejected for now, because `talent_search.attrs` is empty until M8. A filter on them would match nobody.
+
+Left for M8: the `sensitive_filter_audit` row (8.4), standard attribute filters (8.1), and the `onRequest` group for hidden rates in search (8.3). Acceptance:
+- **Behaviour:** covered by `deck/session.integration.test.ts`.
+- **Latency:** measured with `pnpm --filter api measure:candidates`, results in `docs/plans/measurements.md`. Against 1,214 live rows, p95 is under 2.2ms in every scenario.
 
 Single SQL against `talent_search`, ~500 rows. Hard filters: live, category from vertical weights or role category, geo, 30-day pass decay for the role, blocks, standard-tier filters (filter UI may still be thin; the query builder must accept the filter object). Sensitive-tier filters not applied unless a role with a non-empty brief is active — even if M8 UI is not shipped, the guard belongs here.
 

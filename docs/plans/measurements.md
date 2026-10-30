@@ -42,3 +42,36 @@ Device measurements against TECH_SPEC §25. Each gate records how it was measure
 Options considered and not taken: resizing in the app before upload (doesn't fix existing photos, and Cloudflare Images replaces it), and relaxing the budget now (it would hide a provider limitation behind a spec change).
 
 **Device rows.** Still pending. Misses, if any, follow TECH_SPEC §26.1: relax the named budget, or load the depth layer on explicit expand instead of on scroll.
+
+---
+
+## M5 5.5: Stage 1 candidate query
+
+**Status: passed (2026-10-30).** Budget: p95 under 120ms (TECH_SPEC §7.1) against at least 1,000 live rows.
+
+### How to measure
+
+Run `pnpm --filter api measure:candidates`, or add `-- <n>` for a larger pool. The script needs the admin `DATABASE_URL`.
+
+1. Inside one transaction, it seeds synthetic live talents in Lagos, one category each. Quality scores are rounded to steps of 5, so ties are common.
+2. It adds a booker with a role, 300 passes on that role, and 20 blocks.
+3. It runs `ANALYZE` on the tables.
+4. It times `EXPLAIN ANALYZE` (planning plus execution) on the deck's own `candidateQuery`, 50 runs per scenario.
+5. It rolls everything back.
+
+The numbers below are from the local Supabase Postgres on a development Mac. They are database time only, with no network round trip.
+
+### Results
+
+| Pool (live rows) | Scenario | Rows returned | p50 | p95 | Pass |
+|---|---|---|---|---|---|
+| 1,214 | Vertical default categories | 484 | 1.23ms | 1.81ms | Yes |
+| 1,214 | Role category, plus 300 swipes and 20 blocks to exclude | 176 | 0.76ms | 1.13ms | Yes |
+| 1,214 | Role, plus city, region and rate filters | 172 | 0.78ms | 1.35ms | Yes |
+| 20,014 | Vertical default categories | 500 | 14.36ms | 15.97ms | Yes |
+| 20,014 | Role category, plus 300 swipes and 20 blocks to exclude | 500 | 9.43ms | 11.61ms | Yes |
+| 20,014 | Role, plus city, region and rate filters | 500 | 9.78ms | 10.99ms | Yes |
+
+**Plan at 20k:** one sequential scan on `talent_search` with the hard filters, then hash anti-joins on swipes and blocks, then a top-N sort (heapsort) for the 500 rows. No index is needed at this size.
+
+If stage 1 later gets close to the budget, the planned fix is TECH_SPEC §26.5: promote frequently filtered attributes onto `talent_search`. A partial index matching the deck's `ORDER BY` is another option.

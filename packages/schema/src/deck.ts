@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { mediaStatusOutput } from "./media"
+import { roleRequirementsSchema } from "./project"
 import { talentDtoSchema } from "./talent/dto"
 
 export const categoryKindSchema = z.enum(["on_camera", "crew", "production", "events"])
@@ -37,13 +38,38 @@ export const deckPreviewInput = z
 
 export const deckPreviewSchema = z.object({ cards: z.array(deckCardSchema) })
 
+const ids = (max: number) => z.array(z.uuid()).min(1).max(max)
+
+/**
+ * The booker's filters (TECH_SPEC §8), the one object stage 1 and, from M8, search both take.
+ * Each list matches any of its values; separate fields must all match. A talent with a hidden
+ * or unset rate is never removed by `rateDayMax` (PRD §7.3). `attributes` is keyed by attribute
+ * definition, shaped like role requirements: sensitive keys need an active role with a brief and
+ * are only ever soft preferences, never exclusions.
+ */
+export const deckFiltersSchema = z
+  .object({
+    categoryIds: ids(20).optional(),
+    cityIds: ids(50).optional(),
+    regions: z.array(z.string().trim().min(1).max(64)).min(1).max(20).optional(),
+    skillIds: ids(30).optional(),
+    languageIds: ids(30).optional(),
+    accentIds: ids(30).optional(),
+    rateDayMax: z.number().min(0).max(9_999_999_999.99).optional(),
+    hasShowreel: z.literal(true).optional(),
+    minCredits: z.number().int().min(1).max(500).optional(),
+    attributes: roleRequirementsSchema.optional(),
+  })
+  .strict()
+
 /** A deck session, optionally for one of the booker's roles, with an optional card goal. */
 export const deckStartInput = z
   .object({
     roleId: z.uuid().nullable().default(null),
     goalCount: z.number().int().min(1).max(500).nullable().default(null),
+    filters: deckFiltersSchema.default({}),
   })
-  .default({ roleId: null, goalCount: null })
+  .default({ roleId: null, goalCount: null, filters: {} })
 
 /** The session `deck.next` (5.8) pages through, and how many cards its queue holds. */
 export const deckSessionSchema = z.object({
@@ -58,3 +84,4 @@ export type DeckDecision = z.infer<typeof deckDecisionSchema>
 export type DeckCard = z.infer<typeof deckCardSchema>
 export type DeckPreview = z.infer<typeof deckPreviewSchema>
 export type DeckSession = z.infer<typeof deckSessionSchema>
+export type DeckFilters = z.infer<typeof deckFiltersSchema>

@@ -18,7 +18,7 @@ import { BookerError } from "./errors.js"
  * in `packages/core`). Read from the table on every call: an ops edit is what the next deck uses.
  */
 export async function loadVerticalCategoryWeights(
-  db: Db,
+  db: Pick<Db, "select">,
   vertical: BookerVertical,
 ): Promise<VerticalCategoryWeights> {
   const rows = await db

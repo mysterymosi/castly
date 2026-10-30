@@ -40,12 +40,15 @@ export const deckSessions = pgTable(
     roleId: uuid("role_id").references(() => roles.id, { onDelete: "set null" }),
     goalCount: integer("goal_count"),
     seed: integer("seed").notNull(),
+    /** The booker's filter object (`deckFiltersSchema`), kept so a refill re-runs the same stage 1. */
+    filters: jsonb("filters").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
     startedAt: timestamptz("started_at").notNull().defaultNow(),
     endedAt: timestamptz("ended_at"),
   },
   (table) => [
     index("deck_sessions_booker_started_idx").on(table.bookerId, table.startedAt.desc()),
     index("deck_sessions_role_id_idx").on(table.roleId),
+    check("deck_sessions_filters_object", sql`jsonb_typeof(${table.filters}) = 'object'`),
     check("deck_sessions_goal_count_positive", sql`${table.goalCount} IS NULL OR ${table.goalCount} > 0`),
     check(
       "deck_sessions_ended_after_start",
