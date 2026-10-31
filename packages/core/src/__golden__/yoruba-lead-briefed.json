@@ -1,17 +1,5 @@
 [
   {
-    "talent": "bisi-actress-lagos",
-    "score": 3.24,
-    "reasons": [
-      "vertical",
-      "geo(city)",
-      "quality",
-      "freshness",
-      "responsiveness",
-      "role(languages)"
-    ]
-  },
-  {
     "talent": "kemi-actress-ibadan",
     "score": 3.1158,
     "reasons": [
@@ -92,6 +80,19 @@
       "freshness",
       "responsiveness",
       "role"
+    ]
+  },
+  {
+    "talent": "bisi-actress-lagos",
+    "score": 2.43,
+    "reasons": [
+      "vertical",
+      "geo(city)",
+      "quality",
+      "freshness",
+      "responsiveness",
+      "role(languages)",
+      "exposure"
     ]
   }
 ]

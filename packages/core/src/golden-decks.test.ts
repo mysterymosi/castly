@@ -1,16 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import {
-  applyFairness,
-  DEFAULT_RANKING_WEIGHTS,
-  scoreCandidates,
-  type DeckCandidate,
-  type ScoringContext,
-} from "./deck.js"
+import { DEFAULT_RANKING_WEIGHTS, scoreCandidates, type DeckCandidate, type ScoringContext } from "./deck.js"
+import { applyFairness, DEFAULT_FAIRNESS_CONFIG, type FairnessContext } from "./fairness.js"
 
 /**
- * Golden decks (TECH_SPEC §22.2): a fixed population scored under fixed contexts, with the
- * expected order committed in `__golden__/`. A change to weights or scoring shows up as a diff
+ * Golden decks (TECH_SPEC §22.2): a fixed population run through stages 2 and 3 under fixed
+ * contexts, with the expected order committed in `__golden__/`. A change to weights or scoring shows up as a diff
  * in review. To accept an intended change: `pnpm --filter @workspace/core test -- -u`.
  */
 
@@ -33,6 +28,9 @@ const talent = (
   freshnessScore: 50,
   responsivenessScore: 50,
   attributes: {},
+  agencyId: null,
+  impressions7d: 30,
+  lifetimeImpressions: 2000,
   raisedHand: false,
   boost: 0,
   ...fields,
@@ -47,9 +45,11 @@ const population: DeckCandidate[] = [
     attributes: { languages: ["igbo", "english"], playing_age_min: 30, playing_age_max: 38 },
   }),
   talent("amaka-model-lagos", { ...lagos, categoryIds: [MODELS], qualityScore: 85, freshnessScore: 90 }),
+  // Seen four times the threshold this week: the exposure penalty takes its maximum.
   talent("bisi-actress-lagos", {
     ...lagos,
     qualityScore: 80,
+    impressions7d: 400,
     attributes: { languages: ["yoruba", "english"], playing_age_min: 24, playing_age_max: 30 },
   }),
   talent("halima-actress-abuja", {
@@ -69,7 +69,14 @@ const population: DeckCandidate[] = [
     freshnessScore: 20,
     attributes: { languages: ["yoruba", "english"], playing_age_min: 26, playing_age_max: 34 },
   }),
-  talent("zainab-actress-lagos-new", { ...lagos, qualityScore: 30, freshnessScore: 100 }),
+  // New: never shown, so she is the one under-seen talent and takes the exploration slot.
+  talent("zainab-actress-lagos-new", {
+    ...lagos,
+    qualityScore: 30,
+    freshnessScore: 100,
+    impressions7d: 0,
+    lifetimeImpressions: 0,
+  }),
 ]
 
 const castingDirectorInLagos: ScoringContext = {
@@ -98,8 +105,10 @@ const briefedYorubaLead: ScoringContext = {
   role: { ...yorubaLead.role!, briefed: true },
 }
 
+const fairness: FairnessContext = { config: DEFAULT_FAIRNESS_CONFIG, seed: 42, exposureThreshold: 100 }
+
 function deck(context: ScoringContext) {
-  const ranked = applyFairness(scoreCandidates(population, context))
+  const ranked = applyFairness(scoreCandidates(population, context), fairness)
   return `${JSON.stringify(
     ranked.map((c) => ({
       talent: c.talentId,

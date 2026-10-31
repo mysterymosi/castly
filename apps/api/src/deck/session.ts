@@ -7,7 +7,8 @@ import type { DeckSession, deckStartInput } from "@workspace/schema"
 import type { z } from "zod"
 
 import { generateCandidates, resolveCandidateScope } from "./candidates.js"
-import { loadRankingWeights } from "./ranking-weights.js"
+import { exposureThreshold } from "./exposure.js"
+import { loadRankingConfig } from "./ranking-weights.js"
 
 /** A fresh session seed; Postgres `integer`. */
 export function newSeed() {
@@ -26,8 +27,13 @@ export async function startDeck(
   seed = newSeed(),
 ): Promise<DeckSession> {
   const scope = await resolveCandidateScope(db, bookerId, input.roleId, input.filters, seed)
-  const context = { ...scope.scoring, weights: await loadRankingWeights(db) }
-  const ranked = applyFairness(scoreCandidates(await generateCandidates(db, scope), context))
+  const { weights, fairness } = await loadRankingConfig(db)
+  const scored = scoreCandidates(await generateCandidates(db, scope), { ...scope.scoring, weights })
+  const ranked = applyFairness(scored, {
+    config: fairness,
+    seed,
+    exposureThreshold: await exposureThreshold(db, fairness.exposurePercentile),
+  })
 
   return db.transaction(async (tx) => {
     const [session] = await tx

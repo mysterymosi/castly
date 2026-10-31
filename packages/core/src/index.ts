@@ -4,7 +4,6 @@ export function identity<T>(value: T): T {
 }
 
 export {
-  applyFairness,
   boostContribution,
   DEFAULT_RANKING_WEIGHTS,
   geoProximity,
@@ -25,6 +24,21 @@ export {
   type ScoringContext,
   type ScoringRequirement,
 } from "./deck.js"
+export {
+  applyExposurePenalty,
+  applyFairness,
+  DEFAULT_FAIRNESS_CONFIG,
+  drawExplorers,
+  explorationEligible,
+  FAIRNESS_CONFIG_KEYS,
+  fairnessConfigFromRows,
+  injectExploration,
+  isExplorationSlot,
+  spaceForDiversity,
+  type FairCandidate,
+  type FairnessConfig,
+  type FairnessContext,
+} from "./fairness.js"
 export { computeCompleteness, type CompletenessInput, type CompletenessResult } from "./completeness.js"
 export { computeFreshnessScore, type FreshnessScoreInput } from "./freshness-score.js"
 export {

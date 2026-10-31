@@ -1,16 +1,5 @@
 [
   {
-    "talent": "bisi-actress-lagos",
-    "score": 2.54,
-    "reasons": [
-      "vertical",
-      "geo(city)",
-      "quality",
-      "freshness",
-      "responsiveness"
-    ]
-  },
-  {
     "talent": "amaka-model-lagos",
     "score": 2.44,
     "reasons": [
@@ -55,6 +44,16 @@
     ]
   },
   {
+    "talent": "tunde-cinematographer-lagos",
+    "score": 1.66,
+    "reasons": [
+      "geo(city)",
+      "quality",
+      "freshness",
+      "responsiveness"
+    ]
+  },
+  {
     "talent": "ngozi-actress-enugu",
     "score": 2.2,
     "reasons": [
@@ -77,13 +76,15 @@
     ]
   },
   {
-    "talent": "tunde-cinematographer-lagos",
-    "score": 1.66,
+    "talent": "bisi-actress-lagos",
+    "score": 1.905,
     "reasons": [
+      "vertical",
       "geo(city)",
       "quality",
       "freshness",
-      "responsiveness"
+      "responsiveness",
+      "exposure"
     ]
   }
 ]

@@ -8,6 +8,7 @@ import { db } from "../db.js"
 import { deleteAuthUser, seedAuthUser } from "../test/seed-auth-user.js"
 import { createContext } from "../trpc/context.js"
 import { appRouter } from "../trpc/router.js"
+import { clearExposureThresholdCache } from "./exposure.js"
 import { clearRankingWeightsCache } from "./ranking-weights.js"
 import { startDeck } from "./session.js"
 
@@ -139,6 +140,7 @@ describe("deck.start", () => {
       await db.delete(schema.rankingWeights).where(eq(schema.rankingWeights.key, key))
     }
     clearRankingWeightsCache()
+    clearExposureThresholdCache()
     for (const id of createdCategoryIds.splice(0)) {
       await db.delete(schema.categories).where(eq(schema.categories.id, id))
     }
@@ -389,10 +391,28 @@ describe("deck.start", () => {
     await db.insert(schema.rankingWeights).values({ key: "w_quality", value: "0" })
     createdWeightKeys.push("w_quality")
     clearRankingWeightsCache()
+    clearExposureThresholdCache()
 
     const [row] = await queue((await api.deck.start({ filters: w.filters })).sessionId)
     expect(row!.score).toBe("0.6000")
     expect(row!.reasons.map((r) => r.code)).toEqual(["geo"])
+  })
+
+  it("demotes a talent seen too often this week, without dropping them", async () => {
+    const w = await world()
+    const busy = await liveTalent(w, "busy")
+    const quiet = await liveTalent(w, "quiet")
+    const today = new Date().toISOString().slice(0, 10)
+    await db.insert(schema.talentExposureDaily).values({ talentId: busy, day: today, impressions: 500 })
+    const { api } = await booker(w, "deck-session-exposure")
+
+    const rows = await queue((await api.deck.start({ filters: w.filters })).sessionId)
+    expect(rows.map((r) => r.talentId)).toEqual([quiet, busy])
+    const penalty = rows[1]!.reasons.find((r) => r.code === "exposure")
+    expect(penalty?.contribution).toBeLessThan(0)
+    // The reasons still add up to the stored score.
+    const sum = rows[1]!.reasons.reduce((total, r) => total + r.contribution, 0)
+    expect(sum).toBeCloseTo(Number(rows[1]!.score), 4)
   })
 
   it("needs a finished booker profile", async () => {

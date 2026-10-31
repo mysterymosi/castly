@@ -64,6 +64,9 @@ const candidate: fc.Arbitrary<DeckCandidate> = fc.record({
   freshnessScore: score,
   responsivenessScore: score,
   attributes: fc.dictionary(fc.constantFrom(...STANDARD_KEYS, ...SENSITIVE_KEYS), attributeValue),
+  agencyId: fc.option(id, { nil: null }),
+  impressions7d: fc.nat(1000),
+  lifetimeImpressions: fc.nat(100000),
   raisedHand: fc.boolean(),
   boost: fc.oneof(fc.constant(0), fc.double({ min: 0, max: 1e6, noNaN: true })),
 })

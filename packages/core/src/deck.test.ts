@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  applyFairness,
   DEFAULT_RANKING_WEIGHTS,
   geoProximity,
   rankingWeightsFromRows,
@@ -24,6 +23,9 @@ const candidate = (talentId: string, overrides: Partial<DeckCandidate> = {}): De
   freshnessScore: 0,
   responsivenessScore: 0,
   attributes: {},
+  agencyId: null,
+  impressions7d: 0,
+  lifetimeImpressions: 0,
   raisedHand: false,
   boost: 0,
   ...overrides,
@@ -151,11 +153,6 @@ describe("scoreCandidates", () => {
   it("keeps stage 1's order between tied candidates", () => {
     const seeded = ["d", "a", "c", "b"].map((id) => candidate(id, { qualityScore: 50 }))
     expect(scoreCandidates(seeded, context()).map((c) => c.talentId)).toEqual(["d", "a", "c", "b"])
-  })
-
-  it("passes the scored order through fairness unchanged for now", () => {
-    const scored = scoreCandidates([candidate("a", { qualityScore: 10 }), candidate("b")], context())
-    expect(applyFairness(scored)).toEqual(scored)
   })
 })
 

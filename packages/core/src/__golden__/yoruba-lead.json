@@ -1,17 +1,5 @@
 [
   {
-    "talent": "bisi-actress-lagos",
-    "score": 3.34,
-    "reasons": [
-      "vertical",
-      "geo(city)",
-      "quality",
-      "freshness",
-      "responsiveness",
-      "role(languages)"
-    ]
-  },
-  {
     "talent": "femi-actor-lagos",
     "score": 3.22,
     "reasons": [
@@ -92,6 +80,19 @@
       "freshness",
       "responsiveness",
       "role"
+    ]
+  },
+  {
+    "talent": "bisi-actress-lagos",
+    "score": 2.505,
+    "reasons": [
+      "vertical",
+      "geo(city)",
+      "quality",
+      "freshness",
+      "responsiveness",
+      "role(languages)",
+      "exposure"
     ]
   }
 ]

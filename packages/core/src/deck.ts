@@ -26,6 +26,11 @@ export type DeckCandidate = {
    * never a mismatch. Never read without a role.
    */
   attributes: Readonly<Record<string, AttributeValue>>
+  /** The managing agency's user id (an active `profile_delegates` grant), for diversity spacing. */
+  agencyId: string | null
+  /** From `talent_exposure_daily`: stage 3's exposure penalty and exploration pool. */
+  impressions7d: number
+  lifetimeImpressions: number
   /** Raised a hand on the session's role (M9). */
   raisedHand: boolean
   /** Paid placement multiplier (M10); 0 when none. Capped in `boostContribution`. */
@@ -97,12 +102,14 @@ export type ScoreTerm =
   | "boost"
 
 /**
- * One "why this card" entry. Scoring appends one per term that added to the score; the card's
- * reason string (5.11) and the inspector (5.10) read them. `detail` names what matched — keys
- * and levels, never a talent's attribute values.
+ * One "why this card" entry. Scoring appends one per term that added to the score, and stage 3
+ * one per adjustment, so the contributions sum to the final score. The card's reason string
+ * (5.11) and the inspector (5.10) read them. `detail` names what matched — keys and levels,
+ * never a talent's attribute values.
  */
 export type DeckReason = {
-  code: ScoreTerm
+  /** A stage 2 term, or stage 3's `exposure` (a negative contribution) or `exploration` (0). */
+  code: ScoreTerm | "exposure" | "exploration"
   contribution: number
   detail?: Record<string, string | readonly string[]>
 }
@@ -240,14 +247,6 @@ export function scoreCandidates(
   context: ScoringContext,
 ): ScoredCandidate[] {
   return candidates.map((c) => scoreCandidate(c, context)).sort((a, b) => b.score - a.score)
-}
-
-/**
- * Stage 3, interim: the scored order unchanged. Exposure penalty, exploration injection and
- * diversity spacing land in M5 5.7.
- */
-export function applyFairness(scored: readonly ScoredCandidate[]): ScoredCandidate[] {
-  return [...scored]
 }
 
 /** Weights from `ranking_weights` rows over the defaults. Unknown keys and bad values are ignored. */

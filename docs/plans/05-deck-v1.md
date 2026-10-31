@@ -64,7 +64,7 @@ Measure on 2GB Android, throttled 3G, against §25:
 **Status:** Built, started while the 5.3 device rows were still pending. Tables are in migration `0011_deck_sessions` (`packages/db/src/schema/deck.ts`), all with default-deny RLS. `deck_sessions` stores an integer `seed`. `deck_queue` has the primary key `(session_id, position)` and is unique per `(session, talent)`; `reasons` is a jsonb array of `{code, contribution}`. Each swipe gets one row, and an undo sets `undone_at`. `deck.start` (booker-only, `apps/api/src/deck/session.ts`) needs a finished booker profile, and accepts only the booker's own role. It runs stage 1 → `scoreCandidates` → `applyFairness` (`packages/core/src/deck.ts`) and writes the queue in one transaction. The stages are interim:
 - **Stage 1:** live talents other than the booker, by `quality_score` descending, with ties ordered by `md5(talent_id || seed)`. Replaced by 5.5.
 - **Stage 2:** quality only, with a stable sort, so tied talents keep stage 1's seeded order. Replaced by 5.6.
-- **Stage 3:** passes the order through unchanged.
+- **Stage 3:** passes the order through unchanged. Replaced by 5.7.
 
 5.5–5.7 replace these behind the same signatures. The mobile app still uses `deck.preview` until `deck.next` (5.8). Acceptance is covered by `deck/session.integration.test.ts`: seeds 1 and 2 give different first-10 decks from a 15-talent tied pool, and seed 1 replays exactly.
 
@@ -152,6 +152,46 @@ Each term appends to `reasons[]`. `roleSoftMatch` never excludes. Follower count
 **Acceptance.** Property tests (fast-check): roleSoftMatch never drops a candidate; sensitive attributes do not change score without an active briefed role; boost cap holds at 0 and at max. Golden-deck fixtures committed.
 
 ### 5.7 Stage 3 — fairness
+
+**Status:** Built. `applyFairness` (`packages/core/src/fairness.ts`) runs three steps. None of them drops a card, so the output is always a reordering of the input.
+
+1. **Exposure penalty.**
+   - The threshold is the platform's 90th percentile of 7-day impressions, counting every live talent, with unseen ones as 0. It's computed in `apps/api/src/deck/exposure.ts` and cached for 10 minutes.
+   - The penalty never starts below 20 impressions.
+   - Above the threshold, the score is cut by `strength × (impressions / threshold − 1)`, up to a maximum share.
+   - The cut is recorded as an `exposure` reason with a negative contribution, so the reasons still sum to the stored score.
+2. **Exploration.**
+   - A fifth of the slots (`exploration_fraction`), spread evenly, are reserved.
+   - Talents for them are drawn in a seeded order from the lowest 10% of candidates by lifetime impressions (`exploration_decile`).
+   - Exploration only promotes. A drawn talent whose own score already ranks them earlier keeps that place. Only a talent placed ahead of a higher-scored card is marked `explored` and gets an `exploration` reason, with contribution 0.
+3. **Diversity spacing.**
+   - No more than 3 cards in a row may share a category (any in common), a city, or a managing agency. The agency is the earliest active `profile_delegates` grant.
+   - When the next card would break that, the first card within 20 places that doesn't takes its spot. In a narrow pool, such as a role whose category every candidate shares, the order stands.
+
+The settings are `ranking_weights` keys with defaults in `DEFAULT_FAIRNESS_CONFIG`, read through the same 60-second cache as the weights (`loadRankingConfig`). Values out of range are ignored.
+
+| Key | Default |
+|---|---|
+| `exposure_percentile` | 0.9 |
+| `exposure_min_impressions` | 20 |
+| `exposure_penalty_strength` | 0.25 |
+| `exposure_penalty_max` | 0.25 |
+| `exploration_fraction` | 0.2 |
+| `exploration_decile` | 0.1 |
+| `diversity_max_run` | 3 |
+| `diversity_window` | 20 |
+
+Exposure is read from `talent_exposure_daily`, which nothing writes yet. Impressions are recorded from 5.8, and the nightly roll-up into this table still needs building. Until then every talent counts as unseen, so there is no penalty, and exploration draws from the whole pool at random.
+
+Acceptance:
+- **Property tests** (`fairness.property.test.ts`):
+  - Every card comes back exactly once, including a sparse pool where every talent is over-exposed.
+  - Exploration draws `min(slots, eligible)` talents, and by each reserved slot at least that many drawn talents have been placed.
+  - Only talents from the lowest lifetime-impression share are promoted.
+  - Reasons always sum to the score.
+  - A varied pool never has a run longer than the maximum.
+- **Golden decks:** these now run stages 2 and 3, with an over-exposed fixture (Bisi) and a never-seen one (Zainab).
+- **API:** an integration test shows a talent with 500 impressions this week ranked below an otherwise-equal one, with the penalty in their reasons.
 
 After scoring: exposure penalty (7-day impressions above a percentile, proportional, not a hard cap), exploration injection (~20% from lowest lifetime-impression decile), diversity spacing (no more than N consecutive same category/city/agency).
 

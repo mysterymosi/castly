@@ -31,6 +31,7 @@ import { BookerError } from "../booker/errors.js"
 import { loadVerticalCategoryWeights } from "../booker/vertical-weights.js"
 import { ProjectError } from "../project/errors.js"
 import { DeckError } from "./errors.js"
+import { candidateExposure, managingAgencies } from "./exposure.js"
 
 /** Stage 1's cap (TECH_SPEC §7.1): enough for a session plus refills, small enough for one query. */
 export const CANDIDATE_LIMIT = 500
@@ -274,12 +275,16 @@ async function taxonomySlugs(db: Reader, key: "languages" | "accents") {
 }
 
 /**
- * Runs stage 1 and shapes each row for scoring. Attributes are what role matching reads, and
- * only the ones the role asks about: languages and accents from the projection's id lists.
- * Other attributes read as unknown until M8 projects them onto `talent_search`.
+ * Runs stage 1 and shapes each row for stages 2 and 3. Attributes are what role matching reads,
+ * and only the ones the role asks about: languages and accents from the projection's id lists.
+ * Other attributes read as unknown until M8 projects them onto `talent_search`. Exposure and
+ * managing agency come from two batched reads over the candidates.
  */
 export async function generateCandidates(db: Reader, scope: CandidateScope): Promise<DeckCandidate[]> {
   const rows = await candidateQuery(db, scope)
+  const ids = rows.map((row) => row.talentId)
+  const exposure = await candidateExposure(db, ids)
+  const agencies = await managingAgencies(db, ids)
   const asked = new Set((scope.scoring.role?.requirements ?? []).map((r) => r.key))
   const slugs = {
     languages: asked.has("languages") ? await taxonomySlugs(db, "languages") : null,
@@ -302,6 +307,9 @@ export async function generateCandidates(db: Reader, scope: CandidateScope): Pro
       freshnessScore: Number(row.freshnessScore),
       responsivenessScore: Number(row.responsivenessScore),
       attributes,
+      agencyId: agencies.get(row.talentId) ?? null,
+      impressions7d: exposure.get(row.talentId)?.impressions7d ?? 0,
+      lifetimeImpressions: exposure.get(row.talentId)?.lifetime ?? 0,
       // Raise a hand (M9) and boosts (M10) feed these; until then they never add to a score.
       raisedHand: false,
       boost: 0,
