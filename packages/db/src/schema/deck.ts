@@ -22,8 +22,15 @@ export const swipeDirection = pgEnum("swipe_direction", ["pass", "interest", "sa
 
 export const swipeSource = pgEnum("swipe_source", ["deck", "open_role", "search"])
 
-/** One "why this card" entry, appended by scoring (TECH_SPEC §7.2). */
-export type DeckReason = { code: string; contribution: number }
+/**
+ * One "why this card" entry, appended by scoring (TECH_SPEC §7.2); `DeckReason` in
+ * `packages/core` is the source. `detail` names what matched, never attribute values.
+ */
+export type DeckReason = {
+  code: string
+  contribution: number
+  detail?: Record<string, string | readonly string[]>
+}
 
 /**
  * One deck run for a booker, optionally for a role (TECH_SPEC §5.6). `seed` makes the session's

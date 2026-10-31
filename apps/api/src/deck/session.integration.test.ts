@@ -8,12 +8,15 @@ import { db } from "../db.js"
 import { deleteAuthUser, seedAuthUser } from "../test/seed-auth-user.js"
 import { createContext } from "../trpc/context.js"
 import { appRouter } from "../trpc/router.js"
+import { clearRankingWeightsCache } from "./ranking-weights.js"
 import { startDeck } from "./session.js"
 
 const adult = "1990-01-01"
 const seededUserIds: string[] = []
 const createdCityIds: string[] = []
 const createdCategoryIds: string[] = []
+const createdLanguageIds: string[] = []
+const createdWeightKeys: string[] = []
 
 const tag = () => randomUUID().slice(0, 8)
 const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000)
@@ -129,6 +132,13 @@ async function queuedIds(sessionId: string) {
 describe("deck.start", () => {
   afterEach(async () => {
     for (const id of seededUserIds.splice(0)) await deleteAuthUser(id)
+    for (const id of createdLanguageIds.splice(0)) {
+      await db.delete(schema.languages).where(eq(schema.languages.id, id))
+    }
+    for (const key of createdWeightKeys.splice(0)) {
+      await db.delete(schema.rankingWeights).where(eq(schema.rankingWeights.key, key))
+    }
+    clearRankingWeightsCache()
     for (const id of createdCategoryIds.splice(0)) {
       await db.delete(schema.categories).where(eq(schema.categories.id, id))
     }
@@ -158,9 +168,14 @@ describe("deck.start", () => {
     const rows = await queue(session.sessionId)
     expect(rows.map((r) => r.position)).toEqual([0, 1])
     expect(rows.map((r) => r.talentId).sort()).toEqual([...pool].sort())
+    // Same city as the booker and full quality; the test category has no vertical weight and
+    // the fixture has no freshness or responsiveness. Default weights: geo 0.6, quality 0.8.
     expect(rows[0]).toMatchObject({
-      score: "1.0000",
-      reasons: [{ code: "quality", contribution: 1 }],
+      score: "1.4000",
+      reasons: [
+        { code: "geo", contribution: 0.6, detail: { level: "city" } },
+        { code: "quality", contribution: 0.8 },
+      ],
       servedAt: null,
     })
 
@@ -328,6 +343,56 @@ describe("deck.start", () => {
 
     const other = await booker(w, "deck-session-other")
     await expect(other.api.deck.start({ roleId })).rejects.toMatchObject({ code: "NOT_FOUND" })
+  })
+
+  it("ranks a role's language match first without dropping the talent who misses it", async () => {
+    const w = await world()
+    const [yoruba] = await db
+      .insert(schema.languages)
+      .values({ slug: `yoruba-${tag()}`, name: "Yoruba" })
+      .returning({ id: schema.languages.id, slug: schema.languages.slug })
+    createdLanguageIds.push(yoruba!.id)
+    const misses = await liveTalent(w, "misses-language")
+    const speaker = await liveTalent(w, "speaks-yoruba")
+    await db.insert(schema.talentLanguages).values({ talentId: speaker, languageId: yoruba!.id })
+    const { userId, api } = await booker(w, "deck-session-role-match")
+    const [project] = await db
+      .insert(schema.projects)
+      .values({ bookerId: userId, name: "Lagos Nights" })
+      .returning({ id: schema.projects.id })
+    const [roleRow] = await db
+      .insert(schema.roles)
+      .values({
+        projectId: project!.id,
+        name: "Lead",
+        categoryId: w.categoryId,
+        requirements: { languages: { anyOf: [yoruba!.slug] } },
+      })
+      .returning({ id: schema.roles.id })
+
+    const rows = await queue((await api.deck.start({ roleId: roleRow!.id })).sessionId)
+    expect(rows.map((r) => r.talentId)).toEqual([speaker, misses])
+    expect(rows[0]!.reasons).toContainEqual({
+      code: "role",
+      contribution: 1,
+      detail: { matched: ["languages"] },
+    })
+    // No languages on record is unknown, not a miss: half the role weight, and nothing named
+    // as matched, so the card's reason string (5.11) won't claim a role match.
+    expect(rows[1]!.reasons).toContainEqual({ code: "role", contribution: 0.5 })
+  })
+
+  it("reads term weights from ranking_weights", async () => {
+    const w = await world()
+    await liveTalent(w, "weighted")
+    const { api } = await booker(w, "deck-session-weights")
+    await db.insert(schema.rankingWeights).values({ key: "w_quality", value: "0" })
+    createdWeightKeys.push("w_quality")
+    clearRankingWeightsCache()
+
+    const [row] = await queue((await api.deck.start({ filters: w.filters })).sessionId)
+    expect(row!.score).toBe("0.6000")
+    expect(row!.reasons.map((r) => r.code)).toEqual(["geo"])
   })
 
   it("needs a finished booker profile", async () => {

@@ -5,10 +5,25 @@ export function identity<T>(value: T): T {
 
 export {
   applyFairness,
+  boostContribution,
+  DEFAULT_RANKING_WEIGHTS,
+  geoProximity,
+  maxOrganicScore,
+  RANKING_WEIGHT_KEYS,
+  rankingWeightsFromRows,
+  requirementMatch,
+  roleSoftMatch,
+  scoreCandidate,
   scoreCandidates,
+  UNKNOWN_MATCH,
+  type AttributeValue,
   type DeckCandidate,
   type DeckReason,
+  type RankingWeights,
   type ScoredCandidate,
+  type ScoreTerm,
+  type ScoringContext,
+  type ScoringRequirement,
 } from "./deck.js"
 export { computeCompleteness, type CompletenessInput, type CompletenessResult } from "./completeness.js"
 export { computeFreshnessScore, type FreshnessScoreInput } from "./freshness-score.js"

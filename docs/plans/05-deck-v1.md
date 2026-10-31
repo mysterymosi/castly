@@ -63,7 +63,7 @@ Measure on 2GB Android, throttled 3G, against §25:
 
 **Status:** Built, started while the 5.3 device rows were still pending. Tables are in migration `0011_deck_sessions` (`packages/db/src/schema/deck.ts`), all with default-deny RLS. `deck_sessions` stores an integer `seed`. `deck_queue` has the primary key `(session_id, position)` and is unique per `(session, talent)`; `reasons` is a jsonb array of `{code, contribution}`. Each swipe gets one row, and an undo sets `undone_at`. `deck.start` (booker-only, `apps/api/src/deck/session.ts`) needs a finished booker profile, and accepts only the booker's own role. It runs stage 1 → `scoreCandidates` → `applyFairness` (`packages/core/src/deck.ts`) and writes the queue in one transaction. The stages are interim:
 - **Stage 1:** live talents other than the booker, by `quality_score` descending, with ties ordered by `md5(talent_id || seed)`. Replaced by 5.5.
-- **Stage 2:** quality only, with a stable sort, so tied talents keep stage 1's seeded order.
+- **Stage 2:** quality only, with a stable sort, so tied talents keep stage 1's seeded order. Replaced by 5.6.
 - **Stage 3:** passes the order through unchanged.
 
 5.5–5.7 replace these behind the same signatures. The mobile app still uses `deck.preview` until `deck.next` (5.8). Acceptance is covered by `deck/session.integration.test.ts`: seeds 1 and 2 give different first-10 decks from a 15-talent tied pool, and seed 1 replays exactly.
@@ -94,7 +94,7 @@ New schema in migration `0012_deck_candidate_filters`:
 
 Attribute filters go through the one guard, `checkAttributeFilters` (`packages/core/src/sensitive-filter-guard.ts`), which reads tiers from `attribute_definitions`:
 - **Unknown keys** are rejected.
-- **Sensitive keys** are rejected unless the session's role has a brief. With a brief they are carried as `softAttributes` for `roleSoftMatch` (5.6) and never reach SQL.
+- **Sensitive keys** are rejected unless the session's role has a brief. With a brief they join the role's requirements for `roleSoftMatch` (5.6) and never reach SQL.
 - **Standard attribute keys** (e.g. `height_cm`) are rejected for now, because `talent_search.attrs` is empty until M8. A filter on them would match nobody.
 
 Left for M8: the `sensitive_filter_audit` row (8.4), standard attribute filters (8.1), and the `onRequest` group for hidden rates in search (8.3). Acceptance:
@@ -108,6 +108,31 @@ p95 &lt; 120ms on a seeded Lagos-sized set.
 **Acceptance.** `EXPLAIN ANALYZE` on the candidate query meets 120ms p95 locally against a seed of ≥1,000 live rows. A talent passed for role A still appears for role B.
 
 ### 5.6 Stage 2 — scoring (`packages/core`)
+
+**Status:** Built. `scoreCandidates` (`packages/core/src/deck.ts`) is the weighted sum below. Each term's contribution goes into `components`, and each term that adds more than 0 appends a reason. `detail` names what matched, never a talent's values: the geo level, or the role requirement keys that matched fully. No candidate is ever removed, and the sort is stable, so ties keep stage 1's seeded order.
+
+The terms:
+- **`verticalCategoryMatch`:** the existing core function.
+- **`geoProximity`:** same city 1, same region 0.6, same country 0.3.
+- **Quality, freshness, responsiveness:** each `talent_search` score divided by 100.
+- **`roleSoftMatch`:** the mean match across the role's requirements:
+  - **Range:** 1 inside it, falling to 0 at 10% of the bound outside it.
+  - **`anyOf` / `equals`:** 1 or 0.
+  - **Unknown value:** 0.5, so a missing value is neither a match nor a miss.
+  - **Sensitive requirements:** count only on a briefed role.
+- **Raised hand:** adds a fixed `w_raised_hand` when the talent has raised a hand on the role. Always 0 until M9.
+- **Boost:** capped at `boost_cap_fraction` (default 0.1) of the highest organic score under the current weights. Always 0 until M10.
+
+Weights:
+- They come from `ranking_weights` (`w_vertical`, `w_geo`, `w_quality`, `w_freshness`, `w_responsiveness`, `w_role`, `w_raised_hand`, `boost_cap_fraction`), read through a 60-second cache (`apps/api/src/deck/ranking-weights.ts`).
+- A key with no row uses the default from `DEFAULT_RANKING_WEIGHTS`: 1 / 0.6 / 0.8 / 0.4 / 0.2 / 1 / 0.3. Negative values and unknown keys are ignored.
+
+Inputs: stage 1 also returns region, country, freshness, responsiveness, and the language and accent ids. Role matching reads languages and accents as slugs. Other attributes count as unknown until M8 projects them onto `talent_search`.
+
+Acceptance:
+- **Property tests** (`deck.property.test.ts`, fast-check): no candidate is dropped and every score is finite; sensitive attributes change nothing without a briefed role; the boost stays within its cap for any weights and any boost, and adds 0 at 0.
+- **Golden decks:** `golden-decks.test.ts` against `src/__golden__/*.json` (cold start in Lagos, an unbriefed Yoruba lead, the same lead with a brief). Accept an intended change with `pnpm --filter @workspace/core test -- -u`.
+- **API:** integration tests cover the language-match ordering and a `ranking_weights` override.
 
 Pure function. Weights from `ranking_weights` cached 60s.
 

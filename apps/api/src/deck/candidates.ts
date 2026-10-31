@@ -1,4 +1,11 @@
-import { checkAttributeFilters, type DeckCandidate, type FilterAttributeTier } from "@workspace/core"
+import {
+  checkAttributeFilters,
+  type AttributeValue,
+  type DeckCandidate,
+  type FilterAttributeTier,
+  type ScoringContext,
+  type ScoringRequirement,
+} from "@workspace/core"
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
 import type { DeckFilters, RoleRequirements } from "@workspace/schema"
@@ -48,8 +55,12 @@ export type CandidateScope = {
    */
   categorySets: string[][]
   filters: DeckFilters
-  /** Sensitive preferences from a briefed role's filters: stage 2 input (5.6), never SQL. */
-  softAttributes: RoleRequirements
+  /**
+   * Stage 2's inputs other than the weights: the vertical's category weights, where the booker
+   * is, and the role's requirements with their tiers. A briefed role's sensitive filters join
+   * the requirements here as soft weights; they never reach SQL.
+   */
+  scoring: Omit<ScoringContext, "weights">
 }
 
 /** `ids` plus their direct children: a parent category stands for its subcategories. */
@@ -91,28 +102,43 @@ export async function resolveCandidateScope(
   seed: number,
 ): Promise<CandidateScope> {
   const [booker] = await db
-    .select({ vertical: schema.bookerProfiles.vertical, country: schema.cities.country })
+    .select({
+      vertical: schema.bookerProfiles.vertical,
+      cityId: schema.bookerProfiles.cityId,
+      region: schema.cities.region,
+      country: schema.cities.country,
+    })
     .from(schema.bookerProfiles)
     .leftJoin(schema.cities, eq(schema.bookerProfiles.cityId, schema.cities.id))
     .where(eq(schema.bookerProfiles.userId, bookerId))
     .limit(1)
   if (!booker) throw new BookerError("Finish your booker profile first", "profile_required")
 
-  let role: { categoryId: string | null; brief: string | null } | null = null
+  let role: { categoryId: string | null; brief: string | null; requirements: RoleRequirements } | null =
+    null
   if (roleId) {
     const [owned] = await db
-      .select({ categoryId: schema.roles.categoryId, brief: schema.roles.brief })
+      .select({
+        categoryId: schema.roles.categoryId,
+        brief: schema.roles.brief,
+        requirements: schema.roles.requirements,
+      })
       .from(schema.roles)
       .innerJoin(schema.projects, eq(schema.roles.projectId, schema.projects.id))
       .where(and(eq(schema.roles.id, roleId), eq(schema.projects.bookerId, bookerId)))
       .limit(1)
     if (!owned) throw new ProjectError("Role not found", "role_not_found")
-    role = owned
+    role = { ...owned, requirements: owned.requirements as RoleRequirements }
   }
 
   const attributes = filters.attributes ?? {}
   const keys = Object.keys(attributes)
-  const check = checkAttributeFilters(keys, await attributeTiers(db, keys), role)
+  const tiers = await attributeTiers(db, [...keys, ...Object.keys(role?.requirements ?? {})])
+  const check = checkAttributeFilters(
+    keys,
+    Object.fromEntries(keys.filter((key) => tiers[key]).map((key) => [key, tiers[key]!])),
+    role,
+  )
   if (!check.ok) {
     const list = check.keys.map((key) => `"${key}"`).join(", ")
     throw check.reason === "unknown_attribute"
@@ -131,14 +157,24 @@ export async function resolveCandidateScope(
     )
   }
 
+  const verticalWeights = await loadVerticalCategoryWeights(db, booker.vertical)
   const categorySets: string[][] = []
   if (role?.categoryId) categorySets.push(await withChildCategories(db, [role.categoryId]))
   if (filters.categoryIds) categorySets.push(await withChildCategories(db, filters.categoryIds))
   if (categorySets.length === 0) {
-    const weights = await loadVerticalCategoryWeights(db, booker.vertical)
-    const preferred = Object.keys(weights).filter((id) => weights[id]! > 0)
+    const preferred = Object.keys(verticalWeights).filter((id) => verticalWeights[id]! > 0)
     if (preferred.length > 0) categorySets.push(await withChildCategories(db, preferred))
   }
+
+  // The role's requirements, then its sensitive filters (which win on the same key). A
+  // requirement whose definition has since been retired has no tier and drops out.
+  const requirements: RoleRequirements = {
+    ...role?.requirements,
+    ...Object.fromEntries(check.sensitive.map((key) => [key, attributes[key]!])),
+  }
+  const scoringRequirements: ScoringRequirement[] = Object.entries(requirements).flatMap(
+    ([key, requirement]) => (tiers[key] ? [{ key, tier: tiers[key]!, requirement }] : []),
+  )
 
   return {
     bookerId,
@@ -147,7 +183,13 @@ export async function resolveCandidateScope(
     country: booker.country,
     categorySets,
     filters,
-    softAttributes: Object.fromEntries(check.sensitive.map((key) => [key, attributes[key]!])),
+    scoring: {
+      verticalWeights,
+      booker: { cityId: booker.cityId, region: booker.region, country: booker.country },
+      role: role
+        ? { briefed: Boolean(role.brief?.trim()), requirements: scoringRequirements }
+        : null,
+    },
   }
 }
 
@@ -208,9 +250,15 @@ export function candidateQuery(db: Reader, scope: CandidateScope) {
   return db
     .select({
       talentId: ts.talentId,
-      qualityScore: ts.qualityScore,
       categoryIds: ts.categoryIds,
       cityId: ts.cityId,
+      region: ts.region,
+      country: ts.country,
+      qualityScore: ts.qualityScore,
+      freshnessScore: ts.freshnessScore,
+      responsivenessScore: ts.responsivenessScore,
+      languageIds: ts.languageIds,
+      accentIds: ts.accentIds,
     })
     .from(ts)
     .where(and(...conditions))
@@ -218,7 +266,45 @@ export function candidateQuery(db: Reader, scope: CandidateScope) {
     .limit(CANDIDATE_LIMIT)
 }
 
+/** Slug by id for a taxonomy-backed attribute, which role requirements name by slug. */
+async function taxonomySlugs(db: Reader, key: "languages" | "accents") {
+  const table = key === "languages" ? schema.languages : schema.accents
+  const rows = await db.select({ id: table.id, slug: table.slug }).from(table)
+  return new Map(rows.map((row) => [row.id, row.slug]))
+}
+
+/**
+ * Runs stage 1 and shapes each row for scoring. Attributes are what role matching reads, and
+ * only the ones the role asks about: languages and accents from the projection's id lists.
+ * Other attributes read as unknown until M8 projects them onto `talent_search`.
+ */
 export async function generateCandidates(db: Reader, scope: CandidateScope): Promise<DeckCandidate[]> {
   const rows = await candidateQuery(db, scope)
-  return rows.map((row) => ({ ...row, qualityScore: Number(row.qualityScore) }))
+  const asked = new Set((scope.scoring.role?.requirements ?? []).map((r) => r.key))
+  const slugs = {
+    languages: asked.has("languages") ? await taxonomySlugs(db, "languages") : null,
+    accents: asked.has("accents") ? await taxonomySlugs(db, "accents") : null,
+  }
+  return rows.map(({ languageIds, accentIds, ...row }) => {
+    const attributes: Record<string, AttributeValue> = {}
+    for (const [key, ids] of [
+      ["languages", languageIds],
+      ["accents", accentIds],
+    ] as const) {
+      const map = slugs[key]
+      if (map && ids.length > 0) {
+        attributes[key] = ids.flatMap((id) => map.get(id) ?? [])
+      }
+    }
+    return {
+      ...row,
+      qualityScore: Number(row.qualityScore),
+      freshnessScore: Number(row.freshnessScore),
+      responsivenessScore: Number(row.responsivenessScore),
+      attributes,
+      // Raise a hand (M9) and boosts (M10) feed these; until then they never add to a score.
+      raisedHand: false,
+      boost: 0,
+    }
+  })
 }
