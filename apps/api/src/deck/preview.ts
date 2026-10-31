@@ -9,7 +9,7 @@ import { loadTalentRecord, sectionMediaIds } from "../talent/record.js"
 
 const LEAD_MEDIA_MAX = 5
 
-type Card = Omit<DeckCard, "talent"> & {
+export type Card = Omit<DeckCard, "talent"> & {
   talent: ReturnType<typeof serializeTalent>
 }
 
@@ -54,7 +54,7 @@ async function playingAge(db: Db, talentId: string): Promise<DeckDecision["ageRa
  * One talent as a deck card, for `viewerId` (a booker). Serialized with the same rules as every
  * other talent payload; the booker is unverified until M7, so verified-only rates stay hidden.
  */
-async function deckCard(
+export async function deckCard(
   db: Db,
   viewerId: string,
   profile: typeof schema.talentProfiles.$inferSelect,

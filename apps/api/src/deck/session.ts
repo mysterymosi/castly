@@ -1,18 +1,40 @@
 import { randomInt } from "node:crypto"
 
-import { applyFairness, scoreCandidates } from "@workspace/core"
+import { applyFairness, scoreCandidates, type FairCandidate } from "@workspace/core"
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
 import type { DeckSession, deckStartInput } from "@workspace/schema"
 import type { z } from "zod"
 
-import { generateCandidates, resolveCandidateScope } from "./candidates.js"
+import { generateCandidates, resolveCandidateScope, type CandidateScope, type Reader } from "./candidates.js"
 import { exposureThreshold } from "./exposure.js"
 import { loadRankingConfig } from "./ranking-weights.js"
 
 /** A fresh session seed; Postgres `integer`. */
 export function newSeed() {
   return randomInt(0, 2 ** 31 - 1)
+}
+
+/** Stages 1–3 for a resolved scope: candidates, scored, then reordered for fairness. */
+export async function rankCandidates(db: Reader, scope: CandidateScope): Promise<FairCandidate[]> {
+  const { weights, fairness } = await loadRankingConfig(db)
+  const scored = scoreCandidates(await generateCandidates(db, scope), { ...scope.scoring, weights })
+  return applyFairness(scored, {
+    config: fairness,
+    seed: scope.seed,
+    exposureThreshold: await exposureThreshold(db, fairness.exposurePercentile),
+  })
+}
+
+/** `deck_queue` rows for ranked cards, numbered on from `start`. */
+export function queueRows(sessionId: string, ranked: readonly FairCandidate[], start = 0) {
+  return ranked.map((card, i) => ({
+    sessionId,
+    position: start + i,
+    talentId: card.talentId,
+    score: card.score.toFixed(4),
+    reasons: card.reasons,
+  }))
 }
 
 /**
@@ -27,13 +49,7 @@ export async function startDeck(
   seed = newSeed(),
 ): Promise<DeckSession> {
   const scope = await resolveCandidateScope(db, bookerId, input.roleId, input.filters, seed)
-  const { weights, fairness } = await loadRankingConfig(db)
-  const scored = scoreCandidates(await generateCandidates(db, scope), { ...scope.scoring, weights })
-  const ranked = applyFairness(scored, {
-    config: fairness,
-    seed,
-    exposureThreshold: await exposureThreshold(db, fairness.exposurePercentile),
-  })
+  const ranked = await rankCandidates(db, scope)
 
   return db.transaction(async (tx) => {
     const [session] = await tx
@@ -46,17 +62,7 @@ export async function startDeck(
         filters: input.filters,
       })
       .returning({ id: schema.deckSessions.id })
-    if (ranked.length > 0) {
-      await tx.insert(schema.deckQueue).values(
-        ranked.map((card, position) => ({
-          sessionId: session!.id,
-          position,
-          talentId: card.talentId,
-          score: card.score.toFixed(4),
-          reasons: card.reasons,
-        })),
-      )
-    }
+    if (ranked.length > 0) await tx.insert(schema.deckQueue).values(queueRows(session!.id, ranked))
     return {
       sessionId: session!.id,
       roleId: input.roleId,

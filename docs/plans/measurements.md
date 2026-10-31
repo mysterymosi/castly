@@ -75,3 +75,27 @@ The numbers below are from the local Supabase Postgres on a development Mac. The
 **Plan at 20k:** one sequential scan on `talent_search` with the hard filters, then hash anti-joins on swipes and blocks, then a top-N sort (heapsort) for the 500 rows. No index is needed at this size.
 
 If stage 1 later gets close to the budget, the planned fix is TECH_SPEC §26.5: promote frequently filtered attributes onto `talent_search`. A partial index matching the deck's `ORDER BY` is another option.
+
+---
+
+## M5 5.8: `deck.next` latency
+
+**Status: passed (2026-10-31).** Budget: p95 under 400ms.
+
+### How to measure
+
+Run `pnpm --filter api measure:deck-next` against the seeded deck (`seed:deck`). It uses real portfolios and media, so card building costs what it will in use.
+
+1. It creates a throwaway booker. The `other` vertical means no category restriction.
+2. It opens 40 sessions and times the service call for each one's first page of 10. That covers the session lock, the refill check (which runs on every call here, since 14 talents minus a page of 10 leaves fewer than 10), the serve writes, and building 10 cards.
+3. It restores `talent_exposure_daily` and deletes the booker.
+
+This is local Postgres on a development Mac with no network round trip.
+
+### Results
+
+| Live talents | Calls | p50 | p95 | max | Pass |
+|---|---|---|---|---|---|
+| 14 | 40 | 23.1ms | 76.6ms | 91.0ms | Yes |
+
+Card building is most of the time: each card loads its record, media, category and playing age separately, and the cards in a page are built in parallel. If production latency approaches the budget, batch those reads across the page.

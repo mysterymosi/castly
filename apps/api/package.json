@@ -13,6 +13,7 @@
     "seed:deck": "tsx src/scripts/seed-deck.ts",
     "measure:deck-payload": "tsx src/scripts/measure-deck-payload.ts",
     "measure:candidates": "tsx src/scripts/measure-candidates.ts",
+    "measure:deck-next": "tsx src/scripts/measure-deck-next.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run src/auth/age.test.ts src/auth/rate-limit.test.ts src/talent/public-rate-limit.test.ts src/taxonomy/attribute-policy.test.ts src/auth/termii.test.ts src/auth/phone.test.ts src/observability/sentry.test.ts",

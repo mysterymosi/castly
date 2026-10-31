@@ -1,4 +1,6 @@
 import {
+  deckNextInput,
+  deckPageSchema,
   deckPreviewInput,
   deckPreviewSchema,
   deckSessionSchema,
@@ -7,13 +9,14 @@ import {
 
 import { callProcedure } from "../trpc/errors.js"
 import { bookerProcedure, router } from "../trpc/trpc.js"
+import { nextCards } from "./next.js"
 import { previewDeck } from "./preview.js"
 import { startDeck } from "./session.js"
 
 export const deckRouter = router({
   /**
-   * Interim card source for the deck shell (M5 5.1–5.3), ungated beyond booker mode like the rest
-   * of M5. The app moves to `deck.start` + `deck.next` once `deck.next` serves cards (5.8).
+   * Interim card source from the deck shell (M5 5.1–5.3); the app now uses `deck.start` +
+   * `deck.next`. Kept for `measure:deck-payload`.
    */
   preview: bookerProcedure
     .input(deckPreviewInput)
@@ -25,4 +28,13 @@ export const deckRouter = router({
     .input(deckStartInput)
     .output(deckSessionSchema)
     .mutation(({ ctx, input }) => callProcedure(() => startDeck(ctx.db, ctx.userId, input))),
+
+  /**
+   * The next page of a session's queue. A mutation: serving records impressions and moves the
+   * cursor, so a retry or refetch must never replay it as a read.
+   */
+  next: bookerProcedure
+    .input(deckNextInput)
+    .output(deckPageSchema)
+    .mutation(({ ctx, input }) => callProcedure(() => nextCards(ctx.db, ctx.userId, input))),
 })

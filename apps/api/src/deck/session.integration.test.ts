@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 
 import { schema } from "@workspace/db"
-import { asc, eq } from "drizzle-orm"
+import { and, asc, eq } from "drizzle-orm"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { db } from "../db.js"
@@ -420,5 +420,140 @@ describe("deck.start", () => {
     const api = caller(userId)
     await api.auth.enableMode({ mode: "booker" })
     await expect(api.deck.start()).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
+  })
+})
+
+describe("deck.next", () => {
+  afterEach(async () => {
+    for (const id of seededUserIds.splice(0)) await deleteAuthUser(id)
+    for (const id of createdCategoryIds.splice(0)) {
+      await db.delete(schema.categories).where(eq(schema.categories.id, id))
+    }
+    for (const id of createdCityIds.splice(0)) {
+      await db.delete(schema.cities).where(eq(schema.cities.id, id))
+    }
+    clearRankingWeightsCache()
+    clearExposureThresholdCache()
+  })
+
+  it("serves the queue in order, page by page, recording an impression for each card", async () => {
+    const w = await world()
+    for (let i = 0; i < 5; i++) await liveTalent(w, `paged-${i}`)
+    const { api } = await booker(w, "deck-next-paging")
+    const { sessionId } = await api.deck.start({ filters: w.filters })
+    const queued = await queuedIds(sessionId)
+
+    const first = await api.deck.next({ sessionId, limit: 3 })
+    const second = await api.deck.next({ sessionId, limit: 3 })
+    expect(first.cards.map((c) => c.position)).toEqual([0, 1, 2])
+    expect(second.cards.map((c) => c.position)).toEqual([3, 4])
+    expect([...first.cards, ...second.cards].map((c) => c.talent.profile.userId)).toEqual(queued)
+    expect(first.exhausted).toBe(false)
+    expect(second.exhausted).toBe(true)
+    expect(first.cards[0]!.reasons.map((r) => r.code)).toContain("quality")
+
+    const rows = await queue(sessionId)
+    expect(rows.every((r) => r.servedAt !== null)).toBe(true)
+    const impressions = await db
+      .select()
+      .from(schema.deckImpressions)
+      .where(eq(schema.deckImpressions.sessionId, sessionId))
+    expect(impressions.map((r) => r.position).sort()).toEqual([0, 1, 2, 3, 4])
+    const [exposure] = await db
+      .select()
+      .from(schema.talentExposureDaily)
+      .where(eq(schema.talentExposureDaily.talentId, queued[0]!))
+    expect(exposure!.impressions).toBe(1)
+  })
+
+  it("keeps paging the materialised order when scores change mid-session", async () => {
+    const w = await world()
+    for (let i = 0; i < 6; i++) await liveTalent(w, `stable-${i}`)
+    const { api } = await booker(w, "deck-next-stable")
+    const { sessionId } = await api.deck.start({ filters: w.filters })
+    const queued = await queuedIds(sessionId)
+
+    await api.deck.next({ sessionId, limit: 2 })
+    // The last-queued talent jumps to the top of any new ranking; this session must not notice.
+    await db
+      .update(schema.talentSearch)
+      .set({ qualityScore: "0" })
+      .where(eq(schema.talentSearch.talentId, queued[2]!))
+    const page = await api.deck.next({ sessionId, limit: 4 })
+    expect(page.cards.map((c) => c.talent.profile.userId)).toEqual(queued.slice(2))
+  })
+
+  it("refills from talent published after the session started, never repeating a card", async () => {
+    const w = await world()
+    const early = await liveTalent(w, "early")
+    const { api } = await booker(w, "deck-next-refill")
+    const { sessionId } = await api.deck.start({ filters: w.filters })
+    const late = await liveTalent(w, "late")
+
+    const page = await api.deck.next({ sessionId, limit: 5 })
+    expect(page.cards.map((c) => c.talent.profile.userId)).toEqual([early, late])
+    expect((await queue(sessionId)).map((r) => r.position)).toEqual([0, 1])
+    expect(await api.deck.next({ sessionId })).toMatchObject({ cards: [], exhausted: true })
+  })
+
+  it("on an over-filtered deck, suggests the filters to drop, ranked by what each unlocks", async () => {
+    const w = await world()
+    const experienced = await liveTalent(w, "experienced")
+    const reels = [await liveTalent(w, "reel-a"), await liveTalent(w, "reel-b")]
+    await db
+      .update(schema.talentSearch)
+      .set({ creditCount: 6 })
+      .where(eq(schema.talentSearch.talentId, experienced))
+    for (const id of reels) {
+      await db.update(schema.talentSearch).set({ hasShowreel: true }).where(eq(schema.talentSearch.talentId, id))
+    }
+    const { userId, api } = await booker(w, "deck-next-exhausted")
+    const roleId = await role(userId, { categoryId: w.categoryId })
+
+    const { sessionId, queued } = await api.deck.start({
+      roleId,
+      filters: { minCredits: 5, hasShowreel: true },
+    })
+    expect(queued).toBe(0)
+    expect(await api.deck.next({ sessionId })).toEqual({
+      cards: [],
+      exhausted: true,
+      suggestions: [
+        { filter: "minCredits", unlocks: 2 },
+        { filter: "hasShowreel", unlocks: 1 },
+      ],
+    })
+  })
+
+  it("skips a queued talent who went offline or blocked the booker mid-session", async () => {
+    const w = await world()
+    const unpublished = await liveTalent(w, "unpublished")
+    const blocker = await liveTalent(w, "blocker")
+    const kept = await liveTalent(w, "kept")
+    const { userId, api } = await booker(w, "deck-next-skips")
+    const { sessionId } = await api.deck.start({ filters: w.filters })
+
+    await db
+      .update(schema.talentProfiles)
+      .set({ status: "draft", publishedAt: null })
+      .where(eq(schema.talentProfiles.userId, unpublished))
+    await db.insert(schema.blocks).values({ blockerId: blocker, blockedId: userId })
+
+    const page = await api.deck.next({ sessionId })
+    expect(page.cards.map((c) => c.talent.profile.userId)).toEqual([kept])
+    expect(page.exhausted).toBe(true)
+    const impressions = await db
+      .select()
+      .from(schema.deckImpressions)
+      .where(and(eq(schema.deckImpressions.sessionId, sessionId)))
+    expect(impressions.map((r) => r.talentId)).toEqual([kept])
+  })
+
+  it("serves only the booker's own session", async () => {
+    const w = await world()
+    const owner = await booker(w, "deck-next-owner")
+    const { sessionId } = await owner.api.deck.start({ filters: w.filters })
+    const other = await booker(w, "deck-next-intruder")
+    await expect(other.api.deck.next({ sessionId })).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 })

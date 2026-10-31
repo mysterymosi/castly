@@ -41,6 +41,8 @@ const deckCode = {
   unknown_attribute: "BAD_REQUEST",
   sensitive_requires_brief: "BAD_REQUEST",
   attribute_filter_unavailable: "BAD_REQUEST",
+  session_not_found: "NOT_FOUND",
+  session_ended: "PRECONDITION_FAILED",
 } as const
 
 const projectCode = {

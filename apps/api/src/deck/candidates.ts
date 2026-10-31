@@ -47,6 +47,8 @@ export type CandidateScope = {
   bookerId: string
   roleId: string | null
   seed: number
+  /** On a refill: the session whose queued talents (served or not) stage 1 must skip. */
+  excludeQueuedIn?: string
   /** The booker's country (from their city); talents elsewhere are out of scope. */
   country: string | null
   /**
@@ -194,12 +196,8 @@ export async function resolveCandidateScope(
   }
 }
 
-/**
- * Stage 1 (TECH_SPEC §7.1) as one query over `talent_search`: the hard filters, best quality
- * first, ties broken by a session-seeded hash so two bookers in one vertical get different decks.
- * Returned unawaited so the measurement script can `EXPLAIN ANALYZE` the exact query.
- */
-export function candidateQuery(db: Reader, scope: CandidateScope) {
+/** Stage 1's hard filters as SQL, shared by the candidate query and its count. */
+function candidateConditions(db: Reader, scope: CandidateScope) {
   const ts = schema.talentSearch
   const swipes = schema.swipes
   const blocks = schema.blocks
@@ -246,8 +244,32 @@ export function candidateQuery(db: Reader, scope: CandidateScope) {
     not(exists(recentSwipe)),
     not(exists(blockedByBooker)),
     not(exists(blockedBooker)),
+    scope.excludeQueuedIn
+      ? not(
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(schema.deckQueue)
+              .where(
+                and(
+                  eq(schema.deckQueue.sessionId, scope.excludeQueuedIn),
+                  eq(schema.deckQueue.talentId, ts.talentId),
+                ),
+              ),
+          ),
+        )
+      : undefined,
   ]
+  return and(...conditions)
+}
 
+/**
+ * Stage 1 (TECH_SPEC §7.1) as one query over `talent_search`: the hard filters, best quality
+ * first, ties broken by a session-seeded hash so two bookers in one vertical get different decks.
+ * Returned unawaited so the measurement script can `EXPLAIN ANALYZE` the exact query.
+ */
+export function candidateQuery(db: Reader, scope: CandidateScope) {
+  const ts = schema.talentSearch
   return db
     .select({
       talentId: ts.talentId,
@@ -262,9 +284,18 @@ export function candidateQuery(db: Reader, scope: CandidateScope) {
       accentIds: ts.accentIds,
     })
     .from(ts)
-    .where(and(...conditions))
+    .where(candidateConditions(db, scope))
     .orderBy(desc(ts.qualityScore), sql`md5(${ts.talentId}::text || ${String(scope.seed)})`)
     .limit(CANDIDATE_LIMIT)
+}
+
+/** How many talents stage 1 would return for `scope`, uncapped. Exhaustion suggestions rank by it. */
+export async function countCandidates(db: Reader, scope: CandidateScope): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.talentSearch)
+    .where(candidateConditions(db, scope))
+  return row?.n ?? 0
 }
 
 /** Slug by id for a taxonomy-backed attribute, which role requirements name by slug. */

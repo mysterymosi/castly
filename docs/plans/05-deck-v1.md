@@ -66,7 +66,7 @@ Measure on 2GB Android, throttled 3G, against §25:
 - **Stage 2:** quality only, with a stable sort, so tied talents keep stage 1's seeded order. Replaced by 5.6.
 - **Stage 3:** passes the order through unchanged. Replaced by 5.7.
 
-5.5–5.7 replace these behind the same signatures. The mobile app still uses `deck.preview` until `deck.next` (5.8). Acceptance is covered by `deck/session.integration.test.ts`: seeds 1 and 2 give different first-10 decks from a 15-talent tied pool, and seed 1 replays exactly.
+5.5–5.7 replace these behind the same signatures. Since 5.8 the app uses `deck.start` + `deck.next`; `deck.preview` stays only for `measure:deck-payload`. Acceptance is covered by `deck/session.integration.test.ts`: seeds 1 and 2 give different first-10 decks from a 15-talent tied pool, and seed 1 replays exactly.
 
 Tables: `deck_sessions` (optional `role_id`, `goal_count`, `seed`), `deck_queue`, `swipes`, `deck_impressions`, `talent_exposure_daily`, `profile_views`.
 
@@ -181,7 +181,7 @@ The settings are `ranking_weights` keys with defaults in `DEFAULT_FAIRNESS_CONFI
 | `diversity_max_run` | 3 |
 | `diversity_window` | 20 |
 
-Exposure is read from `talent_exposure_daily`, which nothing writes yet. Impressions are recorded from 5.8, and the nightly roll-up into this table still needs building. Until then every talent counts as unseen, so there is no penalty, and exploration draws from the whole pool at random.
+Exposure is read from `talent_exposure_daily`, which `deck.next` (5.8) updates as it serves cards.
 
 Acceptance:
 - **Property tests** (`fairness.property.test.ts`):
@@ -198,6 +198,30 @@ After scoring: exposure penalty (7-day impressions above a percentile, proportio
 **Acceptance.** Property tests: exploration fraction met when eligible under-seen talents exist; sparse pool still returns enough cards (penalty does not empty the deck).
 
 ### 5.8 Stage 4 — queue, `deck.next`, impressions
+
+**Status:** Built. `deck.next({ sessionId, limit = 10 })` (`apps/api/src/deck/next.ts`) is a booker-only mutation, because serving a page writes. Each call is one transaction holding a lock on the session row, so two calls can't serve the same cards. In order, it:
+
+1. **Refills if needed.** If serving the page would leave fewer than 10 unserved cards, it re-runs stages 1–3 with the session's own role, filters and seed. Stage 1 skips everyone already in this session's queue, served or not, via `excludeQueuedIn`. The results are appended after the last position.
+2. **Serves the next page** in position order. It skips any queued talent who has since gone non-live, or who blocked or was blocked by the booker mid-session.
+3. **Records the serve.** It marks the rows `served_at` and writes a `deck_impressions` row for each card. It also adds the impression to today's `talent_exposure_daily` row in the same transaction. This differs from the spec, which has a nightly roll-up: the API has no job runner, and this keeps stage 3's exposure data current.
+
+Cards come back as `deckQueuedCardSchema`: the usual `DeckCard` plus `position` and the stored `reasons`, ready for 5.11. Impressions are recorded on serve, so a page counts as seen once fetched. `max_scroll_depth` and `dwell_ms` stay empty until the app reports them.
+
+**Exhaustion.** `exhausted` is true once nothing is left to serve, even after a refill. `suggestions` then lists each filter in the session whose removal would bring talent back, with how many it unlocks, sorted from most to fewest; filters that unlock no one are left out. Each count re-resolves the scope without that filter, so dropping `categoryIds` falls back to the vertical's categories, and skips everyone already queued. The deck is never padded with off-filter talent. The app has no filter UI until M8, so it doesn't show suggestions yet.
+
+**App.**
+- `useDeckSession` (`apps/mobile/src/deck/use-deck-session.ts`) opens the session and first page in a query that never refetches or retries on its own. It then asks for further pages through `SwipeDeck`'s `onNearEnd` once 5 cards remain.
+- `SwipeDeck` keeps each card's motion values when pages are appended. When the booker runs out of loaded cards, it shows "Finding more talent" while a page loads, an inline retry if loading failed, and the end screen only once the session is exhausted.
+- "Start over" opens a new session, and the screen keys the deck by session.
+
+Acceptance (`deck/session.integration.test.ts`, `describe("deck.next")`):
+- **Paging:** pages arrive in position order with no repeats, and impressions and exposure are recorded.
+- **Stable order:** a quality change mid-session doesn't change the order of the cards still to come.
+- **Refill:** a talent published after the session started arrives through a refill without repeating anyone.
+- **Exhaustion:** a role with `{ minCredits: 5, hasShowreel: true }` that matches nobody returns suggestions in order: `minCredits` (2) then `hasShowreel` (1).
+- **Serve-time skips and ownership:** both are covered.
+- **Latency:** `pnpm --filter api measure:deck-next` gives p95 76.6ms locally (`docs/plans/measurements.md`).
+- **On device:** checked on the iOS simulator, swiping to the end screen and starting over.
 
 `deck.next` reads the cursor. Record impression on serve. Refill when &lt; 10 unserved. Exhaustion payload lists filter relaxations ranked by how many results each unlocks.
 

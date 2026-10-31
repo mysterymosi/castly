@@ -79,9 +79,65 @@ export const deckSessionSchema = z.object({
   queued: z.number().int(),
 })
 
+/** One "why this card" entry, as scoring wrote it to `deck_queue` (`DeckReason` in core). */
+export const deckReasonSchema = z.object({
+  code: z.enum([
+    "vertical",
+    "geo",
+    "quality",
+    "freshness",
+    "responsiveness",
+    "role",
+    "raisedHand",
+    "boost",
+    "exposure",
+    "exploration",
+  ]),
+  contribution: z.number(),
+  detail: z.record(z.string(), z.union([z.string(), z.array(z.string())])).optional(),
+})
+
+/** A served card: the card itself plus its place in the session's queue and why it is there. */
+export const deckQueuedCardSchema = deckCardSchema.extend({
+  position: z.number().int(),
+  reasons: z.array(deckReasonSchema),
+})
+
+export const deckNextInput = z.object({
+  sessionId: z.uuid(),
+  limit: z.number().int().min(1).max(20).default(10),
+})
+
+/** The filters `deckFiltersSchema` holds that an exhausted deck may suggest dropping. */
+export const deckRelaxableFilterSchema = z.enum([
+  "categoryIds",
+  "cityIds",
+  "regions",
+  "skillIds",
+  "languageIds",
+  "accentIds",
+  "rateDayMax",
+  "hasShowreel",
+  "minCredits",
+])
+
+/**
+ * A page of the session's queue. `exhausted` means nothing is left to serve, even after a refill;
+ * `suggestions` then lists the filters whose removal would bring talent back, most first.
+ */
+export const deckPageSchema = z.object({
+  cards: z.array(deckQueuedCardSchema),
+  exhausted: z.boolean(),
+  suggestions: z.array(z.object({ filter: deckRelaxableFilterSchema, unlocks: z.number().int() })),
+})
+
 export type CategoryKind = z.infer<typeof categoryKindSchema>
 export type DeckDecision = z.infer<typeof deckDecisionSchema>
 export type DeckCard = z.infer<typeof deckCardSchema>
 export type DeckPreview = z.infer<typeof deckPreviewSchema>
 export type DeckSession = z.infer<typeof deckSessionSchema>
 export type DeckFilters = z.infer<typeof deckFiltersSchema>
+export type DeckReason = z.infer<typeof deckReasonSchema>
+export type DeckQueuedCard = z.infer<typeof deckQueuedCardSchema>
+export type DeckPage = z.infer<typeof deckPageSchema>
+export type DeckRelaxableFilter = z.infer<typeof deckRelaxableFilterSchema>

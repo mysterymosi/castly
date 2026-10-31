@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { bookerProfileStateSchema, deckPreviewSchema, type DeckCard } from "@workspace/schema"
+import { bookerProfileStateSchema, type DeckCard } from "@workspace/schema"
 import { useCallback, useEffect } from "react"
 import { Share, View } from "react-native"
 import { SafeAreaView } from "react-native-screens/experimental"
@@ -11,6 +11,7 @@ import { ErrorState, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
 import { DataSaverOffer, DataSaverToggle } from "@/deck/data-saver-controls"
 import { SwipeDeck } from "@/deck/swipe-deck"
+import { useDeckSession } from "@/deck/use-deck-session"
 import { useTokens } from "@/hooks/use-tokens"
 import { markDeckOpened } from "@/lib/measure"
 import { trpcQuery } from "@/trpc/query-client"
@@ -18,8 +19,8 @@ import { trpcQuery } from "@/trpc/query-client"
 const SITE_URL = (process.env.EXPO_PUBLIC_SITE_URL ?? "https://castly.app").replace(/\/$/, "")
 
 /**
- * The booker deck (M5). Cards come from the interim `deck.preview` until the ranked
- * `deck.start` / `deck.next` replace it; the card shape is the same.
+ * The booker deck (M5): a ranked session from `deck.start`, served a page at a time by
+ * `deck.next` as the booker swipes.
  */
 export default function DiscoverScreen() {
   const { me } = useSession()
@@ -33,18 +34,7 @@ export default function DiscoverScreen() {
     }),
   )
   const hasProfile = !!profileQuery.data?.profile
-  const deckQuery = useQuery(
-    trpcQuery.deck.preview.queryOptions(
-      { limit: 20 },
-      {
-        enabled: isBooker && hasProfile,
-        select: deckPreviewSchema.parse,
-        // A session's cards must not reshuffle under the booker when the app regains focus.
-        staleTime: Infinity,
-        refetchOnWindowFocus: false,
-      },
-    ),
-  )
+  const deck = useDeckSession(isBooker && hasProfile)
 
   // M5 5.9 records passes, interests and saves; for now a decision only advances the deck.
   const onDecision = useCallback(() => {}, [])
@@ -59,21 +49,21 @@ export default function DiscoverScreen() {
   if (profileQuery.data && !hasProfile) {
     return <FinishBookerProfile body="Tell us what kind of work you do so we know who to show you first." />
   }
-  const loadError = profileQuery.error ?? deckQuery.error
-  if (!deckQuery.data && loadError) {
+  const loadError = profileQuery.error ?? deck.error
+  if (!deck.cards && loadError) {
     return (
       <Screen edges={["top"]} contentClassName="justify-center">
         <ErrorState
           message={errorMessage(loadError, "Could not load talent")}
           onRetry={() => {
             void profileQuery.refetch()
-            void deckQuery.refetch()
+            deck.restart()
           }}
         />
       </Screen>
     )
   }
-  if (!deckQuery.data) return <LoadingState label="Loading talent" />
+  if (!deck.cards) return <LoadingState label="Loading talent" />
 
   // Full-bleed (no Screen padding): the card's width is the screen's, less the deck's own gutter.
   // Native tabs only inset the first ScrollView on iOS; the deck doesn't scroll, so this view
@@ -87,10 +77,14 @@ export default function DiscoverScreen() {
       </View>
       <DataSaverOffer />
       <SwipeDeck
-        cards={deckQuery.data.cards}
+        key={deck.sessionId}
+        cards={deck.cards}
+        exhausted={deck.exhausted}
+        loadMoreError={deck.loadMoreError ? errorMessage(deck.loadMoreError, "Could not load more talent") : null}
+        onNearEnd={deck.loadMore}
         onDecision={onDecision}
         onShare={onShare}
-        onRestart={() => void deckQuery.refetch()}
+        onRestart={deck.restart}
       />
     </SafeAreaView>
   )

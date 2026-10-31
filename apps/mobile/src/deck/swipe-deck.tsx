@@ -21,6 +21,7 @@ import { scheduleOnRN } from "react-native-worklets"
 import { Button } from "@/components/ui/button"
 import { Icon, type IconName } from "@/components/ui/icon"
 import { PressableScale } from "@/components/ui/pressable-scale"
+import { ErrorState, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
 import { cardId, DeckCard, DeckCardPreview } from "@/deck/deck-card"
 import { useDeckPrefetch } from "@/deck/prefetch"
@@ -36,6 +37,8 @@ const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
 const CARD_GUTTER = 12
 const ACTION_ROW_HEIGHT = 64
 const ACTION_ROW_GAP = 10
+/** Ask for the next page when this many cards are left: enough for the 5-card prefetch ahead. */
+const NEAR_END = 5
 
 /**
  * Both cards occupy the same slot, stacked. Positioning lives on a plain View; the Animated.View
@@ -54,6 +57,12 @@ type Props = {
   onDecision: (decision: DeckDecision, card: DeckCardData) => void
   onShare: (card: DeckCardData) => void
   onRestart: () => void
+  /** Called as the booker nears the last loaded card; the session loads its next page. */
+  onNearEnd?: () => void
+  /** Nothing more to serve: past the last card, show the end of the deck. */
+  exhausted?: boolean
+  /** The next page failed; past the last card, offer to retry instead of waiting. */
+  loadMoreError?: string | null
 }
 
 /**
@@ -72,17 +81,28 @@ type Props = {
  * offset across cards left the new top card a frame at the old one's off-screen position, which
  * flashed the card after it.
  */
-export function SwipeDeck({ cards, onDecision, onShare, onRestart }: Props) {
+export function SwipeDeck({
+  cards,
+  onDecision,
+  onShare,
+  onRestart,
+  onNearEnd,
+  exhausted = true,
+  loadMoreError = null,
+}: Props) {
   const reduceMotion = useReducedMotion()
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const [index, setIndex] = useState(0)
   const exiting = useRef(false)
-  // One offset per card, made with the list (cheap: two numbers each), so none is created or
-  // reset mid-swipe.
-  const motions = useMemo(
-    () => new Map<string, Motion>(cards.map((c) => [cardId(c), { x: makeMutable(0), y: makeMutable(0) }])),
-    [cards],
-  )
+  // One offset per card (cheap: two numbers each), kept for the life of the deck: a page that
+  // arrives mid-swipe adds offsets for its cards and never replaces the moving one.
+  const [motionStore] = useState(() => new Map<string, Motion>())
+  const motions = useMemo(() => {
+    for (const c of cards) {
+      if (!motionStore.has(cardId(c))) motionStore.set(cardId(c), { x: makeMutable(0), y: makeMutable(0) })
+    }
+    return motionStore
+  }, [cards, motionStore])
   const scrollMomentum = useSharedValue(false)
 
   const current = cards[index]
@@ -101,6 +121,10 @@ export function SwipeDeck({ cards, onDecision, onShare, onRestart }: Props) {
     exiting.current = false
     scrollMomentum.set(false)
   }, [index, scrollMomentum])
+
+  useEffect(() => {
+    if (cards.length - index <= NEAR_END) onNearEnd?.()
+  }, [cards.length, index, onNearEnd])
 
   // §25 timings (logged only when measuring): first card from Discover opening, and each
   // card-to-card transition from the moment the old card has left to the new one fully mounted.
@@ -187,18 +211,16 @@ export function SwipeDeck({ cards, onDecision, onShare, onRestart }: Props) {
             />
           </>
         ) : null}
-        {size && !current ? (
-          <DeckEnd
-            onRestart={() => {
-              // Every card left off-screen; nothing is mounted while this shows, so no frame races.
-              for (const motion of motions.values()) {
-                motion.x.set(0)
-                motion.y.set(0)
-              }
-              setIndex(0)
-              onRestart()
-            }}
-          />
+        {size && !current && !exhausted ? (
+          loadMoreError ? (
+            <ErrorState message={loadMoreError} onRetry={onNearEnd} />
+          ) : (
+            <LoadingState label="Finding more talent" />
+          )
+        ) : null}
+        {size && !current && exhausted ? (
+          // A restart opens a new session; the screen keys the deck by it, so it remounts fresh.
+          <DeckEnd onRestart={onRestart} />
         ) : null}
       </View>
     </View>
