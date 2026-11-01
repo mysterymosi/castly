@@ -92,6 +92,13 @@
       "when": 1793399222366,
       "tag": "0012_deck_candidate_filters",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793415113551,
+      "tag": "0013_deck_swipes_session",
+      "breakpoints": true
     }
   ]
 }

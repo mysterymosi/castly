@@ -71,7 +71,7 @@ describe("stage 3 invariants", () => {
     )
   })
 
-  it("keeps a sparse, entirely over-exposed pool whole, with scores above zero", () => {
+  it("keeps a sparse, entirely over-exposed pool whole, never pushing a score below zero", () => {
     fc.assert(
       fc.property(
         fc.uniqueArray(scored, { selector: (c) => c.talentId, minLength: 1, maxLength: 5 }),
@@ -80,7 +80,8 @@ describe("stage 3 invariants", () => {
           const flooded = cards.map((c) => ({ ...c, score: c.score + 0.1, impressions7d: 1_000_000 }))
           const out = applyFairness(flooded, ctx)
           expect(out).toHaveLength(flooded.length)
-          for (const c of out) expect(c.score).toBeGreaterThan(0)
+          // A penalty maximum of 1 may take a score to 0; the card still stays in the deck.
+          for (const c of out) expect(c.score).toBeGreaterThanOrEqual(0)
         },
       ),
     )

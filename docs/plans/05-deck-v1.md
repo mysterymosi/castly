@@ -185,7 +185,7 @@ Exposure is read from `talent_exposure_daily`, which `deck.next` (5.8) updates a
 
 Acceptance:
 - **Property tests** (`fairness.property.test.ts`):
-  - Every card comes back exactly once, including a sparse pool where every talent is over-exposed.
+  - Every card comes back exactly once, including a sparse pool where every talent is over-exposed, and no score goes below 0.
   - Exploration draws `min(slots, eligible)` talents, and by each reserved slot at least that many drawn talents have been placed.
   - Only talents from the lowest lifetime-impression share are promoted.
   - Reasons always sum to the score.
@@ -228,6 +228,61 @@ Acceptance (`deck/session.integration.test.ts`, `describe("deck.next")`):
 **Acceptance.** Paging is stable if quality scores change mid-session (queue is materialised). Exhaustion on an over-filtered role returns suggestions, not random padding. `deck.next` p95 &lt; 400ms.
 
 ### 5.9 Swipe, undo, shortlists
+
+**Status:** Built. Product decisions taken: "Save for later" always goes to Saved talent, whatever the role. A free booker gets `FREE_UNDO_LIMIT = 3` undos per session.
+
+**API** (`apps/api/src/deck/swipe.ts`). Each call holds the same session lock as `deck.next`.
+- **`deck.swipe({ sessionId, position, direction })`** decides on a card that has been served:
+  - **pass** records the swipe only. Stage 1 then hides the talent for that role, or for no role, for 30 days.
+  - **interest** adds the talent to the role's shortlist, or to Saved talent when there's no role. The list is created on first use and named after the role.
+  - **save** adds the talent to Saved talent.
+  - Each card can have one live decision per session: a unique partial index on `swipes (session_id, position)` where the swipe isn't undone. Interests also count into `talent_exposure_daily.interests`.
+- **`deck.undo({ sessionId })`** takes back the session's latest live swipe:
+  - It sets `undone_at`, so the swipe no longer hides the talent.
+  - It removes the shortlist entry only if this swipe created it and no other live swipe also put the talent there.
+  - It takes the interest back off the exposure count.
+  - It returns the card's position and talent, so the app steps back to it. The queue row stays served, because the card is still on the phone.
+- **`deck.setGoal({ sessionId, goalCount | null })`** sets or clears the goal. Swipe, undo and set-goal all return `goal: { target, shortlisted }`, where `shortlisted` counts the session's live interest swipes, and `undosLeft`.
+
+Migration `0013_deck_swipes_session` adds to `swipes`: `session_id`, `position`, `shortlist_id` and `entry_added`, the unique live index, and a `session_id` index for the foreign key.
+
+**Shortlists** (`apps/api/src/shortlist/`):
+- **`shortlist.list`:** Saved talent first, with each list's project and entry count.
+- **`shortlist.get`:** the list's entries.
+- **`shortlist.compare({ shortlistId, talentIds })`:** 2–4 talents from one list.
+
+- **`shortlist.remove({ shortlistId, talentId })`:** takes a talent off the list. The swipe that put them there stands, so they stay out of that role's deck, and a later undo of that swipe leaves the list alone.
+- **`shortlist.setNote({ shortlistId, talentId, note })`:** the booker's private note on an entry, trimmed and up to 500 characters. A blank note clears it.
+- **`shortlist.reorder({ shortlistId, talentIds })`:** the booker's order, top first, written to `shortlist_entries.rank`. Entries left out, and later right-swipes, are unranked and sort below it, newest first.
+
+These three are TECH_SPEC §6's `addNote` and `reorder` plus removal. No later milestone schedules them, so they were added here. Each returns the list's new detail. `shareLink` (the PRD's v1 read-only share link) is also unscheduled and not built yet.
+
+Entries and compared talents are deck cards built by `deckCard`. Talent data leaves the API only through `serializeTalent` (TECH_SPEC §6.1, which the guard test enforces), and compare therefore shows only what this booker may see. A talent who has gone offline stays on the list but isn't shown.
+
+**App:**
+- **Discover:**
+  - Each decision is sent to `deck.swipe`. Swipe, undo and goal calls are queued one at a time, so an undo can't overtake its swipe on the server.
+  - An Undo pill appears after a swipe while undos remain, and the deck slides the card back in.
+  - A goal chip reads "Set a goal" or "n of N shortlisted", and turns green when the goal is met.
+  - Opened from a role's "Find talent" button (`?roleId=&roleName=`), the deck casts for that role, shown by a "For <role>" chip that can be cleared.
+- **Projects:**
+  - A Shortlists list.
+  - A shortlist screen where you pick 2–4 talents to compare. Notes show under each talent. Edit mode gives each row up/down and remove buttons (with a confirm), and tapping a talent opens a note sheet.
+  - A compare table that scrolls sideways. Its rows are category, city, every visible attribute any of them has (height, playing age…), languages, accents, skills, credits, signature credit and day rate.
+
+Acceptance:
+- **`deck/swipe.integration.test.ts`:**
+  - A right-swipe for an active role puts Tunde on that role's shortlist.
+  - Save and a role-less interest both land on Saved talent.
+  - Pass hides the talent from that role's next deck.
+  - An unserved card is rejected, and so is a second decision on the same card.
+  - Undo removes the shortlist row, returns the position and frees the card, but keeps an entry another live swipe also made.
+  - Undos stop after 3 per session, and the goal progress is correct.
+  - Compare shows two talents' height, languages and credits, and refuses a talent who isn't on the list.
+  - Shortlists stay private to their booker.
+  - Remove, note (set, trim, clear) and reorder work, later saves land below the booker's order, and another booker can't edit the list.
+- **The fixtures** these tests share moved to `src/test/deck-fixtures.ts`.
+- **On the iOS simulator** (`.maestro/deck-shortlist.yaml`): Interested, Undo (the card returns), two Interested, a goal of 5 showing "2 of 5 shortlisted", Projects → Shortlists → Saved talent, selecting two, then Compare. `.maestro/shortlist-edit.yaml` (run after it): Edit, move down, add a note, remove with confirm, Done.
 
 Left = pass (role-scoped, 30-day decay). Right = interest **and** shortlist entry (role shortlist or general Saved talent). Save-for-later. Undo last swipe (limit for free bookers — use a constant; Pro unlimited in M10).
 

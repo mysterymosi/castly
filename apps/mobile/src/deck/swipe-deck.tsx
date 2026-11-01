@@ -1,6 +1,6 @@
 import type { DeckCard as DeckCardData } from "@workspace/schema"
 import { shadow } from "@workspace/ui-tokens"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react"
 import { View, type LayoutChangeEvent } from "react-native"
 import { Gesture, GestureDetector } from "react-native-gesture-handler"
 import Animated, {
@@ -48,6 +48,9 @@ const NEAR_END = 5
  */
 const cardSlot = { position: "absolute", left: CARD_GUTTER, top: 0 } as const
 
+/** Lets the screen step the deck back after the server confirms an undo. */
+export type SwipeDeckHandle = { stepBackTo: (talentId: string) => void }
+
 /** A card's drag offset. Each card owns one, so the card that takes the top starts at rest. */
 type Motion = { x: SharedValue<number>; y: SharedValue<number> }
 
@@ -63,6 +66,7 @@ type Props = {
   exhausted?: boolean
   /** The next page failed; past the last card, offer to retry instead of waiting. */
   loadMoreError?: string | null
+  ref?: Ref<SwipeDeckHandle>
 }
 
 /**
@@ -89,6 +93,7 @@ export function SwipeDeck({
   onNearEnd,
   exhausted = true,
   loadMoreError = null,
+  ref,
 }: Props) {
   const reduceMotion = useReducedMotion()
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
@@ -125,6 +130,25 @@ export function SwipeDeck({
   useEffect(() => {
     if (cards.length - index <= NEAR_END) onNearEnd?.()
   }, [cards.length, index, onNearEnd])
+
+  // Undo: the card comes back on top and slides home from wherever it left.
+  useImperativeHandle(
+    ref,
+    () => ({
+      stepBackTo(talentId) {
+        const back = cards.findIndex((c) => cardId(c) === talentId)
+        if (back < 0 || back >= index) return
+        const motion = motions.get(talentId)
+        if (motion) {
+          const settle = { duration: reduceMotion ? 0 : 320, dampingRatio: 0.85 }
+          motion.x.set(withSpring(0, settle))
+          motion.y.set(withSpring(0, settle))
+        }
+        setIndex(back)
+      },
+    }),
+    [cards, index, motions, reduceMotion],
+  )
 
   // §25 timings (logged only when measuring): first card from Discover opening, and each
   // card-to-card transition from the moment the old card has left to the new one fully mounted.

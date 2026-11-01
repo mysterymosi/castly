@@ -77,6 +77,8 @@ export const deckSessionSchema = z.object({
   roleId: z.uuid().nullable(),
   goalCount: z.number().int().nullable(),
   queued: z.number().int(),
+  /** Undos allowed this session; null when unlimited (Pro, M10). */
+  undosLeft: z.number().int().nullable(),
 })
 
 /** One "why this card" entry, as scoring wrote it to `deck_queue` (`DeckReason` in core). */
@@ -141,3 +143,46 @@ export type DeckReason = z.infer<typeof deckReasonSchema>
 export type DeckQueuedCard = z.infer<typeof deckQueuedCardSchema>
 export type DeckPage = z.infer<typeof deckPageSchema>
 export type DeckRelaxableFilter = z.infer<typeof deckRelaxableFilterSchema>
+
+/** A session's goal and progress: talents shortlisted (live interest swipes) against the target. */
+export const deckGoalSchema = z.object({
+  target: z.number().int().nullable(),
+  shortlisted: z.number().int(),
+})
+
+export const deckSwipeDirectionSchema = z.enum(["pass", "interest", "save"])
+
+/** A decision on a served card, by its queue position. */
+export const deckSwipeInput = z.object({
+  sessionId: z.uuid(),
+  position: z.number().int().min(0),
+  direction: deckSwipeDirectionSchema,
+})
+
+export const deckSwipeResultSchema = z.object({
+  /** The shortlist the talent landed on: the role's (interest), Saved talent (save, or no role). */
+  shortlistId: z.uuid().nullable(),
+  goal: deckGoalSchema,
+  /** Undos left this session; null when unlimited (Pro, M10). */
+  undosLeft: z.number().int().nullable(),
+})
+
+export const deckSessionInput = z.object({ sessionId: z.uuid() })
+
+/** The undone card's position, so the deck steps back to it. */
+export const deckUndoResultSchema = z.object({
+  position: z.number().int(),
+  talentId: z.uuid(),
+  goal: deckGoalSchema,
+  undosLeft: z.number().int().nullable(),
+})
+
+export const deckSetGoalInput = z.object({
+  sessionId: z.uuid(),
+  goalCount: z.number().int().min(1).max(500).nullable(),
+})
+
+export type DeckGoal = z.infer<typeof deckGoalSchema>
+export type DeckSwipeDirection = z.infer<typeof deckSwipeDirectionSchema>
+export type DeckSwipeResult = z.infer<typeof deckSwipeResultSchema>
+export type DeckUndoResult = z.infer<typeof deckUndoResultSchema>

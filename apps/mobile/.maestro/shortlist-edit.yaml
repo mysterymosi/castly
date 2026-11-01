@@ -1,0 +1,40 @@
+# Edit a shortlist: reorder, add a note, remove a talent. Run after deck-shortlist.yaml, which
+# leaves at least two talents on Saved talent.
+appId: com.okimmosi.mobile
+---
+- launchApp
+- tapOn: "Projects"
+- tapOn: "Shortlists.*"
+- tapOn: "Saved talent.*"
+- extendedWaitUntil:
+    visible:
+      id: "shortlist-entry-1"
+    timeout: 10000
+- tapOn:
+    id: "shortlist-edit"
+- takeScreenshot: 1-edit-mode
+- tapOn:
+    text: "Move .* down"
+    index: 0
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 2-reordered
+- tapOn:
+    id: "shortlist-entry-0"
+- tapOn:
+    id: "shortlist-note-input"
+- inputText: "Callback for March"
+- tapOn: "Save note"
+- extendedWaitUntil:
+    visible: ".*Note: Callback for March.*"
+    timeout: 10000
+- takeScreenshot: 3-noted
+- tapOn:
+    text: "Remove .*"
+    index: 1
+- tapOn: "Remove"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 4-removed
+- tapOn: "Done"
+- takeScreenshot: 5-done

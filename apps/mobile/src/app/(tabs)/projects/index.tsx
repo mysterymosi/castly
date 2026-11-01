@@ -104,6 +104,23 @@ export default function ProjectsScreen() {
           onPress={() => router.push("/projects/new")}
         />
       </View>
+      <PressableCard
+        accessibilityRole="button"
+        accessibilityLabel="Shortlists: Saved talent and each role's picks"
+        onPress={() => router.push("/projects/shortlists")}
+        className="flex-row items-center gap-3"
+      >
+        <View className="h-11 w-11 items-center justify-center rounded-pill bg-surfaceMuted">
+          <Icon name="bookmark" size={20} />
+        </View>
+        <View className="flex-1 gap-0.5">
+          <Text variant="body-strong">Shortlists</Text>
+          <Text variant="footnote" tone="muted">
+            Saved talent and each role’s picks
+          </Text>
+        </View>
+        <Icon name="chevron-right" size={18} tone="textMuted" />
+      </PressableCard>
       {loaded.projects.length === 0 ? (
         <EmptyState
           icon="film"

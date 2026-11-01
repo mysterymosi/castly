@@ -9,6 +9,7 @@ import type { z } from "zod"
 import { generateCandidates, resolveCandidateScope, type CandidateScope, type Reader } from "./candidates.js"
 import { exposureThreshold } from "./exposure.js"
 import { loadRankingConfig } from "./ranking-weights.js"
+import { FREE_UNDO_LIMIT } from "./swipe.js"
 
 /** A fresh session seed; Postgres `integer`. */
 export function newSeed() {
@@ -68,6 +69,7 @@ export async function startDeck(
       roleId: input.roleId,
       goalCount: input.goalCount,
       queued: ranked.length,
+      undosLeft: FREE_UNDO_LIMIT,
     }
   })
 }

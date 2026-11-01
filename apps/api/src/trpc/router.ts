@@ -14,6 +14,7 @@ import { bookerRouter } from "../booker/router.js"
 import { deckRouter } from "../deck/router.js"
 import { mediaRouter } from "../media/router.js"
 import { projectRouter, roleRouter } from "../project/router.js"
+import { shortlistRouter } from "../shortlist/router.js"
 import { talentRouter } from "../talent/router.js"
 import { assertAdult } from "../auth/age.js"
 import { otpLimiter } from "../auth/rate-limit.js"
@@ -127,6 +128,7 @@ export const appRouter = router({
   admin: adminRouter,
   booker: bookerRouter,
   deck: deckRouter,
+  shortlist: shortlistRouter,
   media: mediaRouter,
   project: projectRouter,
   role: roleRouter,

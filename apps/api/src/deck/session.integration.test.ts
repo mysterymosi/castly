@@ -1,153 +1,30 @@
-import { randomUUID } from "node:crypto"
-
 import { schema } from "@workspace/db"
-import { and, asc, eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { db } from "../db.js"
-import { deleteAuthUser, seedAuthUser } from "../test/seed-auth-user.js"
-import { createContext } from "../trpc/context.js"
-import { appRouter } from "../trpc/router.js"
-import { clearExposureThresholdCache } from "./exposure.js"
+import {
+  booker,
+  caller,
+  category,
+  city,
+  cleanupDeckFixtures,
+  createdLanguageIds,
+  createdWeightKeys,
+  daysAgo,
+  liveTalent,
+  newUser,
+  queue,
+  queuedIds,
+  role,
+  tag,
+  world,
+} from "../test/deck-fixtures.js"
 import { clearRankingWeightsCache } from "./ranking-weights.js"
 import { startDeck } from "./session.js"
 
-const adult = "1990-01-01"
-const seededUserIds: string[] = []
-const createdCityIds: string[] = []
-const createdCategoryIds: string[] = []
-const createdLanguageIds: string[] = []
-const createdWeightKeys: string[] = []
-
-const tag = () => randomUUID().slice(0, 8)
-const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000)
-
-function caller(userId: string) {
-  const request = new Request("http://api.test/trpc", {
-    headers: { authorization: "Bearer test-token", "x-forwarded-for": "203.0.113.97" },
-  })
-  return appRouter.createCaller({ ...createContext(request), verifyAccessToken: async () => ({ userId }) })
-}
-
-async function newUser(label: string) {
-  const userId = await seedAuthUser(label, adult)
-  seededUserIds.push(userId)
-  return userId
-}
-
-async function city(country = "NG") {
-  const [row] = await db
-    .insert(schema.cities)
-    .values({ slug: `deck-session-city-${tag()}`, name: "Lagos", country })
-    .returning({ id: schema.cities.id })
-  createdCityIds.push(row!.id)
-  return row!.id
-}
-
-async function category() {
-  const [row] = await db
-    .insert(schema.categories)
-    .values({ slug: `deck-session-cat-${tag()}`, name: "Actors", kind: "on_camera" })
-    .returning({ id: schema.categories.id })
-  createdCategoryIds.push(row!.id)
-  return row!.id
-}
-
-/**
- * A Nigerian city and a category of the test's own. Decks filter on that category, so only
- * talents this test made can appear, whatever else the database holds.
- */
-async function world() {
-  const cityId = await city()
-  const categoryId = await category()
-  return { cityId, categoryId, filters: { categoryIds: [categoryId] } }
-}
-
-type World = Awaited<ReturnType<typeof world>>
-
-/** A booker with a finished profile in the world's city. */
-async function booker(w: World, label: string, vertical: "casting_director" | "other" = "casting_director") {
-  const userId = await newUser(label)
-  const api = caller(userId)
-  await api.auth.enableMode({ mode: "booker" })
-  await api.booker.updateProfile({
-    vertical,
-    companyName: null,
-    cityId: w.cityId,
-    typicalProjectTypes: ["film"],
-  })
-  return { userId, api }
-}
-
-/**
- * A live talent, inserted directly: the deck reads `talent_search`, which the profile and
- * category triggers fill. Quality is the search-scores job's column, set here as a fixture —
- * the same score for every talent, so only the session seed orders them.
- */
-async function liveTalent(
-  w: World,
-  label: string,
-  { cityId = w.cityId, categoryId = w.categoryId }: { cityId?: string; categoryId?: string } = {},
-) {
-  const userId = await newUser(label)
-  await db.insert(schema.talentProfiles).values({
-    userId,
-    slug: `deck-${label}-${tag()}`,
-    displayName: label,
-    cityId,
-    status: "live",
-    publishedAt: new Date(),
-  })
-  await db.insert(schema.talentCategories).values({ talentId: userId, categoryId, isPrimary: true })
-  await db
-    .update(schema.talentSearch)
-    .set({ qualityScore: "100" })
-    .where(eq(schema.talentSearch.talentId, userId))
-  return userId
-}
-
-async function role(bookerId: string, fields: { categoryId?: string; brief?: string } = {}) {
-  const [project] = await db
-    .insert(schema.projects)
-    .values({ bookerId, name: "Lagos Nights" })
-    .returning({ id: schema.projects.id })
-  const [row] = await db
-    .insert(schema.roles)
-    .values({ projectId: project!.id, name: "Lead", ...fields })
-    .returning({ id: schema.roles.id })
-  return row!.id
-}
-
-async function queue(sessionId: string) {
-  return db
-    .select()
-    .from(schema.deckQueue)
-    .where(eq(schema.deckQueue.sessionId, sessionId))
-    .orderBy(asc(schema.deckQueue.position))
-}
-
-async function queuedIds(sessionId: string) {
-  return (await queue(sessionId)).map((row) => row.talentId)
-}
-
 describe("deck.start", () => {
-  afterEach(async () => {
-    for (const id of seededUserIds.splice(0)) await deleteAuthUser(id)
-    for (const id of createdLanguageIds.splice(0)) {
-      await db.delete(schema.languages).where(eq(schema.languages.id, id))
-    }
-    for (const key of createdWeightKeys.splice(0)) {
-      await db.delete(schema.rankingWeights).where(eq(schema.rankingWeights.key, key))
-    }
-    clearRankingWeightsCache()
-    clearExposureThresholdCache()
-    for (const id of createdCategoryIds.splice(0)) {
-      await db.delete(schema.categories).where(eq(schema.categories.id, id))
-    }
-    for (const id of createdCityIds.splice(0)) {
-      await db.delete(schema.cities).where(eq(schema.cities.id, id))
-    }
-  })
+  afterEach(cleanupDeckFixtures)
 
   it("materialises a ranked queue and keeps the session's filters", async () => {
     const w = await world()
@@ -391,7 +268,6 @@ describe("deck.start", () => {
     await db.insert(schema.rankingWeights).values({ key: "w_quality", value: "0" })
     createdWeightKeys.push("w_quality")
     clearRankingWeightsCache()
-    clearExposureThresholdCache()
 
     const [row] = await queue((await api.deck.start({ filters: w.filters })).sessionId)
     expect(row!.score).toBe("0.6000")
@@ -424,17 +300,7 @@ describe("deck.start", () => {
 })
 
 describe("deck.next", () => {
-  afterEach(async () => {
-    for (const id of seededUserIds.splice(0)) await deleteAuthUser(id)
-    for (const id of createdCategoryIds.splice(0)) {
-      await db.delete(schema.categories).where(eq(schema.categories.id, id))
-    }
-    for (const id of createdCityIds.splice(0)) {
-      await db.delete(schema.cities).where(eq(schema.cities.id, id))
-    }
-    clearRankingWeightsCache()
-    clearExposureThresholdCache()
-  })
+  afterEach(cleanupDeckFixtures)
 
   it("serves the queue in order, page by page, recording an impression for each card", async () => {
     const w = await world()

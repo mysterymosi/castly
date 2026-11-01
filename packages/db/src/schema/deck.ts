@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm"
 import {
+  boolean,
   check,
   date,
   index,
@@ -10,10 +11,11 @@ import {
   pgTable,
   primaryKey,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core"
 
-import { bookerProfiles, roles } from "./booker.js"
+import { bookerProfiles, roles, shortlists } from "./booker.js"
 import { primaryUuid, timestamptz } from "./columns.js"
 import { users } from "./identity.js"
 import { talentProfiles } from "./talent.js"
@@ -93,7 +95,9 @@ export const deckQueue = pgTable(
 
 /**
  * Every deck decision. Passes are role-scoped and decay after 30 days (stage 1); an undone swipe
- * keeps its row with `undone_at` set.
+ * keeps its row with `undone_at` set. A deck swipe names its session and queue position, so undo
+ * can step back to the card; `shortlist_id` / `entry_added` record what it put on a shortlist,
+ * so undo removes only an entry this swipe created.
  */
 export const swipes = pgTable(
   "swipes",
@@ -108,10 +112,22 @@ export const swipes = pgTable(
     roleId: uuid("role_id").references(() => roles.id, { onDelete: "cascade" }),
     direction: swipeDirection("direction").notNull(),
     source: swipeSource("source").notNull().default("deck"),
+    sessionId: uuid("session_id").references(() => deckSessions.id, { onDelete: "set null" }),
+    position: integer("position"),
+    shortlistId: uuid("shortlist_id").references(() => shortlists.id, { onDelete: "set null" }),
+    entryAdded: boolean("entry_added").notNull().default(false),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     undoneAt: timestamptz("undone_at"),
   },
   (table) => [
+    // One live decision per card in a session; an undone swipe frees the card for another.
+    uniqueIndex("swipes_session_position_live_uidx")
+      .on(table.sessionId, table.position)
+      .where(sql`${table.sessionId} IS NOT NULL AND ${table.undoneAt} IS NULL`),
+    // The partial index above can't serve the session foreign key; this one can.
+    index("swipes_session_id_idx").on(table.sessionId),
+    index("swipes_shortlist_id_idx").on(table.shortlistId),
+    check("swipes_session_has_position", sql`${table.sessionId} IS NULL OR ${table.position} IS NOT NULL`),
     // Stage 1's decay check and undo: a booker's recent swipes, per role.
     index("swipes_booker_role_created_idx").on(table.bookerId, table.roleId, table.createdAt.desc()),
     index("swipes_talent_id_idx").on(table.talentId),

@@ -63,6 +63,17 @@ function RoleCard({ role, editable }: { role: Role; editable: boolean }) {
           ))}
         </View>
       ) : null}
+      {editable ? (
+        <Button
+          label="Find talent"
+          icon="layers"
+          size="md"
+          variant="secondary"
+          accessibilityLabel={`Find talent for ${role.name}`}
+          onPress={() => router.navigate({ pathname: "/discover", params: { roleId: role.id, roleName: role.name } })}
+          className="mt-2 self-start"
+        />
+      ) : null}
     </PressableCard>
   )
 }

@@ -35,6 +35,8 @@ const bookerCode = {
   unknown_city: "BAD_REQUEST",
   profile_required: "PRECONDITION_FAILED",
   unknown_category: "BAD_REQUEST",
+  shortlist_not_found: "NOT_FOUND",
+  not_on_shortlist: "BAD_REQUEST",
 } as const
 
 const deckCode = {
@@ -43,6 +45,10 @@ const deckCode = {
   attribute_filter_unavailable: "BAD_REQUEST",
   session_not_found: "NOT_FOUND",
   session_ended: "PRECONDITION_FAILED",
+  card_not_served: "BAD_REQUEST",
+  already_decided: "CONFLICT",
+  undo_limit: "FORBIDDEN",
+  nothing_to_undo: "PRECONDITION_FAILED",
 } as const
 
 const projectCode = {

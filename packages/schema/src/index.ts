@@ -9,6 +9,7 @@ export * from "./booker"
 export * from "./project"
 export * from "./attributes"
 export * from "./deck"
+export * from "./shortlist"
 
 export const healthSchema = z.object({
   ok: z.literal(true),
