@@ -1,10 +1,12 @@
 import { TRPCError } from "@trpc/server"
 import { PortfolioSectionValidationError } from "@workspace/schema"
 
+import { AdminError } from "../admin/errors.js"
 import { InvalidDateOfBirth, UnderageError } from "../auth/age.js"
 import { OtpRateLimited } from "../auth/rate-limit.js"
 import { AuthRejected, OtpDeliveryFailed } from "../auth/supabase.js"
 import { BookerError } from "../booker/errors.js"
+import { DeckError } from "../deck/errors.js"
 import { MediaError } from "../media/errors.js"
 import { ProjectError } from "../project/errors.js"
 import { StudioError } from "../talent/errors.js"
@@ -34,6 +36,25 @@ const bookerCode = {
   unknown_city: "BAD_REQUEST",
   profile_required: "PRECONDITION_FAILED",
   unknown_category: "BAD_REQUEST",
+  shortlist_not_found: "NOT_FOUND",
+  not_on_shortlist: "BAD_REQUEST",
+} as const
+
+const deckCode = {
+  unknown_attribute: "BAD_REQUEST",
+  sensitive_requires_brief: "BAD_REQUEST",
+  attribute_filter_unavailable: "BAD_REQUEST",
+  session_not_found: "NOT_FOUND",
+  session_ended: "PRECONDITION_FAILED",
+  card_not_served: "BAD_REQUEST",
+  already_decided: "CONFLICT",
+  undo_limit: "FORBIDDEN",
+  nothing_to_undo: "PRECONDITION_FAILED",
+} as const
+
+const adminCode = {
+  booker_not_found: "NOT_FOUND",
+  invalid_ranking_setting: "BAD_REQUEST",
 } as const
 
 const projectCode = {
@@ -66,6 +87,20 @@ export function throwTrpc(error: unknown): never {
   if (error instanceof ProjectError) {
     throw new TRPCError({
       code: projectCode[error.code],
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof AdminError) {
+    throw new TRPCError({
+      code: adminCode[error.code],
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof DeckError) {
+    throw new TRPCError({
+      code: deckCode[error.code],
       message: error.message,
       cause: error,
     })

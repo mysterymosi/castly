@@ -6,51 +6,17 @@ import {
   type ProjectSummary,
 } from "@workspace/schema"
 import { router } from "expo-router"
-import { useState } from "react"
 import { View } from "react-native"
 
-import { authApi } from "@/auth/client"
 import { errorMessage, useSession } from "@/auth/session-provider"
+import { EnableBooker, FinishBookerProfile } from "@/booker/booker-gate"
 import { Button } from "@/components/ui/button"
 import { PressableCard } from "@/components/ui/card"
 import { Icon } from "@/components/ui/icon"
 import { Screen } from "@/components/ui/screen"
-import { EmptyState, ErrorState, InlineError, LoadingState } from "@/components/ui/states"
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
-import { queryClient, trpcQuery } from "@/trpc/query-client"
-
-function EnableBooker() {
-  const { refreshMe } = useSession()
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function enable() {
-    setPending(true)
-    setError(null)
-    try {
-      await authApi.enableMode("booker")
-      await refreshMe()
-      await queryClient.invalidateQueries(trpcQuery.booker.pathFilter())
-      router.push("/booker-setup")
-    } catch (caught) {
-      setError(errorMessage(caught, "Could not enable booker mode"))
-    } finally {
-      setPending(false)
-    }
-  }
-
-  return (
-    <Screen edges={["top"]} contentClassName="justify-center">
-      <EmptyState
-        icon="briefcase"
-        title="Turn on booker mode"
-        body="Projects hold the roles you're casting, each with a written brief."
-      />
-      <Button label="Enable booker mode" loading={pending} onPress={enable} className="mx-6" />
-      {error ? <InlineError message={error} className="mx-6 mt-4" /> : null}
-    </Screen>
-  )
-}
+import { trpcQuery } from "@/trpc/query-client"
 
 function ProjectRow({ project }: { project: ProjectSummary }) {
   const meta = [
@@ -98,7 +64,9 @@ export default function ProjectsScreen() {
     ),
   )
 
-  if (!isBooker) return <EnableBooker />
+  if (!isBooker) {
+    return <EnableBooker body="Projects hold the roles you're casting, each with a written brief." />
+  }
 
   const loaded =
     profileQuery.data && listQuery.data
@@ -121,17 +89,7 @@ export default function ProjectsScreen() {
   if (!loaded) return <LoadingState label="Loading projects" />
 
   if (!loaded.hasProfile) {
-    return (
-      <Screen edges={["top"]} contentClassName="justify-center">
-        <EmptyState
-          icon="briefcase"
-          title="Finish your booker profile"
-          body="Tell us what kind of work you do before you start a project."
-          actionLabel="Set up booker profile"
-          onAction={() => router.push("/booker-setup")}
-        />
-      </Screen>
-    )
+    return <FinishBookerProfile body="Tell us what kind of work you do before you start a project." />
   }
 
   return (
@@ -146,6 +104,23 @@ export default function ProjectsScreen() {
           onPress={() => router.push("/projects/new")}
         />
       </View>
+      <PressableCard
+        accessibilityRole="button"
+        accessibilityLabel="Shortlists: Saved talent and each role's picks"
+        onPress={() => router.push("/projects/shortlists")}
+        className="flex-row items-center gap-3"
+      >
+        <View className="h-11 w-11 items-center justify-center rounded-pill bg-surfaceMuted">
+          <Icon name="bookmark" size={20} />
+        </View>
+        <View className="flex-1 gap-0.5">
+          <Text variant="body-strong">Shortlists</Text>
+          <Text variant="footnote" tone="muted">
+            Saved talent and each role’s picks
+          </Text>
+        </View>
+        <Icon name="chevron-right" size={18} tone="textMuted" />
+      </PressableCard>
       {loaded.projects.length === 0 ? (
         <EmptyState
           icon="film"

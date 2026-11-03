@@ -78,6 +78,27 @@
       "when": 1793144088482,
       "tag": "0010_vertical_category_weights",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793396514683,
+      "tag": "0011_deck_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793399222366,
+      "tag": "0012_deck_candidate_filters",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793415113551,
+      "tag": "0013_deck_swipes_session",
+      "breakpoints": true
     }
   ]
 }

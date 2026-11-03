@@ -1,0 +1,62 @@
+# Swipe → undo → goal → shortlist → compare (M5 5.9). Needs a signed-in booker with a finished
+# booker profile and at least three live talents in their deck (`pnpm --filter api seed:deck`).
+# Interested swipes without a role land on Saved talent, so the compare step reads that list.
+#   maestro test apps/mobile/.maestro/deck-shortlist.yaml
+appId: com.okimmosi.mobile
+---
+- launchApp
+- tapOn: "Discover"
+- extendedWaitUntil:
+    visible:
+      id: "deck-card-0"
+    timeout: 20000
+- tapOn: "Interested"
+- extendedWaitUntil:
+    visible:
+      id: "deck-card-1"
+    timeout: 5000
+- extendedWaitUntil:
+    visible: "Undo last swipe.*"
+    timeout: 5000
+- takeScreenshot: 1-after-interest
+- tapOn: "Undo last swipe.*"
+- extendedWaitUntil:
+    visible:
+      id: "deck-card-0"
+    timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 2-after-undo
+- tapOn: "Interested"
+- extendedWaitUntil:
+    visible:
+      id: "deck-card-1"
+    timeout: 5000
+- tapOn: "Interested"
+- extendedWaitUntil:
+    visible:
+      id: "deck-card-2"
+    timeout: 5000
+- tapOn: "Set a session goal"
+- tapOn: "Shortlist 5"
+- extendedWaitUntil:
+    visible: "2 of 5 shortlisted.*"
+    timeout: 5000
+- takeScreenshot: 3-goal
+- tapOn: "Projects"
+- tapOn: "Shortlists.*"
+- tapOn: "Saved talent.*"
+- extendedWaitUntil:
+    visible:
+      id: "shortlist-entry-1"
+    timeout: 10000
+- tapOn:
+    id: "shortlist-entry-0"
+- tapOn:
+    id: "shortlist-entry-1"
+- takeScreenshot: 4-shortlist
+- tapOn: "Compare 2"
+- extendedWaitUntil:
+    visible: "Languages.*"
+    timeout: 10000
+- takeScreenshot: 5-compare

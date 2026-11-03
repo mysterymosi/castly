@@ -1,0 +1,56 @@
+# Discover deck smoke flow (M5 5.1). Needs a signed-in booker with a finished booker profile and
+# at least five live talents (`pnpm --filter api seed:deck -- <donor-email>`). Cards are matched
+# by deck position (`deck-card-N`), not names, so it works whatever talents are live.
+#   maestro test apps/mobile/.maestro/discover-deck.yaml
+appId: com.okimmosi.mobile
+---
+- launchApp:
+    clearState: false
+- tapOn: "Discover"
+- extendedWaitUntil:
+    visible:
+      id: "deck-card-0"
+    timeout: 15000
+- takeScreenshot: discover-1-loaded
+# A vertical drag scrolls the card; it must not swipe it away.
+- swipe:
+    start: 50%, 70%
+    end: 50%, 30%
+    duration: 600
+- takeScreenshot: discover-2-scrolled
+- assertVisible:
+    id: "deck-card-0"
+# A horizontal drag from mid-portfolio swipes: no need to scroll back to the top first.
+- swipe:
+    start: 75%, 45%
+    end: 10%, 45%
+    duration: 300
+- extendedWaitUntil:
+    visible:
+      id: "deck-card-1"
+    timeout: 5000
+- takeScreenshot: discover-3-after-swipe-left
+# Every card that takes the top must swipe, not only the first.
+- swipe:
+    start: 25%, 45%
+    end: 90%, 45%
+    duration: 300
+- extendedWaitUntil:
+    visible:
+      id: "deck-card-2"
+    timeout: 5000
+- tapOn: "Interested"
+- extendedWaitUntil:
+    visible:
+      id: "deck-card-3"
+    timeout: 5000
+- takeScreenshot: discover-4-after-interested
+# A swipe still works after a button decision.
+- swipe:
+    start: 75%, 45%
+    end: 10%, 45%
+    duration: 300
+- extendedWaitUntil:
+    visible:
+      id: "deck-card-4"
+    timeout: 5000

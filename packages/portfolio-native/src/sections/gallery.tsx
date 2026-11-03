@@ -1,8 +1,8 @@
-import { Text, View } from "react-native"
+import { Pressable, Text, View } from "react-native"
 
 import { CARD_WIDTH, SECTION_HORIZONTAL_PADDING, SECTION_TITLE_HEIGHT } from "../constants"
 import { galleryTileHeight } from "../layout"
-import { SectionImage } from "../media"
+import { SectionImage, useOpenGalleryImage } from "../media"
 import { SectionShell, SectionTitle } from "../section-shell"
 import type { CoreSectionConfigMap, NativeSectionRenderer, SectionMediaMeta } from "../types"
 
@@ -22,6 +22,7 @@ function GallerySection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config:
   const ids = config.mediaIds ?? []
   const tileW = (cardWidth - SECTION_HORIZONTAL_PADDING * 2 - GAP) / 2
   const tileH = ids[0] ? galleryTileHeight(cardWidth, mediaMeta, ids[0]) : 120
+  const openImage = useOpenGalleryImage()
   return (
     <SectionShell cardWidth={cardWidth}>
       <SectionTitle>Gallery</SectionTitle>
@@ -31,16 +32,31 @@ function GallerySection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config:
         </Text>
       ) : (
         <View className="flex-row flex-wrap gap-2">
-          {ids.map((id) => (
-            <SectionImage
-              key={id}
-              mediaId={id}
-              mediaMeta={mediaMeta}
-              width={tileW}
-              height={tileH}
-              className="rounded-md"
-            />
-          ))}
+          {ids.map((id, i) => {
+            const tile = (
+              <SectionImage
+                key={id}
+                mediaId={id}
+                mediaMeta={mediaMeta}
+                width={tileW}
+                height={tileH}
+                className="rounded-md"
+              />
+            )
+            return openImage ? (
+              <Pressable
+                key={id}
+                accessibilityRole="imagebutton"
+                accessibilityLabel={`Photo ${i + 1} of ${ids.length}`}
+                onPress={() => openImage(ids, i)}
+                className="active:opacity-80"
+              >
+                {tile}
+              </Pressable>
+            ) : (
+              tile
+            )
+          })}
         </View>
       )}
     </SectionShell>

@@ -1,0 +1,98 @@
+[
+  {
+    "talent": "kemi-actress-ibadan",
+    "score": 3.1158,
+    "reasons": [
+      "vertical",
+      "geo(region)",
+      "quality",
+      "freshness",
+      "responsiveness",
+      "role(languages,complexion)"
+    ]
+  },
+  {
+    "talent": "femi-actor-lagos",
+    "score": 3.0533,
+    "reasons": [
+      "vertical",
+      "geo(city)",
+      "quality",
+      "freshness",
+      "responsiveness",
+      "role(languages,playing_age_min)"
+    ]
+  },
+  {
+    "talent": "amaka-model-lagos",
+    "score": 2.94,
+    "reasons": [
+      "vertical",
+      "geo(city)",
+      "quality",
+      "freshness",
+      "responsiveness",
+      "role"
+    ]
+  },
+  {
+    "talent": "zainab-actress-lagos-new",
+    "score": 2.84,
+    "reasons": [
+      "vertical",
+      "geo(city)",
+      "quality",
+      "freshness",
+      "responsiveness",
+      "role"
+    ]
+  },
+  {
+    "talent": "ngozi-actress-enugu",
+    "score": 2.7,
+    "reasons": [
+      "vertical",
+      "geo(country)",
+      "quality",
+      "freshness",
+      "responsiveness",
+      "role(playing_age_min)"
+    ]
+  },
+  {
+    "talent": "halima-actress-abuja",
+    "score": 2.7,
+    "reasons": [
+      "vertical",
+      "geo(country)",
+      "quality",
+      "freshness",
+      "responsiveness",
+      "role(playing_age_min)"
+    ]
+  },
+  {
+    "talent": "tunde-cinematographer-lagos",
+    "score": 2.16,
+    "reasons": [
+      "geo(city)",
+      "quality",
+      "freshness",
+      "responsiveness",
+      "role"
+    ]
+  },
+  {
+    "talent": "bisi-actress-lagos",
+    "score": 2.43,
+    "reasons": [
+      "vertical",
+      "geo(city)",
+      "quality",
+      "freshness",
+      "responsiveness",
+      "role(languages)",
+      "exposure"
+    ]
+  }
+]
