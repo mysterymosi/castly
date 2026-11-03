@@ -14,6 +14,7 @@ import { DeckError } from "../deck/errors.js"
 import { resolveCandidateScope } from "../deck/candidates.js"
 import { deckCard, type Card } from "../deck/preview.js"
 import { loadRankingRows, rankingConfigFromRows } from "../deck/ranking-weights.js"
+import { reasonTexter } from "../deck/reason-text.js"
 import { newSeed, rankCandidatesInDetail } from "../deck/session.js"
 import { AdminError } from "./errors.js"
 import { assertRankingSetting } from "./ranking-settings.js"
@@ -138,7 +139,8 @@ export async function runInspectorDeck(db: Db, input: z.output<typeof adminDeckR
   const stored = await loadRankingRows(db)
   const rows = [...stored, ...input.overrides]
   const scope = await resolveCandidateScope(db, input.bookerId, input.roleId, input.filters, seed)
-  const { scored, ranked, exposureThreshold } = await rankCandidatesInDetail(db, scope, rankingConfigFromRows(rows))
+  const config = rankingConfigFromRows(rows)
+  const { scored, ranked, exposureThreshold } = await rankCandidatesInDetail(db, scope, config)
 
   const scoreRank = new Map(scored.map((c, i) => [c.talentId, i]))
   const top = ranked.slice(0, input.limit)
@@ -147,6 +149,7 @@ export async function runInspectorDeck(db: Db, input: z.output<typeof adminDeckR
     input.bookerId,
     top.map((c) => c.talentId),
   )
+  const reasonText = await reasonTexter(db, scope, config.weights)
   return {
     seed,
     candidates: ranked.length,
@@ -166,6 +169,7 @@ export async function runInspectorDeck(db: Db, input: z.output<typeof adminDeckR
           impressions7d: c.impressions7d,
           lifetimeImpressions: c.lifetimeImpressions,
           reasons: c.reasons as DeckReason[],
+          reasonText: reasonText(card, c.reasons as DeckReason[]),
           card,
         },
       ]

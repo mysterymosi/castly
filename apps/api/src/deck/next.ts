@@ -13,6 +13,8 @@ import type { z } from "zod"
 import { countCandidates, resolveCandidateScope, type CandidateScope, type Reader } from "./candidates.js"
 import { DeckError } from "./errors.js"
 import { deckCard } from "./preview.js"
+import { loadRankingConfig } from "./ranking-weights.js"
+import { reasonTexter } from "./reason-text.js"
 import { queueRows, rankCandidates } from "./session.js"
 
 /** Refill the queue (TECH_SPEC §7.4) when serving a page would leave fewer unserved than this. */
@@ -159,12 +161,13 @@ export async function nextCards(
         .where(inArray(schema.talentProfiles.userId, page.map((row) => row.talentId)))
     : []
   const byId = new Map(profiles.map((p) => [p.userId, p]))
+  const reasonText = await reasonTexter(db, scope, (await loadRankingConfig(db)).weights)
   const cards = await Promise.all(
-    page.map(async (row) => ({
-      ...(await deckCard(db, bookerId, byId.get(row.talentId)!)),
-      position: row.position,
-      reasons: row.reasons as DeckReason[],
-    })),
+    page.map(async (row) => {
+      const card = await deckCard(db, bookerId, byId.get(row.talentId)!)
+      const reasons = row.reasons as DeckReason[]
+      return { ...card, position: row.position, reasons, reasonText: reasonText(card, reasons) }
+    }),
   )
 
   const exhausted = remaining <= 0

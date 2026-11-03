@@ -103,6 +103,8 @@ export const deckReasonSchema = z.object({
 export const deckQueuedCardSchema = deckCardSchema.extend({
   position: z.number().int(),
   reasons: z.array(deckReasonSchema),
+  /** The card's "why you're seeing this" line, built from `reasons` (`deckReasonText`); null when there's nothing to say. */
+  reasonText: z.string().nullable(),
 })
 
 export const deckNextInput = z.object({

@@ -89,6 +89,8 @@ export const adminDeckRunCardSchema = z.object({
   lifetimeImpressions: z.number().int(),
   /** Exactly what `deck.start` would write to `deck_queue.reasons`. */
   reasons: z.array(deckReasonSchema),
+  /** The line the card shows for those reasons, as `deck.next` would send it. */
+  reasonText: z.string().nullable(),
   /** The card as this booker would see it. */
   card: deckCardSchema,
 })

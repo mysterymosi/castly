@@ -9,6 +9,7 @@ import {
   portfolioContentFromDto,
   readVisibleSections,
   type DeckCard as DeckCardData,
+  type DeckQueuedCard,
   type PortfolioSection,
 } from "@workspace/schema"
 import { shadow } from "@workspace/ui-tokens"
@@ -63,8 +64,11 @@ export function mediaUri(card: DeckCardData, id: string) {
   return media?.variants?.card ?? media?.posterUrl ?? null
 }
 
-/** Name, category, place, age range and signature credit, laid over the photo's lower third. */
-function PhotoCaption({ card }: { card: DeckCardData }) {
+/**
+ * Name, category, place, age range, signature credit and why the card is here (`deck.next`'s
+ * `reasonText`; preview cards have none), laid over the photo's lower third.
+ */
+function PhotoCaption({ card }: { card: DeckCardData & Partial<Pick<DeckQueuedCard, "reasonText">> }) {
   const { profile } = card.talent
   const { decision } = card
   const age = decision.ageRange
@@ -100,6 +104,20 @@ function PhotoCaption({ card }: { card: DeckCardData }) {
           <Icon name="film" size={16} tone="onInverse" />
           <Text variant="body-sm" tone="onInverse" numberOfLines={1} className="flex-1">
             {creditLine}
+          </Text>
+        </View>
+      ) : null}
+      {card.reasonText ? (
+        <View
+          className="flex-row items-center gap-2"
+          style={{ opacity: 0.9 }}
+          accessible
+          accessibilityLabel={`Why you're seeing this: ${card.reasonText}`}
+          testID="deck-card-reason"
+        >
+          <Icon name="sparkle" size={16} tone="onInverse" />
+          <Text variant="body-sm" tone="onInverse" numberOfLines={2} className="flex-1">
+            {card.reasonText}
           </Text>
         </View>
       ) : null}

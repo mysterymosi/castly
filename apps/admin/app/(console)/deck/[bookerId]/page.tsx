@@ -250,6 +250,9 @@ function RunResult({ run }: { run: AdminDeckRun }) {
                   {c.impressions7d} / {c.lifetimeImpressions}
                 </td>
                 <td>
+                  <p className="mb-1 font-medium" title="The line the card shows">
+                    {c.reasonText ?? <span className="text-muted-foreground">No line on the card</span>}
+                  </p>
                   <ReasonList reasons={c.reasons} />
                 </td>
               </tr>

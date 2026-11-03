@@ -40,6 +40,12 @@ export {
   type FairnessContext,
 } from "./fairness.js"
 export {
+  deckReasonText,
+  REASON_TEXT_MAX_PARTS,
+  REASON_TEXT_STRONG,
+  type ReasonTextFacts,
+} from "./reason-text.js"
+export {
   RANKING_SETTINGS,
   rankingSettingProblem,
   type RankingSetting,

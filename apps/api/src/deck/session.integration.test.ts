@@ -261,6 +261,35 @@ describe("deck.start", () => {
     expect(rows[1]!.reasons).toContainEqual({ code: "role", contribution: 0.5 })
   })
 
+  it("serves a Lagos Yoruba actress on a Yoruba role with a reason a booker can read", async () => {
+    const w = await world()
+    const [yoruba] = await db
+      .insert(schema.languages)
+      .values({ slug: `yoruba-${tag()}`, name: "Yoruba" })
+      .returning({ id: schema.languages.id, slug: schema.languages.slug })
+    createdLanguageIds.push(yoruba!.id)
+    const misses = await liveTalent(w, "why-misses")
+    const actress = await liveTalent(w, "why-actress")
+    await db.insert(schema.talentLanguages).values({ talentId: actress, languageId: yoruba!.id })
+    const { userId, api } = await booker(w, "deck-session-why")
+    const roleId = await role(userId, { categoryId: w.categoryId })
+    await db
+      .update(schema.roles)
+      .set({ requirements: { languages: { anyOf: [yoruba!.slug] } } })
+      .where(eq(schema.roles.id, roleId))
+
+    const { sessionId } = await api.deck.start({ roleId })
+    const stored = await queue(sessionId)
+    const { cards } = await api.deck.next({ sessionId })
+    expect(cards.map((c) => c.talent.profile.userId)).toEqual([actress, misses])
+    // The same reasons scoring stored, read out: the role match names the language, the geo
+    // term the city, both as the card itself shows them.
+    expect(cards[0]!.reasons).toEqual(stored[0]!.reasons)
+    expect(cards[0]!.reasonText).toBe("Speaks Yoruba · In Lagos · Matches your role")
+    // No language on record isn't a match, so the line claims none; quality 100 fills the room.
+    expect(cards[1]!.reasonText).toBe("In Lagos · Strong portfolio")
+  })
+
   it("reads term weights from ranking_weights", async () => {
     const w = await world()
     await liveTalent(w, "weighted")

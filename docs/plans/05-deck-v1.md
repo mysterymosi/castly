@@ -355,6 +355,24 @@ Live-edit `ranking_weights` without deploy.
 
 ### 5.11 Why-you're-seeing-this on the card
 
+**Status:** Built. `deckReasonText(reasons, facts, weights)` (`packages/core/src/reason-text.ts`) reads the stored `reasons` into one line of up to three parts joined by " · ", for example "Speaks Yoruba · In Lagos · Matches your role". The parts come in this order:
+- **Promoted:** for a boost (M10). It comes first, so it's always disclosed.
+- **Discovery pick:** for an exploration slot.
+- **The role's languages and accents** that matched fully, like "Speaks Yoruba" or "Yoruba accent".
+- **Where they are:** "In Lagos" for the same city, "Near you" for the same region.
+- **Matches your role:** when any requirement matched fully. A partial or unknown match claims nothing.
+- **Raised a hand for this role:** M9.
+- **The strongest plain term**, only if there's room and it scored at least 70% of its weight: "Strong portfolio", "Recently updated" or "Replies quickly".
+- **In your country:** only when nothing else applies. A card with none of these gets no line.
+
+The line names values only as the serialized card already shows them to this booker. `apps/api/src/deck/reason-text.ts` intersects the role's requested language and accent slugs with the card's visible languages and accents, and takes the city from the card. The reasons themselves still carry only keys and levels, so a sensitive value can never appear.
+
+`deck.next` sends it as `reasonText` on each card, and `admin.deck.run` returns the same line, which the inspector shows above the reasons. On the app it's a sparkle row under the caption's credit line (testID `deck-card-reason`, announced as "Why you're seeing this: …"). Preview cards have no line.
+
+Acceptance:
+- **`packages/core` `reason-text.test.ts`:** runs on `scoreCandidate` and `applyFairness` output. It covers the Yoruba lead, no claim on a partial match, the city-name fallback, region and the strong-term threshold, boost disclosure and the exploration label.
+- **`deck/session.integration.test.ts`:** a Lagos Yoruba actress on a Yoruba role gets `deck.next` reasons equal to the stored ones, and the line "Speaks Yoruba · In Lagos · Matches your role". The talent with no language on record gets "In Lagos · Strong portfolio".
+
 Surface a short string from `reasons[]` on the card.
 
 **Acceptance.** A Lagos Yoruba actress matching an active role shows a reason that a human can read, derived from the same array scoring produced.
