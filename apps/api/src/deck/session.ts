@@ -8,7 +8,7 @@ import type { z } from "zod"
 
 import { generateCandidates, resolveCandidateScope, type CandidateScope, type Reader } from "./candidates.js"
 import { exposureThreshold } from "./exposure.js"
-import { loadRankingConfig } from "./ranking-weights.js"
+import { loadRankingConfig, type RankingConfig } from "./ranking-weights.js"
 import { FREE_UNDO_LIMIT } from "./swipe.js"
 
 /** A fresh session seed; Postgres `integer`. */
@@ -16,15 +16,21 @@ export function newSeed() {
   return randomInt(0, 2 ** 31 - 1)
 }
 
+/**
+ * Stages 1–3 with their workings: `scored` is stage 2's order, `ranked` the order after
+ * fairness. `config` defaults to the live (cached) settings; the deck inspector passes its own.
+ */
+export async function rankCandidatesInDetail(db: Reader, scope: CandidateScope, config?: RankingConfig) {
+  const { weights, fairness } = config ?? (await loadRankingConfig(db))
+  const scored = scoreCandidates(await generateCandidates(db, scope), { ...scope.scoring, weights })
+  const threshold = await exposureThreshold(db, fairness.exposurePercentile)
+  const ranked = applyFairness(scored, { config: fairness, seed: scope.seed, exposureThreshold: threshold })
+  return { scored, ranked, exposureThreshold: threshold }
+}
+
 /** Stages 1–3 for a resolved scope: candidates, scored, then reordered for fairness. */
 export async function rankCandidates(db: Reader, scope: CandidateScope): Promise<FairCandidate[]> {
-  const { weights, fairness } = await loadRankingConfig(db)
-  const scored = scoreCandidates(await generateCandidates(db, scope), { ...scope.scoring, weights })
-  return applyFairness(scored, {
-    config: fairness,
-    seed: scope.seed,
-    exposureThreshold: await exposureThreshold(db, fairness.exposurePercentile),
-  })
+  return (await rankCandidatesInDetail(db, scope)).ranked
 }
 
 /** `deck_queue` rows for ranked cards, numbered on from `start`. */

@@ -39,6 +39,12 @@ export {
   type FairnessConfig,
   type FairnessContext,
 } from "./fairness.js"
+export {
+  RANKING_SETTINGS,
+  rankingSettingProblem,
+  type RankingSetting,
+  type RankingSettingKind,
+} from "./ranking-settings.js"
 export { computeCompleteness, type CompletenessInput, type CompletenessResult } from "./completeness.js"
 export { computeFreshnessScore, type FreshnessScoreInput } from "./freshness-score.js"
 export {

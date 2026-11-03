@@ -294,6 +294,59 @@ Session goal optional with progress.
 
 ### 5.10 Deck inspector
 
+**Status:** Built. The admin console (`apps/admin`) now has sign-in, so this task also gives TECH_SPEC §19 its foundation.
+
+**Admin sign-in** (`apps/admin`):
+- Email OTP through the existing `auth.requestOtp` and `auth.verifyOtp`. A server action checks `auth.me` for the admin mode before it sets any cookie, so a non-admin never gets a session.
+- The session is three httpOnly cookies (`lib/session-cookies.ts`): access token, refresh token and expiry.
+- `proxy.ts` (Next 16's renamed middleware) sends a visit with no session to `/sign-in`. It refreshes an access token within 60s of expiry, writing the new one to both the request and the response so the current render uses it.
+- Pages still check for real with `requireAdmin()` (`lib/auth.ts`, one `auth.me` per request). Every admin procedure is behind `adminProcedure` regardless.
+- Admin mode is still granted by ops in SQL (`insert into user_modes (user_id, mode) values (…, 'admin')`).
+
+**API** (`apps/api/src/admin/`). None of these write, except `rankingWeights.update`.
+- **`admin.bookers.search({ query })`:** email or company name.
+- **`admin.deck.booker({ bookerId })`:** the booker's roles and their 10 latest sessions, each with seed, filters, and served/queued counts.
+- **`admin.deck.run({ bookerId, roleId?, filters?, seed?, overrides?, limit })`:** stages 1–3 exactly as `deck.start` runs them (`rankCandidatesInDetail`), writing no session, queue, impressions or exposure. Each card carries:
+  - every stage-2 component, zeros included;
+  - its stage-2 rank before fairness;
+  - the exposure penalty and the exploration flag;
+  - 7-day and lifetime impressions;
+  - the `reasons` `deck.start` would store;
+  - the card as the booker sees it.
+
+  `seed` replays a session's exploration draw. `overrides` try settings for that run only.
+- **`admin.deck.session({ sessionId })`:** a real session's `deck_queue` as stored (score, reasons, served time, live decision), with cards.
+- **`admin.rankingWeights.list` / `update({ key, value | null })`:** every tunable setting (`RANKING_SETTINGS` in `packages/core`), with its default, stored value and who last changed it. `null` deletes the row, so the default applies again.
+  - Values are checked by `rankingSettingProblem`, which is never looser than the deck's readers, so a saved value is always used.
+  - An update clears this process's 60s cache. Other API instances pick it up within a minute.
+
+New error codes: `booker_not_found` (NOT_FOUND) and `invalid_ranking_setting` (BAD_REQUEST).
+
+**Pages:**
+- **`/deck`:** search for a booker.
+- **`/deck/[bookerId]`:**
+  - the booker's sessions, each with a "Re-run with this seed" link;
+  - a run form (role, seed, card count, filters JSON, and trial settings);
+  - the breakdown table: position, talent, score, stage-2 rank with ↑/↓, eight component columns, penalty, impressions, and the reasons.
+- **`/deck/sessions/[sessionId]`:** the stored queue.
+- **`/ranking`:** the settings, each saved or reset in place, with inline errors.
+
+A replay matches its session until exposure moves or the booker swipes, because a swipe hides that talent from stage 1.
+
+Acceptance:
+- **`admin/deck-inspector.integration.test.ts`:**
+  - `deck.start` with seed 4242, then `admin.deck.run` with the same seed. Card #3 has exactly the `reasons` and score stored at `deck_queue` position 3, every positive component appears among its reasons, and `admin.deck.session` returns the same row.
+  - A run writes nothing.
+  - Overrides apply to one run and aren't saved. Invalid ones are refused.
+  - A saved weight is what the next run uses, and a reset restores the default.
+  - Invalid values are refused, and non-admins get FORBIDDEN.
+- **`packages/core` `ranking-settings.test.ts`:** every setting is listed once, and every accepted value is one the readers use.
+- **In a browser** (local test admin `onboarding+ops@resend.dev`):
+  - sign-in, plus the redirect for no session, refresh for an expired token, and sign-in again for a bad refresh token;
+  - booker search;
+  - re-running a stored role session reproduced its four cards, order, scores and reasons;
+  - saving, resetting and refusing `diversity_max_run = 2.5` on `/ranking`.
+
 Admin: run a deck as a given booker + optional role; show each card's score components and `reasons`.
 
 Live-edit `ranking_weights` without deploy.

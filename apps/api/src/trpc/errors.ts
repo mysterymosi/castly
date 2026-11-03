@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server"
 import { PortfolioSectionValidationError } from "@workspace/schema"
 
+import { AdminError } from "../admin/errors.js"
 import { InvalidDateOfBirth, UnderageError } from "../auth/age.js"
 import { OtpRateLimited } from "../auth/rate-limit.js"
 import { AuthRejected, OtpDeliveryFailed } from "../auth/supabase.js"
@@ -51,6 +52,11 @@ const deckCode = {
   nothing_to_undo: "PRECONDITION_FAILED",
 } as const
 
+const adminCode = {
+  booker_not_found: "NOT_FOUND",
+  invalid_ranking_setting: "BAD_REQUEST",
+} as const
+
 const projectCode = {
   project_not_found: "NOT_FOUND",
   role_not_found: "NOT_FOUND",
@@ -81,6 +87,13 @@ export function throwTrpc(error: unknown): never {
   if (error instanceof ProjectError) {
     throw new TRPCError({
       code: projectCode[error.code],
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof AdminError) {
+    throw new TRPCError({
+      code: adminCode[error.code],
       message: error.message,
       cause: error,
     })

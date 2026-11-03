@@ -20,14 +20,24 @@ let cached: { config: RankingConfig; at: number } | null = null
  */
 export async function loadRankingConfig(db: Pick<Db, "select">, now = Date.now()): Promise<RankingConfig> {
   if (cached && now - cached.at < RANKING_WEIGHTS_TTL_MS) return cached.config
-  const rows = (
+  const config = rankingConfigFromRows(await loadRankingRows(db))
+  cached = { config, at: now }
+  return config
+}
+
+/** The stored `ranking_weights` rows, uncached. */
+export async function loadRankingRows(db: Pick<Db, "select">) {
+  return (
     await db
       .select({ key: schema.rankingWeights.key, value: schema.rankingWeights.value })
       .from(schema.rankingWeights)
   ).map((row) => ({ key: row.key, value: Number(row.value) }))
-  const config = { weights: rankingWeightsFromRows(rows), fairness: fairnessConfigFromRows(rows) }
-  cached = { config, at: now }
-  return config
+}
+
+/** Settings from rows over the defaults; a later row for the same key wins. */
+export function rankingConfigFromRows(rows: readonly { key: string; value: number }[]): RankingConfig {
+  const latest = [...new Map(rows.map((row) => [row.key, row])).values()]
+  return { weights: rankingWeightsFromRows(latest), fairness: fairnessConfigFromRows(latest) }
 }
 
 /** Drops the cached config, so the next read sees the table. For tests and the weights editor (5.10). */
