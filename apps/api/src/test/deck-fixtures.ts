@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto"
 
 import { schema } from "@workspace/db"
-import { asc, eq } from "drizzle-orm"
+import { launchAttributeDefinitions } from "@workspace/db/seed-attributes"
+import { asc, eq, inArray } from "drizzle-orm"
 
 import { db } from "../db.js"
 import { clearExposureThresholdCache } from "../deck/exposure.js"
@@ -21,6 +22,7 @@ export const createdCityIds: string[] = []
 export const createdCategoryIds: string[] = []
 export const createdLanguageIds: string[] = []
 export const createdWeightKeys: string[] = []
+export const createdAttributeKeys: string[] = []
 
 export const tag = () => randomUUID().slice(0, 8)
 export const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000)
@@ -59,10 +61,25 @@ export async function category() {
 }
 
 /**
+ * The launch attribute definitions (height, languages, complexion…) come from `db:seed`, which CI
+ * does not run: insert any that are missing, exactly as the seed defines them, and remove only
+ * those this test created. Stage 1 reads them to tier a filter or a role requirement.
+ */
+async function ensureAttributeDefinitions() {
+  const inserted = await db
+    .insert(schema.attributeDefinitions)
+    .values(launchAttributeDefinitions.map(({ appliesTo: _appliesTo, ...definition }) => definition))
+    .onConflictDoNothing({ target: schema.attributeDefinitions.key })
+    .returning({ key: schema.attributeDefinitions.key })
+  createdAttributeKeys.push(...inserted.map((row) => row.key))
+}
+
+/**
  * A Nigerian city and a category of the test's own. Decks filter on that category, so only
  * talents this test made can appear, whatever else the database holds.
  */
 export async function world() {
+  await ensureAttributeDefinitions()
   const cityId = await city()
   const categoryId = await category()
   return { cityId, categoryId, filters: { categoryIds: [categoryId] } }
@@ -144,6 +161,10 @@ export async function cleanupDeckFixtures() {
   for (const id of seededUserIds.splice(0)) await deleteAuthUser(id)
   for (const id of createdLanguageIds.splice(0)) {
     await db.delete(schema.languages).where(eq(schema.languages.id, id))
+  }
+  const attributeKeys = createdAttributeKeys.splice(0)
+  if (attributeKeys.length > 0) {
+    await db.delete(schema.attributeDefinitions).where(inArray(schema.attributeDefinitions.key, attributeKeys))
   }
   for (const key of createdWeightKeys.splice(0)) {
     await db.delete(schema.rankingWeights).where(eq(schema.rankingWeights.key, key))
