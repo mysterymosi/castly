@@ -52,7 +52,7 @@ function ShowreelSection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config
         <Text
           numberOfLines={1}
           maxFontSizeMultiplier={1.3}
-          className="mt-2 font-body text-textMuted"
+          className="mt-2 font-bodyMedium text-textMuted"
           style={{ fontSize: 14, lineHeight: 20 }}
         >
           {config.headline}

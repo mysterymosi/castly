@@ -2,7 +2,15 @@ import type { MediaStatusOutput } from "@workspace/schema"
 import { Image } from "expo-image"
 import { StatusBar } from "expo-status-bar"
 import { useState } from "react"
-import { FlatList, Modal, Platform, Pressable, ScrollView, useWindowDimensions, View } from "react-native"
+import {
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  useWindowDimensions,
+  View,
+} from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 
 import { Icon } from "@/components/ui/icon"
@@ -33,7 +41,9 @@ export function ImageViewer({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      {state ? <ViewerPages state={state} media={media} onClose={onClose} /> : null}
+      {state ? (
+        <ViewerPages state={state} media={media} onClose={onClose} />
+      ) : null}
     </Modal>
   )
 }
@@ -62,8 +72,14 @@ function ViewerPages({
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         initialScrollIndex={state.index}
-        getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-        onMomentumScrollEnd={(event) => setPage(Math.round(event.nativeEvent.contentOffset.x / width))}
+        getItemLayout={(_, i) => ({
+          length: width,
+          offset: width * i,
+          index: i,
+        })}
+        onMomentumScrollEnd={(event) =>
+          setPage(Math.round(event.nativeEvent.contentOffset.x / width))
+        }
         renderItem={({ item: id }) => {
           const item = media[id]
           const full = item?.variants?.full ?? item?.variants?.card
@@ -81,7 +97,13 @@ function ViewerPages({
               {full ? (
                 <Image
                   source={{ uri: full }}
-                  placeholder={card && card !== full ? { uri: card } : item?.blurhash ? { blurhash: item.blurhash } : undefined}
+                  placeholder={
+                    card && card !== full
+                      ? { uri: card }
+                      : item?.blurhash
+                        ? { blurhash: item.blurhash }
+                        : undefined
+                  }
                   placeholderContentFit="contain"
                   contentFit="contain"
                   style={{ width, height }}
@@ -121,7 +143,11 @@ function ViewerPages({
           <Icon name="close" size={18} tone="onInverse" />
         </Pressable>
         {count > 1 ? (
-          <Text variant="body-sm" tone="onInverse" style={{ fontVariant: ["tabular-nums"] }}>
+          <Text
+            variant="body-sm"
+            tone="onInverse"
+            style={{ fontVariant: ["tabular-nums"] }}
+          >
             {page + 1} / {count}
           </Text>
         ) : null}

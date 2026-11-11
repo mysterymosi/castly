@@ -7,6 +7,7 @@ import {
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
 import {
+  canvasProblem,
   cardConfigSchema,
   type CardConfig,
   type CoreSectionType,
@@ -15,7 +16,7 @@ import {
 } from "@workspace/schema"
 import { randomUUID } from "node:crypto"
 
-import { and, asc, eq } from "drizzle-orm"
+import { and, asc, eq, inArray } from "drizzle-orm"
 
 import { getMediaStatuses } from "../media/service.js"
 import { StudioError } from "./errors.js"
@@ -135,13 +136,31 @@ export async function getStudioState(db: Db, userId: string) {
     .from(schema.skills)
     .where(eq(schema.skills.active, true))
 
+  const categories = await db
+    .select({
+      id: schema.categories.id,
+      name: schema.categories.name,
+      slug: schema.categories.slug,
+      kind: schema.categories.kind,
+    })
+    .from(schema.categories)
+    .where(eq(schema.categories.active, true))
+    .orderBy(asc(schema.categories.sort), asc(schema.categories.name))
+
+  const categoryRows = await db
+    .select({ categoryId: schema.talentCategories.categoryId })
+    .from(schema.talentCategories)
+    .where(eq(schema.talentCategories.talentId, userId))
+    .orderBy(asc(schema.talentCategories.sort))
+
   const completeness = await loadCompleteness(db, userId)
   const record = await loadTalentRecord(db, profile, completeness.score)
   const talent = serializeTalent(record, { kind: "owner", userId }, {})
 
   const mediaIds = new Set(sectionMediaIds(talent.sections))
-  const { leadMediaId } = talent.profile.cardConfig
+  const { leadMediaId, canvasMediaId } = talent.profile.cardConfig
   if (leadMediaId) mediaIds.add(leadMediaId)
+  if (canvasMediaId) mediaIds.add(canvasMediaId)
   const media = await getMediaStatuses(db, userId, [...mediaIds])
 
   return {
@@ -149,6 +168,8 @@ export async function getStudioState(db: Db, userId: string) {
     completeness,
     cities,
     skills,
+    categories,
+    categoryIds: categoryRows.map((row) => row.categoryId),
     media,
   }
 }
@@ -194,6 +215,39 @@ export async function updateStudioProfile(
   return getStudioState(db, userId)
 }
 
+/**
+ * Sets or clears the deck card's canvas. The media must be the talent's own and, as far as it has
+ * been measured, inside `canvasSpec`; a video still processing is checked again when served.
+ */
+export async function setStudioCanvas(db: Db, userId: string, mediaId: string | null) {
+  await ensureProfile(db, userId)
+  if (mediaId) {
+    const media = (await getMediaStatuses(db, userId, [mediaId]))[mediaId]
+    if (!media) throw new StudioError("Media not found", "invalid_canvas")
+    if (media.status === "failed" || media.status === "quarantined") {
+      throw new StudioError("That upload didn't go through", "invalid_canvas")
+    }
+    const problem = canvasProblem(media)
+    if (problem) throw new StudioError(problem, "invalid_canvas")
+  }
+
+  const [current] = await db
+    .select({ cardConfig: schema.talentProfiles.cardConfig })
+    .from(schema.talentProfiles)
+    .where(eq(schema.talentProfiles.userId, userId))
+    .limit(1)
+  const cardConfig = cardConfigSchema.parse({
+    ...cardConfigSchema.parse(current?.cardConfig ?? {}),
+    canvasMediaId: mediaId,
+  })
+  await db
+    .update(schema.talentProfiles)
+    .set({ cardConfig, updatedAt: new Date() })
+    .where(eq(schema.talentProfiles.userId, userId))
+
+  return getStudioState(db, userId)
+}
+
 export async function completeQuickStart(
   db: Db,
   userId: string,
@@ -203,9 +257,11 @@ export async function completeQuickStart(
     bio: string
     skillIds: string[]
     photoMediaIds: string[]
+    categoryIds?: string[]
   }
 ) {
   await ensureProfile(db, userId)
+  if (input.categoryIds) await replaceTalentCategories(db, userId, input.categoryIds)
 
   await db
     .delete(schema.talentSkills)
@@ -452,6 +508,41 @@ export async function setTalentSkills(
       }))
     )
   }
+  return getStudioState(db, userId)
+}
+
+/**
+ * Replaces the talent's categories, the first as primary. Each must be an active category. The
+ * `talent_search` triggers pick the change up, so role decks see it at once.
+ */
+async function replaceTalentCategories(db: Db, userId: string, categoryIds: string[]) {
+  const known = await db
+    .select({ id: schema.categories.id })
+    .from(schema.categories)
+    .where(and(inArray(schema.categories.id, categoryIds), eq(schema.categories.active, true)))
+  if (known.length !== new Set(categoryIds).size)
+    throw new StudioError("Unknown category", "unknown_category")
+
+  await db
+    .delete(schema.talentCategories)
+    .where(eq(schema.talentCategories.talentId, userId))
+  await db.insert(schema.talentCategories).values(
+    categoryIds.map((categoryId, sort) => ({
+      talentId: userId,
+      categoryId,
+      isPrimary: sort === 0,
+      sort,
+    }))
+  )
+}
+
+export async function setTalentCategories(
+  db: Db,
+  userId: string,
+  categoryIds: string[]
+) {
+  await ensureProfile(db, userId)
+  await replaceTalentCategories(db, userId, categoryIds)
   return getStudioState(db, userId)
 }
 

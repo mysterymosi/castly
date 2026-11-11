@@ -44,6 +44,7 @@ const icons = {
   "data-saver": { ios: "leaf", android: "data_saver_on", web: "data_saver_on" },
   undo: { ios: "arrow.uturn.backward", android: "undo", web: "undo" },
   flag: { ios: "flag", android: "flag", web: "flag" },
+  settings: { ios: "slider.horizontal.3", android: "tune", web: "tune" },
 } as const satisfies Record<string, SymbolViewProps["name"]>
 
 export type IconName = keyof typeof icons

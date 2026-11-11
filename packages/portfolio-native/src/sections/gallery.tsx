@@ -27,7 +27,7 @@ function GallerySection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config:
     <SectionShell cardWidth={cardWidth}>
       <SectionTitle>Gallery</SectionTitle>
       {ids.length === 0 ? (
-        <Text testID="portfolio-placeholder" className="font-body text-footnote text-textMuted">
+        <Text testID="portfolio-placeholder" className="font-bodyMedium text-footnote text-textMuted">
           No photos yet
         </Text>
       ) : (

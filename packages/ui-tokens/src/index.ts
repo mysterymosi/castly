@@ -145,11 +145,13 @@ export function hexToRgbChannels(hex: string) {
 
 /** Font family names as registered with expo-font (one family per weight on native). */
 export const fontFamily = {
+  display: "PlusJakartaSans_800ExtraBold",
   heading: "PlusJakartaSans_700Bold",
   headingSemibold: "PlusJakartaSans_600SemiBold",
   body: "PlusJakartaSans_400Regular",
   bodyMedium: "PlusJakartaSans_500Medium",
   bodySemibold: "PlusJakartaSans_600SemiBold",
+  bodyBold: "PlusJakartaSans_700Bold",
 } as const
 
 /** [fontSize, lineHeight] in px. */

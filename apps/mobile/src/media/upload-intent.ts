@@ -1,6 +1,6 @@
 import type { CreateUploadUrlOutput } from "@workspace/schema"
 
-export type UploadIntentGoal = "showreel" | "none"
+export type UploadIntentGoal = "showreel" | "canvas" | "none"
 
 export type UploadIntentPhase =
   | "queued"
@@ -33,6 +33,7 @@ export type UploadIntent = {
 
 export function uploadIntentLabel(intent: UploadIntent) {
   if (intent.goal === "showreel") return "Showreel"
+  if (intent.goal === "canvas") return "Canvas"
   if (intent.kind === "video") return "Video"
   return "Photo"
 }

@@ -10,14 +10,17 @@ import {
   type ReactNode,
 } from "react"
 
-import { pickVideo } from "./upload"
-import type { UploadIntent } from "./upload-intent"
+import { pickCanvas, pickVideo } from "./upload"
+import { isIntentActive, type UploadIntent } from "./upload-intent"
 import { uploadQueueProcessor } from "./upload-queue-processor"
+import { loadUploadQueue } from "./upload-queue-store"
 
 type UploadQueueValue = {
   intents: UploadIntent[]
   enqueueShowreel: (fileUri: string) => string
   pickAndEnqueueShowreel: () => Promise<string | null>
+  /** The intent id, or why the pick can't be a canvas; null when cancelled. */
+  pickAndEnqueueCanvas: () => Promise<{ id: string } | { problem: string } | null>
   dismiss: (id: string) => void
   retry: (id: string) => void
 }
@@ -50,13 +53,18 @@ export function UploadQueueProvider({
     return unsubscribe
   }, [])
 
-  const lastShowreelAttached = useRef<string | null>(null)
+  // Showreel and canvas uploads change the studio when they finish; refetch it once per upload.
+  const lastAttached = useRef(new Set<string>())
   useEffect(() => {
-    const done = intents.find(
-      (row) => row.goal === "showreel" && row.phase === "completed" && row.resultMediaId
+    const done = intents.filter(
+      (row) =>
+        (row.goal === "showreel" || row.goal === "canvas") &&
+        row.phase === "completed" &&
+        row.resultMediaId &&
+        !lastAttached.current.has(row.resultMediaId)
     )
-    if (!done?.resultMediaId || done.resultMediaId === lastShowreelAttached.current) return
-    lastShowreelAttached.current = done.resultMediaId
+    if (done.length === 0) return
+    for (const row of done) lastAttached.current.add(row.resultMediaId!)
     void onStudioChanged?.()
   }, [intents, onStudioChanged])
 
@@ -76,6 +84,23 @@ export function UploadQueueProvider({
     return enqueueShowreel(uri)
   }, [enqueueShowreel])
 
+  const pickAndEnqueueCanvas = useCallback(async () => {
+    const picked = await pickCanvas()
+    if (!picked || "problem" in picked) return picked
+    // The studio blocks a pick while a canvas uploads; clear the finished or failed ones.
+    for (const row of loadUploadQueue()) {
+      if (row.goal === "canvas" && !isIntentActive(row)) uploadQueueProcessor.dismiss(row.id)
+    }
+    const id = uploadQueueProcessor.enqueue({
+      id: randomId(),
+      kind: picked.kind,
+      fileUri: picked.uri,
+      mimeType: picked.mimeType,
+      goal: "canvas",
+    })
+    return { id }
+  }, [])
+
   const dismiss = useCallback((id: string) => {
     uploadQueueProcessor.dismiss(id)
   }, [])
@@ -85,8 +110,8 @@ export function UploadQueueProvider({
   }, [])
 
   const value = useMemo(
-    () => ({ intents, enqueueShowreel, pickAndEnqueueShowreel, dismiss, retry }),
-    [intents, enqueueShowreel, pickAndEnqueueShowreel, dismiss, retry]
+    () => ({ intents, enqueueShowreel, pickAndEnqueueShowreel, pickAndEnqueueCanvas, dismiss, retry }),
+    [intents, enqueueShowreel, pickAndEnqueueShowreel, pickAndEnqueueCanvas, dismiss, retry]
   )
 
   return <UploadQueueContext value={value}>{children}</UploadQueueContext>

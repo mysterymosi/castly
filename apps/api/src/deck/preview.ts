@@ -1,7 +1,12 @@
 import { serializeTalent } from "@workspace/core"
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
-import type { CoreSectionConfigMap, DeckCard, DeckDecision } from "@workspace/schema"
+import {
+  canvasProblem,
+  type CoreSectionConfigMap,
+  type DeckCard,
+  type DeckDecision,
+} from "@workspace/schema"
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm"
 
 import { getMediaStatuses } from "../media/service.js"
@@ -72,13 +77,19 @@ export async function deckCard(
     ...configs("gallery").flatMap((c) => c.mediaIds),
   ].filter((id): id is string => Boolean(id))
 
+  const { canvasMediaId } = talent.profile.cardConfig
   const ids = new Set([...sectionMediaIds(sections), ...leadCandidates])
+  if (canvasMediaId) ids.add(canvasMediaId)
   const statuses = await getMediaStatuses(db, profile.userId, [...ids])
   const media = Object.fromEntries(Object.entries(statuses).filter(([, m]) => m.status === "ready"))
 
   const leadMediaIds = [...new Set(leadCandidates)]
     .filter((id) => media[id]?.kind === "image" || media[id]?.posterUrl)
     .slice(0, LEAD_MEDIA_MAX)
+
+  // Checked again now it's measured: a video set while processing may have come out of spec.
+  const canvas = canvasMediaId ? media[canvasMediaId] : undefined
+  const canvasReady = canvas && !canvasProblem(canvas) ? canvas.id : null
 
   const category = await primaryCategory(db, profile.userId)
   const credits = talent.content.credits
@@ -92,6 +103,7 @@ export async function deckCard(
       categoryKind: category?.kind ?? null,
       ageRange: category?.kind === "on_camera" || !category ? await playingAge(db, profile.userId) : null,
       leadMediaIds,
+      canvasMediaId: canvasReady,
       creditCount: credits.length,
       signatureCredit: signature
         ? { title: signature.title, roleName: signature.roleName, year: signature.year }

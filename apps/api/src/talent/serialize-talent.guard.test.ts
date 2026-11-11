@@ -26,7 +26,7 @@ const handBuiltProfile = {
   bio: null,
   cityId: null,
   cityName: null,
-  cardConfig: { leadMediaId: null, highlightFacts: [] },
+  cardConfig: { leadMediaId: null, canvasMediaId: null, highlightFacts: [] },
   publishedAt: null,
   rateVisibility: "hidden" as const,
   status: "live" as const,

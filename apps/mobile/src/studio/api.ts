@@ -35,6 +35,18 @@ export const studioApi = {
       asStudioState(await trpc.talent.studio.updateProfile.mutate(input))
     )
   },
+  /** Primary first; replaces every category the talent had. */
+  setCategories(categoryIds: string[]) {
+    return invoke(async () =>
+      asStudioState(await trpc.talent.categories.set.mutate({ categoryIds }))
+    )
+  },
+  /** The deck card's canvas; null removes it. */
+  setCanvas(mediaId: string | null) {
+    return invoke(async () =>
+      asStudioState(await trpc.talent.studio.setCanvas.mutate({ mediaId }))
+    )
+  },
   completeQuickStart(
     input: Parameters<typeof trpc.talent.studio.completeQuickStart.mutate>[0]
   ) {

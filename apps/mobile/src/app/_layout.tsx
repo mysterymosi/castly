@@ -2,9 +2,11 @@ import "@/observability/sentry-init"
 
 import { QueryClientProvider } from "@tanstack/react-query"
 import { useFonts } from "expo-font"
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router"
+import { DarkTheme, Stack, ThemeProvider } from "expo-router"
 import * as SplashScreen from "expo-splash-screen"
+import { StatusBar } from "expo-status-bar"
 import { useEffect, useMemo } from "react"
+import { Appearance, Platform } from "react-native"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
 
 import "../global.css"
@@ -17,10 +19,13 @@ import { motion } from "@workspace/ui-tokens"
 
 void SplashScreen.preventAutoHideAsync()
 SplashScreen.setOptions({ fade: true, duration: motion.slow })
+// Dark-only: native controls (alerts, keyboards, sheets, menus) match the palette. `app.json`
+// sets the same for the next native build.
+if (Platform.OS !== "web") Appearance.setColorScheme("dark")
 
 function RootNavigator() {
   const { status } = useSession()
-  const { scheme, color } = useTokens()
+  const { color } = useTokens()
   const [fontsLoaded, fontError] = useFonts(appFonts)
   const ready = (fontsLoaded || !!fontError) && status !== "loading"
 
@@ -33,11 +38,10 @@ function RootNavigator() {
   }, [ready])
 
   const navigationTheme = useMemo(() => {
-    const base = scheme === "dark" ? DarkTheme : DefaultTheme
     return {
-      ...base,
+      ...DarkTheme,
       colors: {
-        ...base.colors,
+        ...DarkTheme.colors,
         primary: color.accentText,
         background: color.bg,
         card: color.surface,
@@ -45,7 +49,7 @@ function RootNavigator() {
         border: color.border,
       },
     }
-  }, [scheme, color])
+  }, [color])
 
   if (!ready) return null
 
@@ -53,13 +57,22 @@ function RootNavigator() {
 
   return (
     <ThemeProvider value={navigationTheme}>
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.bg } }}>
+      <StatusBar style="light" />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: color.bg },
+        }}
+      >
         <Stack.Screen name="index" />
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen
             name="booker-setup"
-            options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }}
+            options={{
+              presentation: "fullScreenModal",
+              animation: "slide_from_bottom",
+            }}
           />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn}>

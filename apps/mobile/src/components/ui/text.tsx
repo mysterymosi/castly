@@ -2,17 +2,18 @@ import { Text as RNText, type TextProps as RNTextProps } from "react-native"
 
 import { cn } from "@/lib/cn"
 
+/** Weighted a step heavier than the type scale's defaults: light text read thin on device. */
 const variants = {
-  display: "font-heading text-display",
-  "display-sm": "font-heading text-display-sm",
+  display: "font-display text-display tracking-tight",
+  "display-sm": "font-display text-display-sm tracking-tight",
   title: "font-heading text-title",
-  "title-sm": "font-headingSemibold text-title-sm",
-  body: "font-body text-body",
-  "body-strong": "font-bodySemibold text-body",
-  "body-sm": "font-body text-body-sm",
-  label: "font-bodySemibold text-body-sm",
-  footnote: "font-body text-footnote",
-  caption: "font-bodySemibold text-caption uppercase tracking-wider",
+  "title-sm": "font-heading text-title-sm",
+  body: "font-bodyMedium text-body",
+  "body-strong": "font-bodyBold text-body",
+  "body-sm": "font-bodyMedium text-body-sm",
+  label: "font-bodyBold text-body-sm",
+  footnote: "font-bodyMedium text-footnote",
+  caption: "font-bodyBold text-caption uppercase tracking-wider",
 } as const
 
 const tones = {

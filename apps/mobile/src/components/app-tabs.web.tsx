@@ -7,10 +7,12 @@ import { Icon, type IconName } from "@/components/ui/icon"
 import { Text } from "@/components/ui/text"
 import { useTokens } from "@/hooks/use-tokens"
 import { cn } from "@/lib/cn"
+import { useActiveMode } from "@/mode/active-mode"
 
 export default function AppTabs() {
   const insets = useSafeAreaInsets()
   const { color } = useTokens()
+  const talent = useActiveMode() === "talent"
   return (
     <Tabs style={{ flex: 1, backgroundColor: color.bg }}>
       <TabSlot style={{ flex: 1 }} />
@@ -19,15 +21,20 @@ export default function AppTabs() {
           className="flex-row justify-center gap-2 border-t border-border bg-surface px-4 pt-1"
           style={{ paddingBottom: Math.max(insets.bottom, 6) }}
         >
-          <TabTrigger name="studio" href="/studio" asChild>
-            <TabButton icon="studio" label="Studio" />
-          </TabTrigger>
-          <TabTrigger name="discover" href="/discover" asChild>
-            <TabButton icon="layers" label="Discover" />
-          </TabTrigger>
-          <TabTrigger name="projects" href="/projects" asChild>
-            <TabButton icon="film" label="Projects" />
-          </TabTrigger>
+          {talent ? (
+            <TabTrigger name="studio" href="/studio" asChild>
+              <TabButton icon="studio" label="Studio" />
+            </TabTrigger>
+          ) : (
+            <>
+              <TabTrigger name="discover" href="/discover" asChild>
+                <TabButton icon="layers" label="Discover" />
+              </TabTrigger>
+              <TabTrigger name="projects" href="/projects" asChild>
+                <TabButton icon="film" label="Projects" />
+              </TabTrigger>
+            </>
+          )}
           <TabTrigger name="account" href="/account" asChild>
             <TabButton icon="person" label="Account" />
           </TabTrigger>

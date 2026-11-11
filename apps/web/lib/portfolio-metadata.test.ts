@@ -34,7 +34,7 @@ function portfolio(
       bio: "Stage and screen actor.",
       cityId: null,
       cityName: "Lagos",
-      cardConfig: { leadMediaId: null, highlightFacts: [] },
+      cardConfig: { leadMediaId: null, canvasMediaId: null, highlightFacts: [] },
       status: "live",
       publishedAt: new Date("2026-10-01T00:00:00Z"),
       quickStartCompletedAt: null,
@@ -94,7 +94,7 @@ describe("pickShareImage", () => {
   it("prefers the card lead over the hero", () => {
     const lead = fixtureMediaIds.gallery[1]
     const image = pickShareImage(
-      portfolio({ profile: { cardConfig: { leadMediaId: lead, highlightFacts: [] } } })
+      portfolio({ profile: { cardConfig: { leadMediaId: lead, canvasMediaId: null, highlightFacts: [] } } })
     )
     expect(image?.url).toBe(ogUrl(lead))
   })
@@ -111,7 +111,7 @@ describe("pickShareImage", () => {
     const reel = fixtureMediaIds.showreel
     const image = pickShareImage(
       portfolio({
-        profile: { cardConfig: { leadMediaId: reel, highlightFacts: [] } },
+        profile: { cardConfig: { leadMediaId: reel, canvasMediaId: null, highlightFacts: [] } },
         media: { [reel]: fixtureMedia[reel]! },
       })
     )

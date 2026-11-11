@@ -9,6 +9,8 @@ import {
   publicPortfolioInput,
   publicPortfolioSchema,
   reorderSectionsInput,
+  setCanvasInput,
+  setTalentCategoriesInput,
   setTalentAttributeInput,
   setTalentSkillsInput,
   studioStateSchema,
@@ -29,6 +31,8 @@ import {
   getStudioState,
   publishTalent,
   reorderSections,
+  setStudioCanvas,
+  setTalentCategories,
   setTalentAttribute,
   setTalentSkills,
   unpublishTalent,
@@ -76,6 +80,15 @@ export const talentRouter = router({
       .mutation(({ ctx, input }) => {
         return callProcedure(() =>
           updateStudioProfile(ctx.db, ctx.userId, input)
+        )
+      }),
+
+    setCanvas: talentMutation
+      .input(setCanvasInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() =>
+          setStudioCanvas(ctx.db, ctx.userId, input.mediaId)
         )
       }),
 
@@ -153,6 +166,17 @@ export const talentRouter = router({
       .mutation(({ ctx, input }) => {
         return callProcedure(() =>
           applyTemplate(ctx.db, ctx.userId, input.templateId)
+        )
+      }),
+  }),
+
+  categories: router({
+    set: talentMutation
+      .input(setTalentCategoriesInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() =>
+          setTalentCategories(ctx.db, ctx.userId, input.categoryIds)
         )
       }),
   }),

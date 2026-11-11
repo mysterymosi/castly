@@ -132,7 +132,9 @@ export class UploadQueueProcessor {
     try {
       let working = { ...intent }
       if (working.kind === "image" && !working.compressedUri) {
-        working.compressedUri = await compressImage(working.fileUri)
+        working.compressedUri = await compressImage(working.fileUri, {
+          canvas: working.goal === "canvas",
+        })
         this.patch(working.id, { compressedUri: working.compressedUri })
       }
 
@@ -151,6 +153,9 @@ export class UploadQueueProcessor {
 
       if (working.goal === "showreel") {
         await attachShowreel(ready.id)
+      }
+      if (working.goal === "canvas") {
+        await studioApi.setCanvas(ready.id)
       }
 
       this.patch(working.id, {

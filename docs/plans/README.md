@@ -16,6 +16,7 @@ A first release is **milestones 1–7**: a talent can build and publish a portfo
 |---|------|------|
 | 1 | [Foundations](01-foundations.md) | Monorepo, schema, auth, CI, Sentry |
 | 2 | [Talent core](02-talent-core.md) | Studio, media pipeline, publish, search projection |
+| 2b | [Studio content](02b-studio-content.md) | Section editors: categories, credits, languages, rates, availability, attributes |
 | 3 | [Public portfolios](03-public-portfolios.md) | SSR pages, OG tags, vanity URLs |
 | 4 | [Booker core](04-booker-core.md) | Vertical profiling, projects, roles |
 | 5 | [Deck v1](05-deck-v1.md) | Card, ranking, swipe, shortlists |
@@ -38,7 +39,10 @@ graph TD
   M5 --> M6[M6 Match loop]
   M4 --> M7[M7 Trust]
   M6 --> M7
-  M5 --> M8[M8 Filters]
+  M2 --> M2b[M2b Studio content]
+  M5 --> M2b
+  M2b --> M8[M8 Filters]
+  M5 --> M8
   M4 --> M9[M9 Open roles]
   M5 --> M9
   M2 --> M10[M10 Monetization]
@@ -49,7 +53,7 @@ graph TD
   M10 --> M11
 ```
 
-M3 can run in parallel with M4. M8, M9, and M10 can run in any order after their listed dependencies, but M11 waits for all of them plus M7.
+M3 can run in parallel with M4. M2b was added after M2 shipped without content editors; it must pass before M8, whose filters query the data it collects. M8, M9, and M10 can run in any order after their listed dependencies, but M11 waits for all of them plus M7.
 
 ## Device measurement gates
 

@@ -1,30 +1,44 @@
 import { useQuery } from "@tanstack/react-query"
-import { bookerProfileStateSchema, type DeckCard, type DeckGoal, type DeckQueuedCard } from "@workspace/schema"
+import {
+  bookerProfileStateSchema,
+  type DeckCard,
+  type DeckQueuedCard,
+} from "@workspace/schema"
 import { router, useLocalSearchParams } from "expo-router"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Alert, Share, View } from "react-native"
+import { Alert, Share, StyleSheet, View } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { SafeAreaView } from "react-native-screens/experimental"
 
 import { errorMessage, useSession } from "@/auth/session-provider"
 import { EnableBooker, FinishBookerProfile } from "@/booker/booker-gate"
-import { Icon } from "@/components/ui/icon"
-import { PressableScale } from "@/components/ui/pressable-scale"
+import { IconButton } from "@/components/ui/icon-button"
+import { ProgressBar } from "@/components/ui/progress-bar"
 import { Screen } from "@/components/ui/screen"
 import { ErrorState, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
-import { DataSaverOffer, DataSaverToggle } from "@/deck/data-saver-controls"
-import { SwipeDeck, type DeckDecision, type SwipeDeckHandle } from "@/deck/swipe-deck"
+import { DataSaverOffer } from "@/deck/data-saver-controls"
+import { DeckSettingsSheet } from "@/deck/deck-settings-sheet"
+import {
+  SwipeDeck,
+  type DeckDecision,
+  type SwipeDeckHandle,
+} from "@/deck/swipe-deck"
 import { useDeckSession } from "@/deck/use-deck-session"
-import { useTokens } from "@/hooks/use-tokens"
 import { haptics } from "@/lib/haptics"
 import { markDeckOpened } from "@/lib/measure"
+import { useDataSaver } from "@/media/data-saver"
 import { trpcQuery } from "@/trpc/query-client"
 
-const SITE_URL = (process.env.EXPO_PUBLIC_SITE_URL ?? "https://castly.app").replace(/\/$/, "")
+const SITE_URL = (
+  process.env.EXPO_PUBLIC_SITE_URL ?? "https://castly.app"
+).replace(/\/$/, "")
 
-const DIRECTION = { pass: "pass", interested: "interest", save: "save" } as const
-
-const GOAL_CHOICES = [5, 10, 20]
+const DIRECTION = {
+  pass: "pass",
+  interested: "interest",
+  save: "save",
+} as const
 
 /**
  * The booker deck (M5): a ranked session from `deck.start`, served a page at a time by
@@ -33,7 +47,6 @@ const GOAL_CHOICES = [5, 10, 20]
  */
 export default function DiscoverScreen() {
   const { me } = useSession()
-  const { color } = useTokens()
   const params = useLocalSearchParams<{ roleId?: string; roleName?: string }>()
   const roleId = params.roleId || null
   useEffect(() => markDeckOpened(), [])
@@ -42,26 +55,50 @@ export default function DiscoverScreen() {
     trpcQuery.booker.getProfile.queryOptions(undefined, {
       enabled: isBooker,
       select: bookerProfileStateSchema.parse,
-    }),
+    })
   )
   const hasProfile = !!profileQuery.data?.profile
   const deck = useDeckSession(isBooker && hasProfile, roleId)
   const deckRef = useRef<SwipeDeckHandle>(null)
   const [undoing, setUndoing] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [screenHeight, setScreenHeight] = useState(0)
+  // The safe frame inside the screen; its bottom gap is the tab bar and home indicator. Kept raw
+  // and resolved on render: the two layouts arrive in either order.
+  const [frame, setFrame] = useState<{ y: number; height: number } | null>(null)
+  const safe =
+    frame && screenHeight > 0
+      ? { top: frame.y, bottom: screenHeight - frame.y - frame.height }
+      : null
+  const [headerHeight, setHeaderHeight] = useState(0)
+  // The measured frame's bottom includes the tab bar; its top can come back 0, so the status bar
+  // height comes from the safe-area context.
+  const insets = useSafeAreaInsets()
+  const dataSaver = useDataSaver()
 
   const { swipe } = deck
   const onDecision = useCallback(
     (decision: DeckDecision, card: DeckCard) => {
-      swipe(card as DeckQueuedCard, DIRECTION[decision]).catch((error: unknown) => {
-        haptics.error()
-        Alert.alert("That swipe wasn't saved", errorMessage(error, "Check your connection, then undo and try again."))
-      })
+      swipe(card as DeckQueuedCard, DIRECTION[decision]).catch(
+        (error: unknown) => {
+          haptics.error()
+          Alert.alert(
+            "That swipe wasn't saved",
+            errorMessage(
+              error,
+              "Check your connection, then undo and try again."
+            )
+          )
+        }
+      )
     },
-    [swipe],
+    [swipe]
   )
   const onShare = useCallback((card: DeckCard) => {
     const { displayName, slug } = card.talent.profile
-    void Share.share({ message: `${displayName} on Castly: ${SITE_URL}/${slug}` })
+    void Share.share({
+      message: `${displayName} on Castly: ${SITE_URL}/${slug}`,
+    })
   }, [])
 
   async function undo() {
@@ -73,29 +110,33 @@ export default function DiscoverScreen() {
       deckRef.current?.stepBackTo(talentId)
     } catch (error) {
       haptics.error()
-      Alert.alert("Couldn't undo", errorMessage(error, "Try again in a moment."))
+      Alert.alert(
+        "Couldn't undo",
+        errorMessage(error, "Try again in a moment.")
+      )
     } finally {
       setUndoing(false)
     }
   }
 
-  function chooseGoal(goal: DeckGoal) {
-    const set = (count: number | null) =>
-      void deck.setGoal(count).catch((error: unknown) => {
-        Alert.alert("Couldn't set the goal", errorMessage(error, "Try again in a moment."))
-      })
-    Alert.alert("Session goal", "How many talents do you want to shortlist this session?", [
-      ...GOAL_CHOICES.map((n) => ({ text: `Shortlist ${n}`, onPress: () => set(n) })),
-      ...(goal.target !== null ? [{ text: "No goal", onPress: () => set(null) }] : []),
-      { text: "Cancel", style: "cancel" as const },
-    ])
+  function setGoal(count: number | null) {
+    deck.setGoal(count).catch((error: unknown) => {
+      Alert.alert(
+        "Couldn't set the goal",
+        errorMessage(error, "Try again in a moment.")
+      )
+    })
   }
 
   if (!isBooker) {
-    return <EnableBooker body="Discover lets you swipe through talent picked for the work you do." />
+    return (
+      <EnableBooker body="Discover lets you swipe through talent picked for the work you do." />
+    )
   }
   if (profileQuery.data && !hasProfile) {
-    return <FinishBookerProfile body="Tell us what kind of work you do so we know who to show you first." />
+    return (
+      <FinishBookerProfile body="Tell us what kind of work you do so we know who to show you first." />
+    )
   }
   const loadError = profileQuery.error ?? deck.error
   if (!deck.cards && loadError) {
@@ -114,100 +155,141 @@ export default function DiscoverScreen() {
   if (!deck.cards || !deck.goal) return <LoadingState label="Loading talent" />
   const goal = deck.goal
 
-  // Full-bleed (no Screen padding): the card's width is the screen's, less the deck's own gutter.
-  // Native tabs only inset the first ScrollView on iOS; the deck doesn't scroll, so this view
-  // takes the bottom inset itself — it includes the tab bar, keeping the docked actions tappable.
+  // The deck runs full bleed, under the status bar and the tab bar, like a now-playing screen; the
+  // header floats over it. Native tabs only inset the first ScrollView on iOS, so a SafeAreaView
+  // (whose bottom edge includes the tab bar) is measured for the insets instead.
   return (
-    // `style`, not className: NativeWind does not style this third-party view.
-    <SafeAreaView edges={{ top: true, bottom: true }} style={{ flex: 1, backgroundColor: color.bg }}>
-      <View className="flex-row items-center justify-between gap-2 px-5 pt-3">
-        <Text variant="display-sm">Discover</Text>
-        <View className="flex-row items-center gap-2">
-          {deck.canUndo ? (
-            <HeaderPill
-              icon="undo"
-              label="Undo"
-              accessibilityLabel={
-                deck.undosLeft === null ? "Undo last swipe" : `Undo last swipe, ${deck.undosLeft} left this session`
-              }
-              disabled={undoing}
-              onPress={() => void undo()}
-            />
-          ) : null}
-          <DataSaverToggle />
-        </View>
-      </View>
-      <View className="flex-row flex-wrap items-center gap-2 px-5 pb-3 pt-2">
-        {roleId ? (
-          <HeaderPill
-            icon="film"
-            label={params.roleName ? `For ${params.roleName}` : "For a role"}
-            trailingIcon="close"
-            accessibilityLabel={`Casting for ${params.roleName ?? "a role"}. Clear the role`}
-            onPress={() => router.setParams({ roleId: "", roleName: "" })}
-          />
-        ) : null}
-        <HeaderPill
-          icon="flag"
-          label={goal.target === null ? "Set a goal" : `${goal.shortlisted} of ${goal.target} shortlisted`}
-          accessibilityLabel={
-            goal.target === null ? "Set a session goal" : `${goal.shortlisted} of ${goal.target} shortlisted. Change goal`
-          }
-          tone={goal.target !== null && goal.shortlisted >= goal.target ? "done" : "default"}
-          onPress={() => chooseGoal(goal)}
+    <View
+      className="bg-bg flex-1"
+      onLayout={(event) => setScreenHeight(event.nativeEvent.layout.height)}
+    >
+      {/* `style`, not className: NativeWind does not style this third-party view. */}
+      <SafeAreaView
+        edges={{ top: true, bottom: true }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      >
+        <View
+          style={{ flex: 1 }}
+          onLayout={(event) => {
+            const { y, height } = event.nativeEvent.layout
+            setFrame((f) =>
+              f && f.y === y && f.height === height ? f : { y, height }
+            )
+          }}
         />
+      </SafeAreaView>
+      {safe ? (
+        <SwipeDeck
+          key={deck.sessionId}
+          ref={deckRef}
+          cards={deck.cards}
+          exhausted={deck.exhausted}
+          loadMoreError={
+            deck.loadMoreError
+              ? errorMessage(deck.loadMoreError, "Could not load more talent")
+              : null
+          }
+          onNearEnd={deck.loadMore}
+          onDecision={onDecision}
+          onShare={onShare}
+          onRestart={deck.restart}
+          insets={{ top: headerHeight, bottom: safe.bottom }}
+        />
+      ) : null}
+      <View
+        pointerEvents="box-none"
+        onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
+        style={[
+          {
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            // Above the deck's cards, which carry their own zIndex.
+            zIndex: 10,
+            paddingTop: Math.max(safe?.top ?? 0, insets.top),
+          },
+          topScrim,
+        ]}
+      >
+        <View className="flex-row items-center gap-3 px-5 pt-2 pb-3">
+          <View className="flex-1">
+            <Text variant="display-sm" numberOfLines={1}>
+              Discover
+            </Text>
+            {roleId ? (
+              <Text variant="footnote" tone="muted" numberOfLines={1}>
+                Casting for {params.roleName || "a role"}
+              </Text>
+            ) : null}
+          </View>
+          <IconButton
+            icon="undo"
+            shape="squircle"
+            variant="glass"
+            size={48}
+            accessibilityLabel={
+              deck.undosLeft === null
+                ? "Undo last swipe"
+                : `Undo last swipe, ${deck.undosLeft} left this session`
+            }
+            disabled={!deck.canUndo || undoing}
+            onPress={() => void undo()}
+          />
+          <View>
+            <IconButton
+              icon="settings"
+              shape="squircle"
+              variant="glass"
+              size={48}
+              accessibilityLabel={
+                dataSaver ? "Deck settings. Data saver is on" : "Deck settings"
+              }
+              onPress={() => setSettingsOpen(true)}
+            />
+            {dataSaver ? (
+              <View
+                pointerEvents="none"
+                className="rounded-pill border-bg bg-interested absolute top-2 right-2 h-2.5 w-2.5 border-2"
+              />
+            ) : null}
+          </View>
+        </View>
+        {goal.target !== null ? (
+          <View className="flex-row items-center gap-3 px-5 pb-3">
+            <ProgressBar
+              value={goal.shortlisted / goal.target}
+              label={`${goal.shortlisted} of ${goal.target} shortlisted`}
+              className="flex-1"
+            />
+            <Text
+              variant="footnote"
+              tone={goal.shortlisted >= goal.target ? "interested" : "muted"}
+            >
+              {goal.shortlisted}/{goal.target}
+            </Text>
+          </View>
+        ) : null}
+        <DataSaverOffer />
       </View>
-      <DataSaverOffer />
-      <SwipeDeck
-        key={deck.sessionId}
-        ref={deckRef}
-        cards={deck.cards}
-        exhausted={deck.exhausted}
-        loadMoreError={deck.loadMoreError ? errorMessage(deck.loadMoreError, "Could not load more talent") : null}
-        onNearEnd={deck.loadMore}
-        onDecision={onDecision}
-        onShare={onShare}
-        onRestart={deck.restart}
+      <DeckSettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        goal={goal}
+        onGoalChange={setGoal}
+        roleName={roleId ? (params.roleName ?? "") : null}
+        onClearRole={() => {
+          setSettingsOpen(false)
+          router.setParams({ roleId: "", roleName: "" })
+        }}
       />
-    </SafeAreaView>
+    </View>
   )
 }
 
-/** A compact control in the deck's header: undo, the active role, the session goal. */
-function HeaderPill({
-  icon,
-  trailingIcon,
-  label,
-  accessibilityLabel,
-  disabled,
-  tone = "default",
-  onPress,
-}: {
-  icon: "undo" | "film" | "flag"
-  trailingIcon?: "close"
-  label: string
-  accessibilityLabel: string
-  disabled?: boolean
-  tone?: "default" | "done"
-  onPress: () => void
-}) {
-  const done = tone === "done"
-  return (
-    <PressableScale
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      disabled={disabled}
-      onPress={onPress}
-      hitSlop={6}
-      className={`min-h-9 flex-row items-center gap-1.5 rounded-pill border px-3 ${
-        done ? "border-interested bg-interested" : "border-border bg-surface"
-      } ${disabled ? "opacity-50" : ""}`}
-    >
-      <Icon name={icon} size={14} tone={done ? "onInterested" : "text"} />
-      <Text variant="label" tone={done ? "onInterested" : "default"} numberOfLines={1}>
-        {label}
-      </Text>
-      {trailingIcon ? <Icon name={trailingIcon} size={12} tone="textMuted" /> : null}
-    </PressableScale>
-  )
-}
+/** Keeps the header legible over a pale photo. */
+const topScrim = {
+  experimental_backgroundImage:
+    "linear-gradient(to bottom, rgba(14, 15, 19, 0.75) 0%, rgba(14, 15, 19, 0.35) 70%, rgba(14, 15, 19, 0) 100%)",
+} as const

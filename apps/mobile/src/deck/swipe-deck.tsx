@@ -1,6 +1,14 @@
 import type { DeckCard as DeckCardData } from "@workspace/schema"
-import { shadow } from "@workspace/ui-tokens"
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react"
+import { palette, shadow } from "@workspace/ui-tokens"
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+} from "react"
 import { View, type LayoutChangeEvent } from "react-native"
 import { Gesture, GestureDetector } from "react-native-gesture-handler"
 import Animated, {
@@ -23,7 +31,12 @@ import { Icon, type IconName } from "@/components/ui/icon"
 import { PressableScale } from "@/components/ui/pressable-scale"
 import { ErrorState, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
-import { cardId, DeckCard, DeckCardPreview } from "@/deck/deck-card"
+import {
+  cardId,
+  DeckCard,
+  DeckCardPreview,
+  type DeckChrome,
+} from "@/deck/deck-card"
 import { useDeckPrefetch } from "@/deck/prefetch"
 import { haptics } from "@/lib/haptics"
 import { logMeasure, takeDeckOpenedAt } from "@/lib/measure"
@@ -34,11 +47,16 @@ export type DeckDecision = "pass" | "interested" | "save"
 const COMMIT_FRACTION = 0.28
 const FLICK_VELOCITY = 900
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
-const CARD_GUTTER = 12
-const ACTION_ROW_HEIGHT = 64
-const ACTION_ROW_GAP = 10
+const ACTION_ROW_HEIGHT = 72
+const ACTION_ROW_GAP = 16
 /** Ask for the next page when this many cards are left: enough for the 5-card prefetch ahead. */
 const NEAR_END = 5
+
+/** Darkens the bottom of the screen behind the decision buttons. */
+const bottomScrim = {
+  experimental_backgroundImage:
+    "linear-gradient(to bottom, rgba(14, 15, 19, 0) 0%, rgba(14, 15, 19, 0.7) 100%)",
+} as const
 
 /**
  * Both cards occupy the same slot, stacked. Positioning lives on a plain View; the Animated.View
@@ -46,7 +64,7 @@ const NEAR_END = 5
  * (`components/ui/animated.ts`) drops layout styles that arrive alongside an animated style, which
  * laid the two cards out one above the other.
  */
-const cardSlot = { position: "absolute", left: CARD_GUTTER, top: 0 } as const
+const cardSlot = { position: "absolute", left: 0, top: 0 } as const
 
 /** Lets the screen step the deck back after the server confirms an undo. */
 export type SwipeDeckHandle = { stepBackTo: (talentId: string) => void }
@@ -66,6 +84,11 @@ type Props = {
   exhausted?: boolean
   /** The next page failed; past the last card, offer to retry instead of waiting. */
   loadMoreError?: string | null
+  /**
+   * What the screen lays over the deck, which runs full bleed under it: the status bar and header
+   * above, the tab bar below. The decision buttons float just above `bottom`.
+   */
+  insets: { top: number; bottom: number }
   ref?: Ref<SwipeDeckHandle>
 }
 
@@ -93,10 +116,13 @@ export function SwipeDeck({
   onNearEnd,
   exhausted = true,
   loadMoreError = null,
+  insets,
   ref,
 }: Props) {
   const reduceMotion = useReducedMotion()
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null)
+  const [size, setSize] = useState<{ width: number; height: number } | null>(
+    null
+  )
   const [index, setIndex] = useState(0)
   const exiting = useRef(false)
   // One offset per card (cheap: two numbers each), kept for the life of the deck: a page that
@@ -104,7 +130,8 @@ export function SwipeDeck({
   const [motionStore] = useState(() => new Map<string, Motion>())
   const motions = useMemo(() => {
     for (const c of cards) {
-      if (!motionStore.has(cardId(c))) motionStore.set(cardId(c), { x: makeMutable(0), y: makeMutable(0) })
+      if (!motionStore.has(cardId(c)))
+        motionStore.set(cardId(c), { x: makeMutable(0), y: makeMutable(0) })
     }
     return motionStore
   }, [cards, motionStore])
@@ -114,10 +141,16 @@ export function SwipeDeck({
   const next = cards[index + 1]
   const afterNext = cards[index + 2]
   useDeckPrefetch(cards, index)
-  const width = size ? size.width - CARD_GUTTER * 2 : 0
-  // The floating action row sits just under the card: across its edge it covered the Highlights
-  // card, which is the first screen's cue to scroll.
-  const height = size ? size.height - ACTION_ROW_HEIGHT - ACTION_ROW_GAP * 2 : 0
+  const width = size?.width ?? 0
+  const height = size?.height ?? 0
+  const actionsTop = height - insets.bottom - ACTION_ROW_GAP - ACTION_ROW_HEIGHT
+  const chrome = useMemo(
+    () => ({
+      top: insets.top,
+      bottom: insets.bottom + ACTION_ROW_HEIGHT + ACTION_ROW_GAP * 2,
+    }),
+    [insets.top, insets.bottom]
+  )
   const offscreen = (size?.width ?? 0) * 1.5
 
   const top = current ? (motions.get(cardId(current)) ?? null) : null
@@ -140,14 +173,17 @@ export function SwipeDeck({
         if (back < 0 || back >= index) return
         const motion = motions.get(talentId)
         if (motion) {
-          const settle = { duration: reduceMotion ? 0 : 320, dampingRatio: 0.85 }
+          const settle = {
+            duration: reduceMotion ? 0 : 320,
+            dampingRatio: 0.85,
+          }
           motion.x.set(withSpring(0, settle))
           motion.y.set(withSpring(0, settle))
         }
         setIndex(back)
       },
     }),
-    [cards, index, motions, reduceMotion],
+    [cards, index, motions, reduceMotion]
   )
 
   // §25 timings (logged only when measuring): first card from Discover opening, and each
@@ -157,11 +193,15 @@ export function SwipeDeck({
     const now = Date.now()
     if (shownIndex === 0) {
       const openedAt = takeDeckOpenedAt()
-      if (openedAt !== null) logMeasure("deck.first_card", { sinceOpenMs: now - openedAt })
+      if (openedAt !== null)
+        logMeasure("deck.first_card", { sinceOpenMs: now - openedAt })
       return
     }
     if (committedAt.current === null) return
-    logMeasure("deck.transition", { ms: now - committedAt.current, index: shownIndex })
+    logMeasure("deck.transition", {
+      ms: now - committedAt.current,
+      index: shownIndex,
+    })
     committedAt.current = null
   }, [])
 
@@ -172,7 +212,7 @@ export function SwipeDeck({
       committedAt.current = Date.now()
       setIndex((i) => i + 1)
     },
-    [cards, index, onDecision],
+    [cards, index, onDecision]
   )
 
   /** Buttons and accessibility actions: the same exit as a swipe, without a finger. */
@@ -186,15 +226,25 @@ export function SwipeDeck({
         "worklet"
         if (finished) scheduleOnRN(advance, decision)
       }
-      if (decision === "save") top.y.set(withTiming(-height * 1.2, timing, done))
-      else top.x.set(withTiming((decision === "interested" ? 1 : -1) * offscreen, timing, done))
+      if (decision === "save")
+        top.y.set(withTiming(-height * 1.2, timing, done))
+      else
+        top.x.set(
+          withTiming(
+            (decision === "interested" ? 1 : -1) * offscreen,
+            timing,
+            done
+          )
+        )
     },
-    [top, reduceMotion, height, offscreen, advance],
+    [top, reduceMotion, height, offscreen, advance]
   )
 
   function onLayout(event: LayoutChangeEvent) {
     const { width: w, height: h } = event.nativeEvent.layout
-    setSize((s) => (s && s.width === w && s.height === h ? s : { width: w, height: h }))
+    setSize((s) =>
+      s && s.width === w && s.height === h ? s : { width: w, height: h }
+    )
   }
 
   return (
@@ -217,6 +267,7 @@ export function SwipeDeck({
                   leader={card === next ? top : null}
                   width={width}
                   height={height}
+                  chrome={chrome}
                   reduceMotion={reduceMotion}
                   offscreen={offscreen}
                   onCommit={advance}
@@ -227,8 +278,24 @@ export function SwipeDeck({
                 />
               )
             })}
+            {/* Keeps the buttons legible over whatever section has scrolled under them. */}
+            <View
+              pointerEvents="none"
+              style={[
+                {
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: chrome.bottom + 24,
+                  // Above the cards (zIndex 1–3), which the renderer may flatten into this level.
+                  zIndex: 4,
+                },
+                bottomScrim,
+              ]}
+            />
             <FloatingActions
-              top={height + ACTION_ROW_GAP}
+              top={actionsTop}
               onPass={() => exit("pass")}
               onSave={() => exit("save")}
               onInterested={() => exit("interested")}
@@ -266,6 +333,7 @@ function DeckSlot({
   leader,
   width,
   height,
+  chrome,
   reduceMotion,
   offscreen,
   scrollMomentum,
@@ -283,6 +351,7 @@ function DeckSlot({
   leader: Motion | null
   width: number
   height: number
+  chrome: DeckChrome
   reduceMotion: boolean
   offscreen: number
   scrollMomentum: SharedValue<boolean>
@@ -313,25 +382,45 @@ function DeckSlot({
         .onEnd((event) => {
           const flick = Math.abs(event.velocityX) > FLICK_VELOCITY
           const far = Math.abs(event.translationX) > width * COMMIT_FRACTION
-          const direction = Math.sign(flick ? event.velocityX : event.translationX)
+          const direction = Math.sign(
+            flick ? event.velocityX : event.translationX
+          )
           if ((flick || far) && direction !== 0) {
             scheduleOnRN(haptics.tap)
             motion.x.set(
               withSpring(
                 direction * offscreen,
-                { duration: 300, dampingRatio: 1, velocity: event.velocityX, overshootClamping: true },
-                (finished) => {
-                  if (finished) scheduleOnRN(onCommit, direction > 0 ? "interested" : "pass")
+                {
+                  duration: 300,
+                  dampingRatio: 1,
+                  velocity: event.velocityX,
+                  overshootClamping: true,
                 },
-              ),
+                (finished) => {
+                  if (finished)
+                    scheduleOnRN(
+                      onCommit,
+                      direction > 0 ? "interested" : "pass"
+                    )
+                }
+              )
             )
           } else {
-            motion.x.set(withSpring(0, { duration: 400, dampingRatio: 0.8, velocity: event.velocityX }))
+            motion.x.set(
+              withSpring(0, {
+                duration: 400,
+                dampingRatio: 0.8,
+                velocity: event.velocityX,
+              })
+            )
           }
         }),
-    [isTop, motion, width, offscreen, onCommit, scrollMomentum],
+    [isTop, motion, width, offscreen, onCommit, scrollMomentum]
   )
-  const scrollGesture = useMemo(() => Gesture.Native().requireExternalGestureToFail(pan), [pan])
+  const scrollGesture = useMemo(
+    () => Gesture.Native().requireExternalGestureToFail(pan),
+    [pan]
+  )
 
   const style = useAnimatedStyle(() => {
     // Two back: rests where the next card starts, hidden behind it.
@@ -340,7 +429,8 @@ function DeckSlot({
       if (reduceMotion || width === 0) return { transform: [{ scale: 1 }] }
       const progress = Math.min(
         1,
-        Math.abs(leader.x.get()) / (width * 0.6) + Math.abs(leader.y.get()) / (height * 0.6),
+        Math.abs(leader.x.get()) / (width * 0.6) +
+          Math.abs(leader.y.get()) / (height * 0.6)
       )
       return { transform: [{ scale: 0.95 + 0.05 * progress }] }
     }
@@ -348,7 +438,12 @@ function DeckSlot({
       transform: [
         { translateX: motion.x.get() },
         { translateY: motion.y.get() },
-        { rotateZ: reduceMotion || width === 0 ? "0deg" : `${(motion.x.get() / width) * 8}deg` },
+        {
+          rotateZ:
+            reduceMotion || width === 0
+              ? "0deg"
+              : `${(motion.x.get() / width) * 8}deg`,
+        },
       ],
     }
   })
@@ -374,19 +469,34 @@ function DeckSlot({
                 ]
               : undefined
           }
-          onAccessibilityAction={(event) => onAction(event.nativeEvent.actionName as DeckDecision)}
+          onAccessibilityAction={(event) =>
+            onAction(event.nativeEvent.actionName as DeckDecision)
+          }
         >
           {!ready ? (
             <View style={{ position: "absolute", top: 0, left: 0 }}>
-              <DeckCardPreview card={card} width={width} height={height} />
+              <DeckCardPreview
+                card={card}
+                width={width}
+                height={height}
+                chrome={chrome}
+              />
             </View>
           ) : null}
           {isTop ? (
-            <View style={{ position: "absolute", top: 0, left: 0, opacity: ready ? 1 : 0 }}>
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                opacity: ready ? 1 : 0,
+              }}
+            >
               <DeckCard
                 card={card}
                 width={width}
                 height={height}
+                chrome={chrome}
                 scrollGesture={scrollGesture}
                 scrollMomentum={scrollMomentum}
                 onShare={onShare}
@@ -399,8 +509,18 @@ function DeckSlot({
           ) : null}
           {isTop ? (
             <>
-              <Stamp side="pass" translateX={motion.x} width={width} />
-              <Stamp side="interested" translateX={motion.x} width={width} />
+              <Stamp
+                side="pass"
+                translateX={motion.x}
+                width={width}
+                top={chrome.top + 24}
+              />
+              <Stamp
+                side="interested"
+                translateX={motion.x}
+                width={width}
+                top={chrome.top + 24}
+              />
             </>
           ) : null}
         </Animated.View>
@@ -412,22 +532,40 @@ function DeckSlot({
 /** After the last card: a fanned stack, a line of copy, and a way back to the start. */
 function DeckEnd({ onRestart }: { onRestart: () => void }) {
   return (
-    <Animated.View entering={FadeIn.duration(240)} style={{ flex: 1, justifyContent: "center" }}>
+    <Animated.View
+      entering={FadeIn.duration(240)}
+      style={{ flex: 1, justifyContent: "center" }}
+    >
       <View className="items-center px-8">
-        <View style={{ width: 168, height: 176, alignItems: "center", justifyContent: "center" }}>
+        <View
+          style={{
+            width: 168,
+            height: 176,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           <View
-            className="absolute rounded-lg border border-border bg-surfaceMuted"
-            style={{ width: 104, height: 140, transform: [{ rotate: "-10deg" }, { translateX: -26 }] }}
+            className="bg-surfaceMuted absolute rounded-lg border border-border"
+            style={{
+              width: 104,
+              height: 140,
+              transform: [{ rotate: "-10deg" }, { translateX: -26 }],
+            }}
           />
           <View
-            className="absolute rounded-lg border border-border bg-surfaceMuted"
-            style={{ width: 104, height: 140, transform: [{ rotate: "10deg" }, { translateX: 26 }] }}
+            className="bg-surfaceMuted absolute rounded-lg border border-border"
+            style={{
+              width: 104,
+              height: 140,
+              transform: [{ rotate: "10deg" }, { translateX: 26 }],
+            }}
           />
           <View
-            className="items-center justify-center rounded-lg border border-border bg-surface"
+            className="bg-surface items-center justify-center rounded-lg border border-border"
             style={{ width: 112, height: 148, boxShadow: shadow.card }}
           >
-            <View className="h-14 w-14 items-center justify-center rounded-pill bg-interested">
+            <View className="rounded-pill bg-interested h-14 w-14 items-center justify-center">
               <Icon name="check" size={26} tone="onInterested" />
             </View>
           </View>
@@ -435,10 +573,22 @@ function DeckEnd({ onRestart }: { onRestart: () => void }) {
         <Text variant="title" className="mt-8 text-center">
           You’re all caught up
         </Text>
-        <Text variant="body" tone="muted" className="mt-2 text-center" style={{ maxWidth: 300 }}>
-          You’ve seen everyone in this deck. New talent joins every day, so check back soon.
+        <Text
+          variant="body"
+          tone="muted"
+          className="mt-2 text-center"
+          style={{ maxWidth: 300 }}
+        >
+          You’ve seen everyone in this deck. New talent joins every day, so
+          check back soon.
         </Text>
-        <Button label="Start over" icon="refresh" size="md" onPress={onRestart} className="mt-8 px-8" />
+        <Button
+          label="Start over"
+          icon="refresh"
+          size="md"
+          onPress={onRestart}
+          className="mt-8 px-8"
+        />
       </View>
     </Animated.View>
   )
@@ -449,10 +599,12 @@ function Stamp({
   side,
   translateX,
   width,
+  top,
 }: {
   side: "pass" | "interested"
   translateX: SharedValue<number>
   width: number
+  top: number
 }) {
   const pass = side === "pass"
   const style = useAnimatedStyle(() => ({
@@ -460,15 +612,19 @@ function Stamp({
       translateX.get(),
       pass ? [-width * COMMIT_FRACTION, 0] : [0, width * COMMIT_FRACTION],
       pass ? [1, 0] : [0, 1],
-      Extrapolation.CLAMP,
+      Extrapolation.CLAMP
     ),
   }))
   return (
-    // Below the progress bars and the share button, tilted like a rubber stamp.
+    // Below the header and the progress bars, tilted like a rubber stamp.
     <View
       pointerEvents="none"
       style={[
-        { position: "absolute", top: 64, transform: [{ rotate: pass ? "12deg" : "-12deg" }] },
+        {
+          position: "absolute",
+          top,
+          transform: [{ rotate: pass ? "12deg" : "-12deg" }],
+        },
         pass ? { right: 20 } : { left: 20 },
       ]}
     >
@@ -477,7 +633,11 @@ function Stamp({
           className={`rounded-md border-[3px] px-3 py-1.5 ${pass ? "border-passText" : "border-interestedText"}`}
           style={{ backgroundColor: "rgba(255, 255, 255, 0.92)" }}
         >
-          <Text variant="title-sm" tone={pass ? "pass" : "interested"} style={{ letterSpacing: 1.5 }}>
+          <Text
+            variant="title-sm"
+            tone={pass ? "pass" : "interested"}
+            style={{ letterSpacing: 1.5 }}
+          >
             {pass ? "PASS" : "INTERESTED"}
           </Text>
         </View>
@@ -486,18 +646,19 @@ function Stamp({
   )
 }
 
+/** Spotify's transport row, on the deck: glass circles either side of a big white play button. */
 function ActionButton({
   icon,
   label,
   onPress,
-  tone,
-  large,
+  primary,
+  testID,
 }: {
   icon: IconName
   label: string
   onPress: () => void
-  tone: "pass" | "interested" | "neutral"
-  large?: boolean
+  primary?: boolean
+  testID?: string
 }) {
   return (
     <PressableScale
@@ -506,23 +667,30 @@ function ActionButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      className={`items-center justify-center rounded-pill ${large ? "h-16 w-16" : "h-12 w-12"} ${
-        tone === "interested" ? "bg-interested" : "bg-surface"
-      }`}
-      style={{ boxShadow: shadow.raised }}
+      testID={testID}
+      className={`rounded-pill items-center justify-center ${primary ? "h-[72px] w-[72px]" : "h-14 w-14"}`}
+      style={
+        primary
+          ? { backgroundColor: "#FFFFFF", boxShadow: shadow.raised }
+          : {
+              backgroundColor: "rgba(255, 255, 255, 0.14)",
+              borderWidth: 1,
+              borderColor: "rgba(255, 255, 255, 0.22)",
+            }
+      }
     >
       <Icon
         name={icon}
-        size={large ? 28 : 20}
-        tone={tone === "pass" ? "passText" : tone === "interested" ? "onInterested" : "text"}
+        size={primary ? 30 : 22}
+        color={primary ? palette.ink : "#FFFFFF"}
       />
     </PressableScale>
   )
 }
 
 /**
- * Pass / Save / Interested float just under the card (PRD §7.2.1: reachable at any scroll depth),
- * as raised circles rather than a bar. Share lives on the photo and at the portfolio's end.
+ * Pass / Interested / Save float just above the tab bar (PRD §7.2.1: reachable at any scroll
+ * depth), over the card. Share sits in the caption and at the portfolio's end.
  */
 function FloatingActions({
   top,
@@ -541,17 +709,24 @@ function FloatingActions({
       style={{
         position: "absolute",
         top,
+        zIndex: 5,
+        height: ACTION_ROW_HEIGHT,
         left: 0,
         right: 0,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: 28,
+        gap: 36,
       }}
     >
-      <ActionButton icon="close" label="Pass" tone="pass" large onPress={onPass} />
-      <ActionButton icon="bookmark" label="Save for later" tone="neutral" onPress={onSave} />
-      <ActionButton icon="check" label="Interested" tone="interested" large onPress={onInterested} />
+      <ActionButton icon="close" label="Pass" onPress={onPass} />
+      <ActionButton
+        icon="check"
+        label="Interested"
+        primary
+        onPress={onInterested}
+      />
+      <ActionButton icon="bookmark" label="Save for later" onPress={onSave} />
     </View>
   )
 }

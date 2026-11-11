@@ -30,6 +30,8 @@ const studioCode = {
   publish_not_ready: "PRECONDITION_FAILED",
   profile_suspended: "FORBIDDEN",
   talent_not_found: "NOT_FOUND",
+  invalid_canvas: "BAD_REQUEST",
+  unknown_category: "BAD_REQUEST",
 } as const
 
 const bookerCode = {

@@ -11,6 +11,8 @@ const serializedTalentBrand = "SerializedTalent"
 
 export const cardConfigSchema = z.object({
   leadMediaId: z.uuid().nullable().default(null),
+  /** The deck card's looping canvas (`canvas.ts`); set only through `studio.setCanvas`. */
+  canvasMediaId: z.uuid().nullable().default(null),
   highlightFacts: z.array(z.string().max(80)).max(3).default([]),
 })
 

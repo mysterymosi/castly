@@ -2,7 +2,12 @@ import { ImageManipulator, SaveFormat } from "expo-image-manipulator"
 import * as ImagePicker from "expo-image-picker"
 import { fetch as expoFetch } from "expo/fetch"
 import { File } from "expo-file-system"
-import type { CreateUploadUrlOutput, MediaStatusOutput } from "@workspace/schema"
+import {
+  canvasProblem,
+  canvasSpec,
+  type CreateUploadUrlOutput,
+  type MediaStatusOutput,
+} from "@workspace/schema"
 
 import { invoke, trpc } from "@/trpc/client"
 
@@ -34,9 +39,40 @@ export async function pickVideo() {
   return result.assets[0]?.uri ?? null
 }
 
-export async function compressImage(uri: string) {
+export type CanvasPick =
+  | { kind: "image" | "video"; uri: string; mimeType: string }
+  | { problem: string }
+
+/**
+ * A canvas from the library: a 3–8 second vertical video or a vertical photo, checked against
+ * `canvasSpec` before anything uploads. iOS records MOV; both it and MP4 are accepted.
+ */
+export async function pickCanvas(): Promise<CanvasPick | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ["videos", "images"],
+    allowsMultipleSelection: false,
+    quality: 1,
+  })
+  const asset = result.canceled ? null : result.assets[0]
+  if (!asset) return null
+  const kind = asset.type === "video" ? "video" : "image"
+  const mimeType = asset.mimeType ?? (kind === "video" ? "video/mp4" : "image/jpeg")
+  const problem = canvasProblem({
+    kind,
+    width: asset.width || null,
+    height: asset.height || null,
+    durationMs: kind === "video" ? (asset.duration ?? null) : null,
+    mimeType: kind === "video" ? mimeType : null,
+  })
+  if (problem) return { problem }
+  // Stills are re-encoded as JPEG before upload (`compressImage`).
+  return { kind, uri: asset.uri, mimeType: kind === "video" ? mimeType : "image/jpeg" }
+}
+
+/** JPEG for upload: 2048 wide, or a canvas still at `canvasSpec.stillHeight` tall. */
+export async function compressImage(uri: string, { canvas = false } = {}) {
   const rendered = await ImageManipulator.manipulate(uri)
-    .resize({ width: 2048 })
+    .resize(canvas ? { height: canvasSpec.stillHeight } : { width: 2048 })
     .renderAsync()
   const manipulated = await rendered.saveAsync({
     compress: 0.82,

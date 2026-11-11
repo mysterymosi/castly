@@ -21,6 +21,7 @@ import { useUploadQueue } from "@/media/upload-queue-provider"
 import { ProgressBar } from "@/components/ui/progress-bar"
 import { markPreviewRequested } from "@/lib/measure"
 import { studioApi } from "@/studio/api"
+import { CanvasCard } from "@/studio/canvas-card"
 import { CompletenessMeter } from "@/studio/completeness-meter"
 import { DecisionCardPreview } from "@/studio/decision-card-preview"
 import { sectionMeta, templates } from "@/studio/section-meta"
@@ -77,6 +78,39 @@ function EnableTalent() {
       <Button label="Enable talent mode" loading={pending} onPress={enable} className="mx-6" />
       {error ? <InlineError message={error} className="mx-6 mt-4" /> : null}
     </Screen>
+  )
+}
+
+/** The talent's categories; none means no role's deck can reach them. */
+function CategoriesRow({ state }: { state: StudioState }) {
+  const names = state.categoryIds
+    .map((id) => state.categories.find((c) => c.id === id)?.name)
+    .filter(Boolean)
+  const missing = names.length === 0
+  return (
+    <PressableCard
+      accessibilityLabel={missing ? "Pick what you do" : `What you do: ${names.join(", ")}. Edit`}
+      onPress={() => router.push("/studio/categories")}
+      className="flex-row items-center gap-4 p-4"
+    >
+      <View
+        className={cn(
+          "h-11 w-11 items-center justify-center rounded-pill",
+          missing ? "bg-pass/15" : "bg-surfaceMuted"
+        )}
+      >
+        <Icon name="person" size={20} tone={missing ? "passText" : "text"} />
+      </View>
+      <View className="flex-1 gap-0.5">
+        <Text variant="body-strong" numberOfLines={1}>
+          {missing ? "Pick what you do" : names.join(" · ")}
+        </Text>
+        <Text variant="footnote" tone={missing ? "pass" : "muted"}>
+          {missing ? "Until you do, you won't show up for any role" : "You show up for roles in these"}
+        </Text>
+      </View>
+      <Icon name="chevron-right" size={18} tone="textMuted" />
+    </PressableCard>
   )
 }
 
@@ -216,6 +250,9 @@ export default function StudioHub() {
             )}
           </Card>
 
+          <SectionHeading title="What you do" />
+          <CategoriesRow state={state} />
+
           <SectionHeading title="Decision card" />
           <PressableCard
             accessibilityLabel="Decision card. Opens a preview"
@@ -248,6 +285,9 @@ export default function StudioHub() {
             onPress={() => router.push("/studio/highlights")}
             className="mt-3"
           />
+
+          <SectionHeading title="Canvas" />
+          <CanvasCard state={state} />
 
           <SectionHeading title="Template" />
           <ScrollView

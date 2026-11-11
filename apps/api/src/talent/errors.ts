@@ -6,6 +6,8 @@ export type StudioErrorCode =
   | "publish_not_ready"
   | "profile_suspended"
   | "talent_not_found"
+  | "invalid_canvas"
+  | "unknown_category"
 
 export class StudioError extends Error {
   readonly code: StudioErrorCode

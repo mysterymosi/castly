@@ -39,7 +39,7 @@ function HeroSection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config: He
         </Text>
       ) : null}
       {config.subtitle ? (
-        <Text numberOfLines={2} maxFontSizeMultiplier={1.3} className="mt-1 font-body text-footnote text-textMuted">
+        <Text numberOfLines={2} maxFontSizeMultiplier={1.3} className="mt-1 font-bodyMedium text-footnote text-textMuted">
           {config.subtitle}
         </Text>
       ) : null}

@@ -29,7 +29,7 @@ function AboutSection({ config, mediaMeta, cardWidth = CARD_WIDTH }: { config: A
         <Text
           numberOfLines={8}
           maxFontSizeMultiplier={1.3}
-          className="font-body text-text"
+          className="font-bodyMedium text-text"
           style={{ fontSize: 14, lineHeight: 20 }}
         >
           {config.body}

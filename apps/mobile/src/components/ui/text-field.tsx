@@ -41,7 +41,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
           onBlur?.(event)
         }}
         className={cn(
-          "min-h-14 rounded-lg border-2 bg-surface px-4 font-body text-body text-text outline-none",
+          "min-h-14 rounded-lg border-2 bg-surface px-4 font-bodySemibold text-body text-text outline-none",
           multiline ? "min-h-28 py-3" : "py-3",
           error ? "border-passText" : focused ? "border-focus" : "border-borderStrong focus:border-focus",
           inputClassName,

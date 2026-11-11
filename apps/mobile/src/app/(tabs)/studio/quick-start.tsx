@@ -18,9 +18,10 @@ import { TextField } from "@/components/ui/text-field"
 import { haptics } from "@/lib/haptics"
 import { mediaApi } from "@/media/api"
 import { studioApi } from "@/studio/api"
+import { CategoryPicker, toggleCategory } from "@/studio/category-picker"
 import { useStudio } from "@/studio/studio-provider"
 
-const steps = ["name", "city", "bio", "skills", "photos"] as const
+const steps = ["name", "category", "city", "bio", "skills", "photos"] as const
 type Step = (typeof steps)[number]
 
 const BIO_MAX = 280
@@ -44,6 +45,7 @@ export default function QuickStartScreen() {
   const [displayName, setDisplayName] = useState(
     state && state.talent.profile.displayName !== "New talent" ? state.talent.profile.displayName : "",
   )
+  const [categoryIds, setCategoryIds] = useState<string[]>(state?.categoryIds ?? [])
   const [cityId, setCityId] = useState(state?.talent.profile.cityId ?? "")
   const [bio, setBio] = useState(state?.talent.profile.bio ?? "")
   const [skillIds, setSkillIds] = useState<string[]>(state?.talent.skillIds.slice(0, SKILL_COUNT) ?? [])
@@ -55,6 +57,7 @@ export default function QuickStartScreen() {
   const step: Step = steps[stepIndex]!
   const canContinue: Record<Step, boolean> = {
     name: displayName.trim().length > 0,
+    category: categoryIds.length > 0,
     city: cityId.length > 0,
     bio: bio.trim().length > 0,
     skills: skillIds.length >= SKILL_COUNT,
@@ -94,6 +97,7 @@ export default function QuickStartScreen() {
         bio: bio.trim(),
         skillIds,
         photoMediaIds,
+        categoryIds,
       })
       haptics.success()
       setState(next)
@@ -166,6 +170,20 @@ export default function QuickStartScreen() {
               maxLength={120}
               returnKeyType="next"
               onSubmitEditing={next}
+            />
+          </>
+        ) : null}
+
+        {step === "category" ? (
+          <>
+            <StepTitle
+              title="What do you do?"
+              body="Bookers cast roles by category, so you'll show up for roles in the ones you pick."
+            />
+            <CategoryPicker
+              categories={state.categories}
+              value={categoryIds}
+              onToggle={(id) => setCategoryIds((current) => toggleCategory(current, id))}
             />
           </>
         ) : null}
