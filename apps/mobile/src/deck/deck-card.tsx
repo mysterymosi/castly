@@ -6,12 +6,15 @@ import {
 import {
   mediaMetaFromStatus,
   PortfolioMediaProvider,
+  PortfolioPhoto,
   PortfolioVideoGate,
   renderStudioSection,
 } from "@workspace/portfolio-native"
 import {
+  layoutPortfolio,
   portfolioContentFromDto,
-  readVisibleSections,
+  readRenderableSections,
+  withShowablePhotos,
   type DeckCard as DeckCardData,
   type DeckQueuedCard,
   type PortfolioSection,
@@ -36,6 +39,7 @@ import type { SharedValue } from "react-native-reanimated"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { Text } from "@/components/ui/text"
+import { DecisionActions, type DeckDecision } from "@/deck/decision-actions"
 import { ImageViewer, type ImageViewerState } from "@/deck/image-viewer"
 import { useFrameMeter } from "@/lib/frame-meter"
 import { useDataSaver } from "@/media/data-saver"
@@ -46,6 +50,7 @@ type NativeGesture = ReturnType<typeof Gesture.Native>
 type Item =
   | { kind: "lead"; key: string }
   | { kind: "section"; key: string; section: PortfolioSection }
+  | { kind: "photo"; key: string; mediaId: string; index: number }
   | { kind: "depth"; key: string }
   | { kind: "end"; key: string }
 
@@ -65,7 +70,7 @@ const photoScrim = {
 
 /**
  * Where the screen's own controls float over the card, full bleed: the header (and status bar)
- * above, the decision buttons (and tab bar) below. Text on the card stays clear of both.
+ * above, the tab bar below. Text on the card stays clear of both.
  */
 export type DeckChrome = { top: number; bottom: number }
 
@@ -276,37 +281,10 @@ function CanvasVideo({
   )
 }
 
-/** "Switch to photos" from the player: flips the lead between the photos and the canvas. */
-function CanvasSwitch({
-  showing,
-  onToggle,
-}: {
-  showing: boolean
-  onToggle: () => void
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={showing ? "Switch to photos" : "Switch to canvas"}
-      onPress={onToggle}
-      hitSlop={8}
-      className="rounded-pill flex-row items-center gap-2 self-start px-3 py-2 active:opacity-70"
-      style={{ backgroundColor: "rgba(14, 15, 19, 0.55)" }}
-    >
-      <Icon name={showing ? "photo" : "play"} size={13} color="#FFFFFF" />
-      <Text variant="label">
-        {showing ? "Switch to photos" : "Switch to canvas"}
-      </Text>
-    </Pressable>
-  )
-}
-
 /**
- * The first screen of a card, a now-playing screen: the canvas (or, without one, the lead photo)
- * fills it edge to edge under the header and the decision buttons
- * (`chrome`), with the caption stacked above the buttons over a scrim. Tap left / right to step
- * through up to five photos — a horizontal pager would fight the deck's swipe. The portfolio
- * continues below.
+ * The first screen of a card, a now-playing screen: the canvas (or, without one, the Main photo)
+ * fills it edge to edge under the header and the tab bar (`chrome`), with the caption over a scrim
+ * at its foot. The portfolio continues below, with the other photos spread between its sections.
  */
 function LeadBlock({
   card,
@@ -315,7 +293,6 @@ function LeadBlock({
   chrome,
   interactive,
   canvas,
-  onToggleCanvas,
   onShare,
   onPhotoShown,
 }: {
@@ -326,16 +303,13 @@ function LeadBlock({
   interactive: boolean
   /** The canvas over the photo, while `showing`; null shows the photos. */
   canvas?: (CardCanvas & { showing: boolean }) | null
-  onToggleCanvas?: () => void
   onShare?: () => void
   onPhotoShown?: () => void
 }) {
-  const ids = card.decision.leadMediaIds
-  const [index, setIndex] = useState(0)
-  const id = ids[Math.min(index, ids.length - 1)]
+  // Main, the talent's first photo; the rest are spread between the portfolio's sections.
+  const id = card.decision.leadMediaIds[0]
   const uri = id ? mediaUri(card, id) : null
   const blurhash = id ? card.media[id]?.blurhash : null
-  const playing = !!canvas?.showing
 
   return (
     <View className="bg-surfaceMuted overflow-hidden" style={{ width, height }}>
@@ -391,61 +365,6 @@ function LeadBlock({
           photoScrim,
         ]}
       />
-      {interactive && !playing && ids.length > 1 ? (
-        <View
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            flexDirection: "row",
-          }}
-        >
-          <Pressable
-            style={{ flex: 1 }}
-            accessibilityRole="button"
-            accessibilityLabel="Previous photo"
-            onPress={() => setIndex((i) => Math.max(0, i - 1))}
-          />
-          <Pressable
-            style={{ flex: 1 }}
-            accessibilityRole="button"
-            accessibilityLabel="Next photo"
-            onPress={() => setIndex((i) => Math.min(ids.length - 1, i + 1))}
-          />
-        </View>
-      ) : null}
-      {!playing && ids.length > 1 ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: chrome.top + 4,
-            left: 20,
-            right: 20,
-            flexDirection: "row",
-            gap: 4,
-          }}
-        >
-          {ids.map((mediaId, i) => (
-            <View
-              key={mediaId}
-              style={{
-                flex: 1,
-                height: 3,
-                borderRadius: 1.5,
-                backgroundColor:
-                  i === index
-                    ? "rgba(255,255,255,0.95)"
-                    : "rgba(255,255,255,0.38)",
-                // Keeps the bars legible over a pale photo.
-                boxShadow: "0px 0px 2px rgba(14, 15, 19, 0.3)",
-              }}
-            />
-          ))}
-        </View>
-      ) : null}
       <View
         pointerEvents="box-none"
         style={{
@@ -456,19 +375,26 @@ function LeadBlock({
           gap: 16,
         }}
       >
-        {interactive && canvas && onToggleCanvas ? (
-          <CanvasSwitch showing={canvas.showing} onToggle={onToggleCanvas} />
-        ) : null}
         <PhotoCaption card={card} onShare={interactive ? onShare : undefined} />
       </View>
     </View>
   )
 }
 
-/** After the last section: share again, for a booker who read to the end. */
-function EndOfPortfolio({ onShare }: { onShare: () => void }) {
+/**
+ * After the last section: decide, or share. The decision buttons are part of the card, so they
+ * come with the portfolio and scroll away with it; swiping decides from anywhere.
+ */
+function EndOfPortfolio({
+  onShare,
+  onDecide,
+}: {
+  onShare: () => void
+  onDecide: (decision: DeckDecision) => void
+}) {
   return (
-    <View className="items-center px-6 pt-6 pb-8">
+    <View className="items-center gap-6 px-6 pt-8 pb-8">
+      <DecisionActions onDecide={onDecide} />
       <Button
         label="Share portfolio"
         variant="secondary"
@@ -572,6 +498,7 @@ export function DeckCard({
   scrollGesture,
   scrollMomentum,
   onShare,
+  onDecide,
   onReady,
 }: {
   card: DeckCardData
@@ -582,6 +509,8 @@ export function DeckCard({
   /** Set while the list coasts after a fling; the deck ignores swipes that start then. */
   scrollMomentum: SharedValue<boolean>
   onShare: () => void
+  /** The end-of-portfolio buttons; the deck exits the card as it does for a swipe. */
+  onDecide: (decision: DeckDecision) => void
   /** Called once, when the list has laid out and the lead photo is on screen. */
   onReady?: () => void
 }) {
@@ -616,10 +545,21 @@ export function DeckCard({
     return () => clearTimeout(timer)
   }, [markReady])
   const mediaMeta = useMemo(() => mediaMetaFromStatus(card.media), [card.media])
+  // Only photos with an image to show, as on the web page.
   const content = useMemo(
-    () => portfolioContentFromDto(card.talent),
-    [card.talent]
+    () =>
+      withShowablePhotos(portfolioContentFromDto(card.talent), (id) =>
+        Boolean(mediaMeta[id]?.imageUrl)
+      ),
+    [card.talent, mediaMeta]
   )
+  // Main is on the lead screen; the others are spread between sections. The viewer pages through
+  // all of them, Main first.
+  const lead = card.decision.leadMediaIds[0]
+  const photos = useMemo(() => {
+    const rest = (content.photoMediaIds ?? []).filter((id) => id !== lead)
+    return { rest, all: lead ? [lead, ...rest] : rest, firstIndex: lead ? 1 : 0 }
+  }, [content.photoMediaIds, lead])
   const [expanded, setExpanded] = useState(() => opensMidPortfolio(card))
   // §25 scroll budget, measured per scroll gesture (drag plus any fling) when measuring is on.
   const scrollMeter = useFrameMeter("deck.scroll")
@@ -628,13 +568,13 @@ export function DeckCard({
   const [activeVideo, setActiveVideo] = useState<string | null>("lead")
   const dataSaver = useDataSaver()
   const canvas = useMemo(() => cardCanvas(card), [card])
-  const [canvasOn, setCanvasOn] = useState(true)
   const items = useMemo<Item[]>(() => {
     // The lead block is the card's hero; a portfolio hero section would repeat it.
-    const sections = readVisibleSections(card.talent.sections).filter(
+    // Empty list sections are left out, as on the public page.
+    const sections = readRenderableSections(card.talent.sections, content, new Date()).filter(
       (section) => section.type !== "hero"
     )
-    if (sections.length === 0)
+    if (sections.length === 0 && photos.rest.length === 0)
       return [
         { kind: "lead", key: "lead" },
         { kind: "end", key: "end" },
@@ -646,14 +586,15 @@ export function DeckCard({
       ]
     return [
       { kind: "lead", key: "lead" },
-      ...sections.map((section) => ({
-        kind: "section" as const,
-        key: section.id,
-        section,
-      })),
+      ...layoutPortfolio(sections, photos.rest, photos.firstIndex).map(
+        (item): Item =>
+          item.kind === "section"
+            ? { kind: "section", key: item.section.id, section: item.section }
+            : { kind: "photo", key: `photo-${item.mediaId}`, mediaId: item.mediaId, index: item.index }
+      ),
       { kind: "end", key: "end" },
     ]
-  }, [card.talent.sections, expanded])
+  }, [card.talent.sections, content, expanded, photos])
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken<Item>[] }) => {
       const reelSection = viewableItems.find(
@@ -684,7 +625,7 @@ export function DeckCard({
             }
             renderScrollComponent={DeckScrollView}
             showsVerticalScrollIndicator={false}
-            // The last section clears the floating buttons and the tab bar.
+            // The last section clears the tab bar.
             contentContainerStyle={{ paddingBottom: chrome.bottom }}
             onLoad={() => {
               // Crew open on the lower half of the lead: caption, highlights and the work below.
@@ -708,7 +649,7 @@ export function DeckCard({
             }}
             viewabilityConfig={VIDEO_VIEWABILITY}
             onViewableItemsChanged={onViewableItemsChanged}
-            extraData={`${activeVideo}:${canvasOn}:${dataSaver}`}
+            extraData={`${activeVideo}:${dataSaver}`}
             onMomentumScrollBegin={() => scrollMomentum.set(true)}
             onMomentumScrollEnd={() => {
               scrollMomentum.set(false)
@@ -728,19 +669,29 @@ export function DeckCard({
                         ? {
                             ...canvas,
                             showing:
-                              canvasOn &&
-                              (canvas.kind === "still" || activeVideo === "lead"),
+                              canvas.kind === "still" || activeVideo === "lead",
                           }
                         : null
                     }
-                    onToggleCanvas={() => setCanvasOn((on) => !on)}
                     onShare={onShare}
                     onPhotoShown={() => markReady("photo")}
                   />
                 )
               }
               if (item.kind === "end")
-                return <EndOfPortfolio onShare={onShare} />
+                return <EndOfPortfolio onShare={onShare} onDecide={onDecide} />
+              if (item.kind === "photo")
+                return (
+                  <View className="items-center pt-3" style={{ width }}>
+                    <PortfolioPhoto
+                      mediaId={item.mediaId}
+                      mediaMeta={mediaMeta}
+                      index={item.index}
+                      photoMediaIds={photos.all}
+                      cardWidth={sectionWidth}
+                    />
+                  </View>
+                )
               if (item.kind === "depth")
                 return (
                   <DepthPlaceholder width={width} sectionWidth={sectionWidth} />

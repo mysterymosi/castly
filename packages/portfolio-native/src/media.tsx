@@ -50,12 +50,12 @@ export type PortfolioMediaComponents = {
   Video: ComponentType<PortfolioVideoProps>
 }
 
-/** Opens a gallery's photos full screen, starting at `index`. */
-export type OpenGalleryImage = (mediaIds: string[], index: number) => void
+/** Opens the talent's photos full screen, starting at `index`. */
+export type OpenPhoto = (mediaIds: string[], index: number) => void
 
 type PortfolioMediaValue = {
   components: PortfolioMediaComponents
-  onOpenImage?: OpenGalleryImage
+  onOpenImage?: OpenPhoto
 }
 
 const PortfolioMediaContext = createContext<PortfolioMediaValue | null>(null)
@@ -66,8 +66,8 @@ export function PortfolioMediaProvider({
   children,
 }: {
   components: PortfolioMediaComponents
-  /** When set, gallery photos are tappable and open through this. */
-  onOpenImage?: OpenGalleryImage
+  /** When set, photos are tappable and open through this. */
+  onOpenImage?: OpenPhoto
   children: ReactNode
 }) {
   const value = useMemo(() => ({ components, onOpenImage }), [components, onOpenImage])
@@ -78,7 +78,7 @@ export function PortfolioMediaProvider({
   )
 }
 
-export function useOpenGalleryImage(): OpenGalleryImage | undefined {
+export function useOpenPhoto(): OpenPhoto | undefined {
   return useContext(PortfolioMediaContext)?.onOpenImage
 }
 

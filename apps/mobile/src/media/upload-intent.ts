@@ -1,6 +1,7 @@
 import type { CreateUploadUrlOutput } from "@workspace/schema"
 
-export type UploadIntentGoal = "showreel" | "canvas" | "none"
+/** What a finished upload becomes: the showreel, the card canvas, or the next free photo slot. */
+export type UploadIntentGoal = "showreel" | "canvas" | "photo" | "none"
 
 export type UploadIntentPhase =
   | "queued"
@@ -18,6 +19,8 @@ export type UploadIntent = {
   compressedUri?: string
   mimeType: string
   goal: UploadIntentGoal
+  /** For a photo upload: the photo whose slot this one takes once it is ready. */
+  replaceMediaId?: string
   mediaId?: string
   upload?: Pick<CreateUploadUrlOutput, "uploadUrl" | "uploadMethod" | "uploadHeaders" | "expiresAt"> & {
     /** Missing on intents persisted before single-PUT image uploads; every PUT then was Mux. */
@@ -34,6 +37,7 @@ export type UploadIntent = {
 export function uploadIntentLabel(intent: UploadIntent) {
   if (intent.goal === "showreel") return "Showreel"
   if (intent.goal === "canvas") return "Canvas"
+  if (intent.goal === "photo") return "Photo"
   if (intent.kind === "video") return "Video"
   return "Photo"
 }

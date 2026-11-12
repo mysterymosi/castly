@@ -54,6 +54,19 @@ async function ensureCityId() {
   return created.id
 }
 
+const createdCategoryIds: string[] = []
+
+/** Publishing needs a category; each talent gets a throwaway one. */
+async function ensureCategoryId() {
+  const [created] = await db
+    .insert(schema.categories)
+    .values({ slug: `public-cat-${randomUUID().slice(0, 8)}`, name: "Actors", kind: "on_camera" })
+    .returning({ id: schema.categories.id })
+  if (!created) throw new Error("category insert failed")
+  createdCategoryIds.push(created.id)
+  return created.id
+}
+
 async function ensureSkillIds() {
   const ids: string[] = []
   for (const name of ["Stage combat", "Improvisation", "Voice"]) {
@@ -123,6 +136,7 @@ async function publishedTalent(label: string) {
     bio: "Actor based in Ibadan.",
     skillIds: await ensureSkillIds(),
     photoMediaIds: photos.mediaIds,
+    categoryIds: [await ensureCategoryId()],
   })
   await db
     .update(schema.talentProfiles)
@@ -175,6 +189,10 @@ describe("talent.public", () => {
           .delete(schema.attributeDefinitions)
           .where(eq(schema.attributeDefinitions.id, id))
       }
+    }
+    while (createdCategoryIds.length > 0) {
+      const id = createdCategoryIds.pop()
+      if (id) await db.delete(schema.categories).where(eq(schema.categories.id, id))
     }
     while (createdCityIds.length > 0) {
       const id = createdCityIds.pop()

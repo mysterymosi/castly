@@ -32,6 +32,16 @@ const studioCode = {
   talent_not_found: "NOT_FOUND",
   invalid_canvas: "BAD_REQUEST",
   unknown_category: "BAD_REQUEST",
+  unknown_city: "BAD_REQUEST",
+  unknown_skill: "BAD_REQUEST",
+  unknown_language: "BAD_REQUEST",
+  unknown_accent: "BAD_REQUEST",
+  invalid_attribute_value: "BAD_REQUEST",
+  credit_not_found: "NOT_FOUND",
+  invalid_credit_order: "BAD_REQUEST",
+  invalid_availability: "BAD_REQUEST",
+  invalid_photo: "BAD_REQUEST",
+  photo_slots_full: "BAD_REQUEST",
 } as const
 
 const bookerCode = {

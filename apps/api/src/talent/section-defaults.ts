@@ -7,8 +7,6 @@ export function defaultSectionConfig(type: CoreSectionType): unknown {
       return { style: "minimal", mediaId: null, showBadges: true, subtitle: undefined }
     case "about":
       return {}
-    case "gallery":
-      return { mediaIds: [], layout: "grid" }
     case "showreel":
       return { mediaId: null }
     case "credits":

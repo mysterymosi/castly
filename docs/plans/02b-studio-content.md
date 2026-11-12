@@ -22,17 +22,23 @@
 
 ### 2b.1 Section editors
 
+**Status:** Done. Routes: `studio/edit/[type]` and `studio/credit`. The empty-section rule is `sectionHasContent` / `readRenderableSections` in `packages/schema/src/portfolio/content.ts`, shared by the web page, the deck card and the studio preview. Hero opens the profile editor. Saving a list's first row adds its section if the talent has none; a section the talent hid stays hidden.
+
 Tapping a section row in the studio hub opens that section's editor; the up/down buttons stay. One route per editable type under `studio/edit/[type]`, each saving through its own procedure. A list section with no content shows an empty state in the studio preview ("Add your first credit") and is left out of the public page and the deck card.
 
 **Acceptance.** Every core section type with content (`about`, `credits`, `attributes`, `skills`, `languages`, `rates`, `availability`) opens an editor from the hub. An empty Credits section renders nothing on the public page or a deck card.
 
 ### 2b.2 Profile basics
 
+**Status:** Done.
+
 After quick start, the talent can edit display name, headline, bio, city, willing to travel and open to relocate. `updateProfile` gains `headline`, `willingToTravel` and `openToRelocate`. Skills become editable after quick start (`skills.set`), with an optional proficiency (`learning | competent | proficient | expert`) per skill.
 
 **Acceptance.** Edits show in the preview without reopening the studio. Changing city updates `talent_search.city_id` and `country`.
 
 ### 2b.3 Credits
+
+**Status:** Done, with two changes. Reordering uses up and down arrows, as the section list does; drag-to-reorder needs a new dependency and was left out. Editing a verified credit's title, role, company or year clears `verifiedAt`.
 
 `talent.credits.create | update | delete | reorder`. Fields: title (required), role name, production company, year, type (film, TV, commercial, music video, theatre, campaign), link. At most one credit is the signature; marking a new one unmarks the old. `verifiedAt` cannot be written by the talent.
 
@@ -42,11 +48,15 @@ Editor: a list with add, edit, delete and drag-to-reorder, plus a star for the s
 
 ### 2b.4 Languages and accents
 
+**Status:** Done.
+
 `talent.languages.set([{ languageId, fluency }])` with fluency `basic | conversational | fluent | native`, and `talent.accents.set([accentId])`. Both replace the whole list, like skills. The editor picks from the active taxonomy and sets fluency per language.
 
 **Acceptance.** `talent_search.language_ids` and `accent_ids` update through the existing triggers. A retired language is rejected. The portfolio's Languages section shows fluency, and shows accents when `showAccents` is on.
 
 ### 2b.5 Rates
+
+**Status:** Done.
 
 `talent.rates.set([{ kind, amountMin, amountMax, currency, negotiable }])` for `day | half_day | project`, plus `rateVisibility` (`public | verified_bookers | hidden`) on `updateProfile`. "On request" means no amounts with `negotiable` on. `amountMin` must not exceed `amountMax`. Currency defaults to NGN.
 
@@ -56,6 +66,8 @@ The editor explains each visibility option in plain words and states that hiding
 
 ### 2b.6 Availability
 
+**Status:** Done. The editor saves all 12 months, so a saved strip is what makes the section show. The projection is now an M8.2 task (see `08-filters.md`).
+
 `talent.availability.set([{ month: "YYYY-MM", status }])` covering the current month and the next 11; months left unset count as available. The editor is a 12-month strip that cycles available → partial → booked on tap. Past months are dropped on write.
 
 **Acceptance.** The portfolio's Availability section shows `horizonMonths` months from today. A month before the current one is rejected.
@@ -63,6 +75,8 @@ The editor explains each visibility option in plain words and states that hiding
 **Note.** `talent_search` has no availability projection. M8.2's availability filter needs one: add a trigger and column here, or record it as an M8 task when 2b.6 lands.
 
 ### 2b.7 Attributes
+
+**Status:** Done. Applicability is `attributeAppliesTo` in `packages/schema`, which also matches a category's ancestors. Option values display humanised ("Dark brown").
 
 An editor built from `attribute_definitions`. It shows definitions whose `applies_to_category_ids` overlap the talent's categories (or that apply to every category), and renders by `data_type`: options become a picker, numbers a unit-labelled field, booleans a switch. Saves through `attributes.set`; clearing a value deletes the row.
 
@@ -74,11 +88,15 @@ An editor built from `attribute_definitions`. It shows definitions whose `applie
 
 ### 2b.8 Completeness counts content, not empty sections
 
+**Status:** Done. A visible showreel scores only with a video in it. Content writes recompute completeness, and for a live talent whose score changes, the quality and search score jobs as well.
+
 Today a section scores as soon as it is visible (`computeCompleteness` takes `visibleSectionTypes`), so an empty Credits section earns points. Pass counts instead (credits, languages, rates set, months set, standard attributes filled) and score a section only when it has content. Recompute on every content write, as section writes do now. The meter names the next most valuable addition (PRD §6.1 step 6).
 
 **Acceptance.** Adding an empty Credits section leaves the score unchanged; adding the first credit raises it. Sensitive attributes still contribute nothing.
 
 ### 2b.9 Category required
+
+**Status:** Partly done. Publishing needs a category (`publishBlockers` on the completeness result) and the hub and meter say so. `completeQuickStart.categoryIds` stays optional: the repo has no minimum-app-version mechanism yet to gate it on.
 
 Make `completeQuickStart.categoryIds` required once the build with the category step is the minimum supported app version. Publishing needs at least one category (`publish_not_ready` names it). Before enforcing, list talents without a category and have each pick one; no automatic backfill.
 
@@ -86,9 +104,17 @@ Make `completeQuickStart.categoryIds` required once the build with the category 
 
 ### 2b.10 Data saver one tap from the deck
 
+**Status:** Done: a leaf button in the deck header (`deck-data-saver`), next to undo.
+
 PRD §7.1.3 requires data saver to be "reachable in one tap from the deck" and "never buried in settings". The UI pass moved it into the deck settings sheet (two taps). Put a one-tap control back on the deck header; the sheet can keep a copy.
 
 **Acceptance.** From a focused deck card, one tap turns data saver on, and the canvas loop stops.
+
+### 2b.11 Photos replace the gallery
+
+**Status:** Done. The gallery section is gone. A talent has up to six photos (`talent_photos`, Main first), arranged in a studio grid: press and hold to drag, × to remove, + to add. Main leads the deck card (or sits under the canvas) and is the hero image and link preview on the web; the other photos are spread evenly between the portfolio's sections by `layoutPortfolio` in `packages/schema`, the same on the card, the studio preview and the public page (parity-tested). The talent orders the photos, not where they land. Migration `0014_talent_photos` moved each talent's card lead, hero image and gallery photos into the list and deleted the gallery sections. The card's tap-through of several lead photos is gone. Tests: `apps/api/src/talent/photos.integration.test.ts`.
+
+Follow-ups, done: × asks Replace / Remove (and confirms the remove); a replacement keeps its slot (`talent.photos.replace`). New photos go through a 4:5 crop screen (`studio/crop`) before upload; slot 1 marks the part that fills the card's first screen. The studio preview is the real deck card, served as an unverified booker sees it (`talent.studio.previewCard`); the separate decision-card tab is gone, and the hub marks empty sections instead. Media nothing uses is deleted (provider file, then row) after a photo or canvas is removed or replaced (`apps/api/src/media/cleanup.ts`), and `pnpm --filter api media:cleanup` sweeps uploads left unattached for 24 hours. Quick start's photo step does not crop yet.
 
 ---
 

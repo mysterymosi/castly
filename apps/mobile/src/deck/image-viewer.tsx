@@ -19,7 +19,7 @@ import { Text } from "@/components/ui/text"
 export type ImageViewerState = { mediaIds: string[]; index: number }
 
 /**
- * A gallery's photos full screen, one per page, swiped sideways. Each page pinch-zooms on iOS
+ * The talent's photos full screen, one per page, swiped sideways. Each page pinch-zooms on iOS
  * (a zooming ScrollView); Android shows the photo fitted. The full variant loads over the card
  * variant already in memory.
  */

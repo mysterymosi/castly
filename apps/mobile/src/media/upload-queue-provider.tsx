@@ -21,6 +21,8 @@ type UploadQueueValue = {
   pickAndEnqueueShowreel: () => Promise<string | null>
   /** The intent id, or why the pick can't be a canvas; null when cancelled. */
   pickAndEnqueueCanvas: () => Promise<{ id: string } | { problem: string } | null>
+  /** Queues already-picked (cropped) photos: new slots, or `replaceMediaId`'s slot for one. */
+  enqueuePhotos: (uris: string[], replaceMediaId?: string) => void
   dismiss: (id: string) => void
   retry: (id: string) => void
 }
@@ -53,12 +55,12 @@ export function UploadQueueProvider({
     return unsubscribe
   }, [])
 
-  // Showreel and canvas uploads change the studio when they finish; refetch it once per upload.
+  // Showreel, canvas and photo uploads change the studio when they finish; refetch once per upload.
   const lastAttached = useRef(new Set<string>())
   useEffect(() => {
     const done = intents.filter(
       (row) =>
-        (row.goal === "showreel" || row.goal === "canvas") &&
+        (row.goal === "showreel" || row.goal === "canvas" || row.goal === "photo") &&
         row.phase === "completed" &&
         row.resultMediaId &&
         !lastAttached.current.has(row.resultMediaId)
@@ -101,6 +103,19 @@ export function UploadQueueProvider({
     return { id }
   }, [])
 
+  const enqueuePhotos = useCallback((uris: string[], replaceMediaId?: string) => {
+    for (const uri of uris) {
+      uploadQueueProcessor.enqueue({
+        id: randomId(),
+        kind: "image",
+        fileUri: uri,
+        mimeType: "image/jpeg",
+        goal: "photo",
+        ...(replaceMediaId ? { replaceMediaId } : {}),
+      })
+    }
+  }, [])
+
   const dismiss = useCallback((id: string) => {
     uploadQueueProcessor.dismiss(id)
   }, [])
@@ -110,8 +125,24 @@ export function UploadQueueProvider({
   }, [])
 
   const value = useMemo(
-    () => ({ intents, enqueueShowreel, pickAndEnqueueShowreel, pickAndEnqueueCanvas, dismiss, retry }),
-    [intents, enqueueShowreel, pickAndEnqueueShowreel, pickAndEnqueueCanvas, dismiss, retry]
+    () => ({
+      intents,
+      enqueueShowreel,
+      pickAndEnqueueShowreel,
+      pickAndEnqueueCanvas,
+      enqueuePhotos,
+      dismiss,
+      retry,
+    }),
+    [
+      enqueuePhotos,
+      intents,
+      enqueueShowreel,
+      pickAndEnqueueShowreel,
+      pickAndEnqueueCanvas,
+      dismiss,
+      retry,
+    ]
   )
 
   return <UploadQueueContext value={value}>{children}</UploadQueueContext>

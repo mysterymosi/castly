@@ -10,7 +10,10 @@ appId: com.okimmosi.mobile
     visible:
       id: "deck-card-0"
     timeout: 20000
-- tapOn: "Interested"
+- swipe:
+    start: 25%, 45%
+    end: 90%, 45%
+    duration: 300
 - extendedWaitUntil:
     visible:
       id: "deck-card-1"
@@ -27,12 +30,18 @@ appId: com.okimmosi.mobile
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: 2-after-undo
-- tapOn: "Interested"
+- swipe:
+    start: 25%, 45%
+    end: 90%, 45%
+    duration: 300
 - extendedWaitUntil:
     visible:
       id: "deck-card-1"
     timeout: 5000
-- tapOn: "Interested"
+- swipe:
+    start: 25%, 45%
+    end: 90%, 45%
+    duration: 300
 - extendedWaitUntil:
     visible:
       id: "deck-card-2"

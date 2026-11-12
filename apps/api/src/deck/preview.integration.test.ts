@@ -63,7 +63,11 @@ async function category(kind: "on_camera" | "crew", name: string) {
 }
 
 /** A talent through the real studio path; published unless `draft`. */
-async function talent(label: string, displayName: string, { draft = false } = {}) {
+async function talent(
+  label: string,
+  displayName: string,
+  { draft = false, categoryId }: { draft?: boolean; categoryId?: string } = {}
+) {
   const userId = await newUser(label)
   const api = caller(userId)
   await api.auth.enableMode({ mode: "talent" })
@@ -74,6 +78,8 @@ async function talent(label: string, displayName: string, { draft = false } = {}
     bio: "Bio.",
     skillIds: await skillIds(),
     photoMediaIds: photos.mediaIds,
+    // Publishing needs a category; a talent without its own gets a throwaway one.
+    categoryIds: [categoryId ?? (await category("on_camera", "Talent"))],
   })
   if (!draft) await api.talent.studio.publish()
   return { userId, api }
@@ -99,11 +105,8 @@ describe("deck.preview", () => {
   })
 
   it("serves live talents as cards with a decision layer, not drafts or the booker's own", async () => {
-    const crew = await talent("deck-crew", "Bisi Cinematographer")
     const crewCategory = await category("crew", "Photographers & cinematographers")
-    await db
-      .insert(schema.talentCategories)
-      .values({ talentId: crew.userId, categoryId: crewCategory, isPrimary: true })
+    const crew = await talent("deck-crew", "Bisi Cinematographer", { categoryId: crewCategory })
     await db.insert(schema.credits).values([
       { talentId: crew.userId, title: "Lagos Nights", roleName: "DP", year: 2025, isSignature: true },
       { talentId: crew.userId, title: "Market Day", year: 2023 },
@@ -133,11 +136,8 @@ describe("deck.preview", () => {
   })
 
   it("gives on-camera cards their playing-age range", async () => {
-    const actor = await talent("deck-actor", "Ada Actor")
-    await db.insert(schema.talentCategories).values({
-      talentId: actor.userId,
+    const actor = await talent("deck-actor", "Ada Actor", {
       categoryId: await category("on_camera", "Actors"),
-      isPrimary: true,
     })
     const definitions = await db
       .insert(schema.attributeDefinitions)

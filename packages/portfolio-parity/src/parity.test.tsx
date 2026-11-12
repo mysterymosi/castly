@@ -16,13 +16,22 @@ describe("renderer parity (native vs web semantic content)", () => {
 
   it("covers every core section type with real content", () => {
     const types = nativeSemantics(complete).map((s) => s.type)
-    expect(types).toEqual([...corePortfolioSectionTypes])
+    expect(types.filter((type) => type !== "photo")).toEqual([...corePortfolioSectionTypes])
+    expect(types.filter((type) => type === "photo").length).toBeGreaterThan(0)
     const credits = nativeSemantics(complete).find((s) => s.type === "credits")
     expect(credits?.texts).toContain("King of Boys III")
   })
 })
 
 describe("the parity check fails on content divergence", () => {
+  it("catches web dropping a photo that native shows", () => {
+    const webOnly: FixturePortfolio = {
+      ...complete,
+      content: { ...complete.content, photoMediaIds: complete.content.photoMediaIds!.slice(0, 2) },
+    }
+    expect(webSemantics(webOnly)).not.toEqual(nativeSemantics(complete))
+  })
+
   it("catches web dropping a credit that native shows", () => {
     const [first, second, ...rest] = complete.content.credits!
     const webOnly: FixturePortfolio = {

@@ -27,7 +27,7 @@ import {
 import { useDeckSession } from "@/deck/use-deck-session"
 import { haptics } from "@/lib/haptics"
 import { markDeckOpened } from "@/lib/measure"
-import { useDataSaver } from "@/media/data-saver"
+import { setDataSaver, useDataSaver } from "@/media/data-saver"
 import { trpcQuery } from "@/trpc/query-client"
 
 const SITE_URL = (
@@ -237,24 +237,31 @@ export default function DiscoverScreen() {
             disabled={!deck.canUndo || undoing}
             onPress={() => void undo()}
           />
-          <View>
-            <IconButton
-              icon="settings"
-              shape="squircle"
-              variant="glass"
-              size={48}
-              accessibilityLabel={
-                dataSaver ? "Deck settings. Data saver is on" : "Deck settings"
-              }
-              onPress={() => setSettingsOpen(true)}
-            />
-            {dataSaver ? (
-              <View
-                pointerEvents="none"
-                className="rounded-pill border-bg bg-interested absolute top-2 right-2 h-2.5 w-2.5 border-2"
-              />
-            ) : null}
-          </View>
+          {/* PRD §7.1.3: data saver is one tap from the deck, never only in settings. */}
+          <IconButton
+            icon="data-saver"
+            shape="squircle"
+            variant={dataSaver ? "accent" : "glass"}
+            size={48}
+            testID="deck-data-saver"
+            accessibilityRole="switch"
+            accessibilityState={{ checked: dataSaver }}
+            accessibilityLabel="Data saver"
+            accessibilityHint={
+              dataSaver
+                ? "Videos play only when you tap them"
+                : "Stops videos loading on their own"
+            }
+            onPress={() => setDataSaver(!dataSaver)}
+          />
+          <IconButton
+            icon="settings"
+            shape="squircle"
+            variant="glass"
+            size={48}
+            accessibilityLabel="Deck settings"
+            onPress={() => setSettingsOpen(true)}
+          />
         </View>
         {goal.target !== null ? (
           <View className="flex-row items-center gap-3 px-5 pb-3">

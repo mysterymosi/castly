@@ -12,6 +12,7 @@ import { Text } from "@/components/ui/text"
 import { isIntentActive } from "@/media/upload-intent"
 import { useUploadQueue } from "@/media/upload-queue-provider"
 import { studioApi } from "@/studio/api"
+import { ToggleRow } from "@/studio/editors/kit"
 import { useStudio } from "@/studio/studio-provider"
 
 const SPEC_LINE = `${canvasSpec.minDurationMs / 1000}–${canvasSpec.maxDurationMs / 1000} second vertical video (9:16, MP4 or MOV) or a vertical photo`
@@ -31,6 +32,7 @@ export function CanvasCard({ state }: { state: StudioState }) {
   const uploading = intents.find((row) => row.goal === "canvas" && isIntentActive(row))
   const failed = intents.find((row) => row.goal === "canvas" && row.phase === "failed")
   const removing = pending === "canvas:remove"
+  const enabled = state.talent.profile.cardConfig.canvasEnabled
 
   async function pick() {
     setProblem(null)
@@ -46,9 +48,11 @@ export function CanvasCard({ state }: { state: StudioState }) {
       ? (failed.error ?? "Upload failed")
       : media
         ? media.status === "ready"
-          ? media.kind === "video"
-            ? "Loops behind your name on the deck"
-            : "Shows behind your name on the deck"
+          ? !enabled
+            ? "Off: your card shows your photos"
+            : media.kind === "video"
+              ? "Loops behind your name on the deck"
+              : "Shows behind your name on the deck"
           : "Processing…"
         : SPEC_LINE
 
@@ -82,6 +86,20 @@ export function CanvasCard({ state }: { state: StudioState }) {
           </Text>
         </View>
       </View>
+      {canvasId ? (
+        <ToggleRow
+          label="Show on your card"
+          hint="Off, bookers see your photos instead. Your canvas stays saved."
+          value={enabled}
+          onChange={(canvasEnabled) =>
+            void run(
+              "canvas:enabled",
+              () => studioApi.updateProfile({ cardConfig: { canvasEnabled } }),
+              "Could not change your card"
+            )
+          }
+        />
+      ) : null}
       {uploading ? (
         <ProgressBar value={uploading.progress} label="Canvas upload" />
       ) : null}

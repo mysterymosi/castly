@@ -38,9 +38,9 @@ function candidateMediaIds(portfolio: PublicPortfolio): string[] {
       .map((section) => section.config as CoreSectionConfigMap[T])
 
   const ids: (string | null | undefined)[] = [
-    portfolio.talent.profile.cardConfig.leadMediaId,
+    // Main first: the photo the talent put in slot 1 is their card's lead.
+    ...portfolio.talent.photoMediaIds,
     ...configs("hero").map((c) => c.mediaId),
-    ...configs("gallery").flatMap((c) => c.mediaIds),
     ...configs("about").map((c) => c.mediaId),
   ]
   return [...new Set(ids.filter((id): id is string => Boolean(id)))]
@@ -49,23 +49,10 @@ function candidateMediaIds(portfolio: PublicPortfolio): string[] {
 const OG_WIDTH = 1200
 const OG_HEIGHT = 630
 
-/** Mux thumbnails crop server-side; other posters are used as stored. */
-function sharePoster(posterUrl: string, width: number | null, height: number | null) {
-  const url = new URL(posterUrl)
-  if (url.hostname === "image.mux.com") {
-    url.searchParams.set("width", String(OG_WIDTH))
-    url.searchParams.set("height", String(OG_HEIGHT))
-    url.searchParams.set("fit_mode", "smartcrop")
-    return { url: url.toString(), width: OG_WIDTH, height: OG_HEIGHT }
-  }
-  return { url: posterUrl, width: width ?? undefined, height: height ?? undefined }
-}
-
 /**
- * The link-preview image: the first ready photo's `og` variant (1200×630 cover crop), else the
- * card lead's poster when the talent chose a video as their lead, else null so the caller uses
- * the generated name card. Other video frames are skipped — an arbitrary frame of a phone video
- * makes a worse preview than the name card.
+ * The link-preview image: the first ready photo's `og` variant (1200×630 cover crop), Main first,
+ * else null so the caller uses the generated name card. Video frames are skipped: an arbitrary
+ * frame of a phone video makes a worse preview than the name card.
  */
 export function pickShareImage(portfolio: PublicPortfolio): ShareImage | null {
   const alt = portfolio.talent.profile.displayName
@@ -74,11 +61,6 @@ export function pickShareImage(portfolio: PublicPortfolio): ShareImage | null {
     if (media?.status === "ready" && media.kind === "image" && media.variants?.og) {
       return { url: media.variants.og, width: OG_WIDTH, height: OG_HEIGHT, alt }
     }
-  }
-  const leadId = portfolio.talent.profile.cardConfig.leadMediaId
-  const lead = leadId ? portfolio.media[leadId] : undefined
-  if (lead?.status === "ready" && lead.kind === "video" && lead.posterUrl) {
-    return { ...sharePoster(lead.posterUrl, lead.width, lead.height), alt }
   }
   return null
 }

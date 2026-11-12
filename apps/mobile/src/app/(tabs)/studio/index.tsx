@@ -1,7 +1,12 @@
-import type { StudioState } from "@workspace/schema"
+import {
+  portfolioContentFromDto,
+  readVisibleSections,
+  sectionHasContent,
+  type StudioState,
+} from "@workspace/schema"
 import { router } from "expo-router"
 import { useState } from "react"
-import { ActivityIndicator, ScrollView, View } from "react-native"
+import { ActivityIndicator, Pressable, ScrollView, View } from "react-native"
 import { FadeIn, LinearTransition } from "react-native-reanimated"
 
 import { authApi } from "@/auth/client"
@@ -23,8 +28,9 @@ import { markPreviewRequested } from "@/lib/measure"
 import { studioApi } from "@/studio/api"
 import { CanvasCard } from "@/studio/canvas-card"
 import { CompletenessMeter } from "@/studio/completeness-meter"
-import { DecisionCardPreview } from "@/studio/decision-card-preview"
-import { sectionMeta, templates } from "@/studio/section-meta"
+import { DecisionCardPreview, mainPhotoUri } from "@/studio/decision-card-preview"
+import { PhotosGrid } from "@/studio/photos-grid"
+import { editorRoute, emptySectionPrompt, sectionMeta, templates } from "@/studio/section-meta"
 import { useStudio } from "@/studio/studio-provider"
 import { queryClient, trpcQuery } from "@/trpc/query-client"
 
@@ -164,6 +170,14 @@ export default function StudioHub() {
   const quickStartDone = !!state?.talent.profile.quickStartCompletedAt
   const ordered = state ? [...state.talent.sections].sort((a, b) => a.position - b.position) : []
 
+  const content = state ? portfolioContentFromDto(state.talent) : null
+  const now = new Date()
+  function sectionShows(section: StudioState["talent"]["sections"][number]) {
+    if (!content) return true
+    const [current] = readVisibleSections([{ ...section, isVisible: true }])
+    return current ? sectionHasContent(current, content, now) : true
+  }
+
   function move(sectionId: string, direction: -1 | 1) {
     const index = ordered.findIndex((s) => s.id === sectionId)
     const target = index + direction
@@ -222,7 +236,9 @@ export default function StudioHub() {
                     ? "Publishing is turned off until this is lifted."
                     : state.completeness.canPublish
                       ? "Bookers can find you once this is published."
-                      : "Finish quick start before publishing."}
+                      : state.completeness.publishBlockers[0] === "category"
+                        ? "Pick what you do before publishing."
+                        : "Finish quick start before publishing."}
                 </Text>
               </View>
             </View>
@@ -250,6 +266,9 @@ export default function StudioHub() {
             )}
           </Card>
 
+          <SectionHeading title="Photos" />
+          <PhotosGrid state={state} />
+
           <SectionHeading title="What you do" />
           <CategoriesRow state={state} />
 
@@ -258,7 +277,7 @@ export default function StudioHub() {
             accessibilityLabel="Decision card. Opens a preview"
             onPress={() => {
                 markPreviewRequested()
-                router.push({ pathname: "/studio/preview", params: { tab: "card" } })
+                router.push("/studio/preview")
               }}
             className="flex-row items-center gap-4 p-3"
           >
@@ -267,6 +286,7 @@ export default function StudioHub() {
                 displayName={state.talent.profile.displayName}
                 headline={state.talent.profile.headline}
                 cardConfig={state.talent.profile.cardConfig}
+                mainUri={mainPhotoUri(state)}
                 compact
               />
             </View>
@@ -335,6 +355,9 @@ export default function StudioHub() {
           <View className="gap-2">
             {ordered.map((section, index) => {
               const meta = sectionMeta[section.type]
+              const route = editorRoute(section.type)
+              // An empty list section is left off the card; say so and how to fill it.
+              const shown = section.isVisible && sectionShows(section)
               const busy = pending === `move:${section.id}`
               return (
                 <AnimatedView
@@ -342,27 +365,37 @@ export default function StudioHub() {
                   layout={LinearTransition.duration(220)}
                   className="min-h-16 flex-row items-center gap-3 rounded-xl border border-border bg-surface py-2 pl-4 pr-2"
                 >
-                  <Icon name={meta.icon} size={18} tone="textMuted" />
-                  <View className="flex-1 gap-0.5">
-                    <Text variant="body-strong" numberOfLines={1}>
-                      {meta.label}
-                    </Text>
-                    <View
-                      className={cn(
-                        "flex-row items-center gap-1 self-start rounded-pill px-2 py-0.5",
-                        section.isVisible ? "bg-interested/15" : "bg-surfaceMuted",
-                      )}
-                    >
-                      <Icon
-                        name={section.isVisible ? "eye" : "eye-off"}
-                        size={11}
-                        tone={section.isVisible ? "interestedText" : "textMuted"}
-                      />
-                      <Text variant="footnote" tone={section.isVisible ? "interested" : "muted"}>
-                        {section.isVisible ? "Visible" : "Hidden"}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${meta.label}, ${section.isVisible ? "visible" : "hidden"}${route ? ". Edit" : ""}`}
+                    disabled={!route}
+                    onPress={() => route && router.push(route)}
+                    // Plain Pressable: PressableScale's full-width wrapper breaks a row layout.
+                    className="flex-1 flex-row items-center gap-3 active:opacity-70"
+                  >
+                    <Icon name={meta.icon} size={18} tone="textMuted" />
+                    <View className="flex-1 gap-0.5">
+                      <Text variant="body-strong" numberOfLines={1}>
+                        {meta.label}
                       </Text>
+                      <View
+                        className={cn(
+                          "flex-row items-center gap-1 self-start rounded-pill px-2 py-0.5",
+                          shown ? "bg-interested/15" : "bg-surfaceMuted",
+                        )}
+                      >
+                        <Icon
+                          name={shown ? "eye" : "eye-off"}
+                          size={11}
+                          tone={shown ? "interestedText" : "textMuted"}
+                        />
+                        <Text variant="footnote" tone={shown ? "interested" : "muted"}>
+                          {!section.isVisible ? "Hidden" : shown ? "Visible" : emptySectionPrompt(section.type)}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
+                    {route ? <Icon name="chevron-right" size={16} tone="textMuted" /> : null}
+                  </Pressable>
                   {busy ? <ActivityIndicator color={color.text} className="mr-3" /> : null}
                   <IconButton
                     icon="chevron-up"
@@ -440,28 +473,6 @@ export default function StudioHub() {
             ) : null}
           </Card>
 
-          {__DEV__ ? (
-            <>
-              <SectionHeading title="Developer" />
-              <Card className="gap-3 border-dashed">
-                <View className="flex-row items-center gap-2">
-                  <Icon name="code" size={16} tone="textMuted" />
-                  <Text variant="footnote" tone="muted" className="flex-1">
-                    Dev-only check: sensitive attributes must not change completeness.
-                  </Text>
-                </View>
-                <Button
-                  label="Set test ethnicity attribute"
-                  variant="ghost"
-                  size="md"
-                  loading={pending === "ethnicity"}
-                  onPress={() =>
-                    void run("ethnicity", () => studioApi.setAttribute("ethnicity", "black"), "Could not set attribute")
-                  }
-                />
-              </Card>
-            </>
-          ) : null}
         </AnimatedView>
       )}
     </Screen>

@@ -1,5 +1,6 @@
 import { CARD_WIDTH } from "@workspace/portfolio-native"
-import type { CardConfig } from "@workspace/schema"
+import type { CardConfig, StudioState } from "@workspace/schema"
+import { Image } from "expo-image"
 import { shadow } from "@workspace/ui-tokens"
 import { View } from "react-native"
 
@@ -11,8 +12,28 @@ type Props = {
   displayName: string
   headline?: string | null
   cardConfig: CardConfig
+  /** The Main photo, which leads the card; null until the talent adds one. */
+  mainUri?: string | null
   /** Thumbnail rendering for the studio hub: media + name only. */
   compact?: boolean
+}
+
+/** The Main photo's card-size image, if it is ready. */
+export function mainPhotoUri(state: StudioState): string | null {
+  const id = state.talent.photoMediaIds[0]
+  const media = id ? state.media[id] : undefined
+  return media?.variants?.card ?? media?.variants?.thumb ?? null
+}
+
+function MainPhoto({ uri }: { uri: string }) {
+  return (
+    <Image
+      source={{ uri }}
+      contentFit="cover"
+      style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      accessibilityIgnoresInvertColors
+    />
+  )
 }
 
 function DecisionButton({ kind }: { kind: "pass" | "interested" }) {
@@ -42,16 +63,20 @@ function DecisionButton({ kind }: { kind: "pass" | "interested" }) {
   )
 }
 
-export function DecisionCardPreview({ displayName, headline, cardConfig, compact = false }: Props) {
+export function DecisionCardPreview({ displayName, headline, cardConfig, mainUri, compact = false }: Props) {
   const facts = cardConfig.highlightFacts.map((fact) => fact.trim()).filter(Boolean).slice(0, 3)
   const missing = 3 - facts.length
 
   if (compact) {
     return (
       <View className="flex-1 justify-end bg-surfaceMuted">
-        <View className="absolute inset-0 items-center justify-center">
-          <Icon name="person" size={32} tone="textMuted" />
-        </View>
+        {mainUri ? (
+          <MainPhoto uri={mainUri} />
+        ) : (
+          <View className="absolute inset-0 items-center justify-center">
+            <Icon name="person" size={32} tone="textMuted" />
+          </View>
+        )}
         <View className="bg-inverse/85 px-2 py-1.5">
           <Text variant="footnote" tone="onInverse" numberOfLines={1} maxFontSizeMultiplier={1.2}>
             {displayName}
@@ -67,12 +92,16 @@ export function DecisionCardPreview({ displayName, headline, cardConfig, compact
       style={{ width: CARD_WIDTH, maxWidth: "100%", boxShadow: shadow.raised }}
     >
       <View className="justify-end bg-surfaceMuted" style={{ aspectRatio: 4 / 5 }}>
-        <View className="absolute inset-0 items-center justify-center gap-2">
-          <Icon name="photo" size={36} tone="textMuted" />
-          <Text variant="footnote" tone="muted">
-            {cardConfig.leadMediaId ? "Lead photo" : "Lead photo appears here"}
-          </Text>
-        </View>
+        {mainUri ? (
+          <MainPhoto uri={mainUri} />
+        ) : (
+          <View className="absolute inset-0 items-center justify-center gap-2">
+            <Icon name="photo" size={36} tone="textMuted" />
+            <Text variant="footnote" tone="muted">
+              Your Main photo appears here
+            </Text>
+          </View>
+        )}
         <View className="gap-3 bg-inverse/85 p-4">
           <View className="gap-0.5">
             <Text variant="title" tone="onInverse" numberOfLines={1}>

@@ -10,9 +10,10 @@ import {
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm"
 
 import { getMediaStatuses } from "../media/service.js"
-import { loadTalentRecord, sectionMediaIds } from "../talent/record.js"
+import { loadTalentRecord, talentMediaIds } from "../talent/record.js"
 
-const LEAD_MEDIA_MAX = 5
+/** Main only: the card's first screen shows one photo; the rest sit between sections. */
+const LEAD_MEDIA_MAX = 1
 
 export type Card = Omit<DeckCard, "talent"> & {
   talent: ReturnType<typeof serializeTalent>
@@ -67,18 +68,18 @@ export async function deckCard(
   const record = await loadTalentRecord(db, profile, Number(profile.completenessScore))
   const talent = serializeTalent(record, { kind: "user", userId: viewerId, verifiedBooker: false }, {})
 
-  // Decision-layer media: card lead, then hero and gallery photos, in that order.
+  // The lead is Main, the first photo; without photos, a hero image. The other photos are spread
+  // between the portfolio's sections on the card (`layoutPortfolio`).
   const sections = talent.sections
-  const configs = <T extends keyof CoreSectionConfigMap>(type: T) =>
-    sections.filter((s) => s.type === type).map((s) => s.config as CoreSectionConfigMap[T])
-  const leadCandidates = [
-    talent.profile.cardConfig.leadMediaId,
-    ...configs("hero").map((c) => c.mediaId),
-    ...configs("gallery").flatMap((c) => c.mediaIds),
-  ].filter((id): id is string => Boolean(id))
+  const heroImages = sections
+    .filter((s) => s.type === "hero")
+    .map((s) => (s.config as CoreSectionConfigMap["hero"]).mediaId)
+  const leadCandidates = [...talent.photoMediaIds, ...heroImages].filter(
+    (id): id is string => Boolean(id)
+  )
 
-  const { canvasMediaId } = talent.profile.cardConfig
-  const ids = new Set([...sectionMediaIds(sections), ...leadCandidates])
+  const { canvasMediaId, canvasEnabled } = talent.profile.cardConfig
+  const ids = new Set([...talentMediaIds(talent), ...leadCandidates])
   if (canvasMediaId) ids.add(canvasMediaId)
   const statuses = await getMediaStatuses(db, profile.userId, [...ids])
   const media = Object.fromEntries(Object.entries(statuses).filter(([, m]) => m.status === "ready"))
@@ -89,7 +90,8 @@ export async function deckCard(
 
   // Checked again now it's measured: a video set while processing may have come out of spec.
   const canvas = canvasMediaId ? media[canvasMediaId] : undefined
-  const canvasReady = canvas && !canvasProblem(canvas) ? canvas.id : null
+  // Off in the studio: the card shows the photos, though the canvas stays uploaded.
+  const canvasReady = canvasEnabled && canvas && !canvasProblem(canvas) ? canvas.id : null
 
   const category = await primaryCategory(db, profile.userId)
   const credits = talent.content.credits

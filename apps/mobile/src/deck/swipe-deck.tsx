@@ -1,5 +1,5 @@
 import type { DeckCard as DeckCardData } from "@workspace/schema"
-import { palette, shadow } from "@workspace/ui-tokens"
+import { shadow } from "@workspace/ui-tokens"
 import {
   useCallback,
   useEffect,
@@ -27,8 +27,7 @@ import Animated, {
 import { scheduleOnRN } from "react-native-worklets"
 
 import { Button } from "@/components/ui/button"
-import { Icon, type IconName } from "@/components/ui/icon"
-import { PressableScale } from "@/components/ui/pressable-scale"
+import { Icon } from "@/components/ui/icon"
 import { ErrorState, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
 import {
@@ -37,26 +36,21 @@ import {
   DeckCardPreview,
   type DeckChrome,
 } from "@/deck/deck-card"
+import { type DeckDecision } from "@/deck/decision-actions"
 import { useDeckPrefetch } from "@/deck/prefetch"
 import { haptics } from "@/lib/haptics"
 import { logMeasure, takeDeckOpenedAt } from "@/lib/measure"
 
-export type DeckDecision = "pass" | "interested" | "save"
+export type { DeckDecision }
 
 /** A card commits past ~a quarter of the width, or on a flick regardless of distance. */
 const COMMIT_FRACTION = 0.28
 const FLICK_VELOCITY = 900
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
-const ACTION_ROW_HEIGHT = 72
-const ACTION_ROW_GAP = 16
+/** Clear space between a card's last line and the tab bar below it. */
+const TAB_BAR_GAP = 16
 /** Ask for the next page when this many cards are left: enough for the 5-card prefetch ahead. */
 const NEAR_END = 5
-
-/** Darkens the bottom of the screen behind the decision buttons. */
-const bottomScrim = {
-  experimental_backgroundImage:
-    "linear-gradient(to bottom, rgba(14, 15, 19, 0) 0%, rgba(14, 15, 19, 0.7) 100%)",
-} as const
 
 /**
  * Both cards occupy the same slot, stacked. Positioning lives on a plain View; the Animated.View
@@ -86,7 +80,7 @@ type Props = {
   loadMoreError?: string | null
   /**
    * What the screen lays over the deck, which runs full bleed under it: the status bar and header
-   * above, the tab bar below. The decision buttons float just above `bottom`.
+   * above, the tab bar below. The decision buttons are in the card, at the end of the portfolio.
    */
   insets: { top: number; bottom: number }
   ref?: Ref<SwipeDeckHandle>
@@ -143,12 +137,8 @@ export function SwipeDeck({
   useDeckPrefetch(cards, index)
   const width = size?.width ?? 0
   const height = size?.height ?? 0
-  const actionsTop = height - insets.bottom - ACTION_ROW_GAP - ACTION_ROW_HEIGHT
   const chrome = useMemo(
-    () => ({
-      top: insets.top,
-      bottom: insets.bottom + ACTION_ROW_HEIGHT + ACTION_ROW_GAP * 2,
-    }),
+    () => ({ top: insets.top, bottom: insets.bottom + TAB_BAR_GAP }),
     [insets.top, insets.bottom]
   )
   const offscreen = (size?.width ?? 0) * 1.5
@@ -278,28 +268,6 @@ export function SwipeDeck({
                 />
               )
             })}
-            {/* Keeps the buttons legible over whatever section has scrolled under them. */}
-            <View
-              pointerEvents="none"
-              style={[
-                {
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: chrome.bottom + 24,
-                  // Above the cards (zIndex 1–3), which the renderer may flatten into this level.
-                  zIndex: 4,
-                },
-                bottomScrim,
-              ]}
-            />
-            <FloatingActions
-              top={actionsTop}
-              onPass={() => exit("pass")}
-              onSave={() => exit("save")}
-              onInterested={() => exit("interested")}
-            />
           </>
         ) : null}
         {size && !current && !exhausted ? (
@@ -500,6 +468,7 @@ function DeckSlot({
                 scrollGesture={scrollGesture}
                 scrollMomentum={scrollMomentum}
                 onShare={onShare}
+                onDecide={onAction}
                 onReady={() => {
                   setReady(true)
                   onShown?.()
@@ -642,91 +611,6 @@ function Stamp({
           </Text>
         </View>
       </Animated.View>
-    </View>
-  )
-}
-
-/** Spotify's transport row, on the deck: glass circles either side of a big white play button. */
-function ActionButton({
-  icon,
-  label,
-  onPress,
-  primary,
-  testID,
-}: {
-  icon: IconName
-  label: string
-  onPress: () => void
-  primary?: boolean
-  testID?: string
-}) {
-  return (
-    <PressableScale
-      // The exit fires its own haptic at the moment the card commits; one per action.
-      haptic={false}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      testID={testID}
-      className={`rounded-pill items-center justify-center ${primary ? "h-[72px] w-[72px]" : "h-14 w-14"}`}
-      style={
-        primary
-          ? { backgroundColor: "#FFFFFF", boxShadow: shadow.raised }
-          : {
-              backgroundColor: "rgba(255, 255, 255, 0.14)",
-              borderWidth: 1,
-              borderColor: "rgba(255, 255, 255, 0.22)",
-            }
-      }
-    >
-      <Icon
-        name={icon}
-        size={primary ? 30 : 22}
-        color={primary ? palette.ink : "#FFFFFF"}
-      />
-    </PressableScale>
-  )
-}
-
-/**
- * Pass / Interested / Save float just above the tab bar (PRD §7.2.1: reachable at any scroll
- * depth), over the card. Share sits in the caption and at the portfolio's end.
- */
-function FloatingActions({
-  top,
-  onPass,
-  onSave,
-  onInterested,
-}: {
-  top: number
-  onPass: () => void
-  onSave: () => void
-  onInterested: () => void
-}) {
-  return (
-    <View
-      pointerEvents="box-none"
-      style={{
-        position: "absolute",
-        top,
-        zIndex: 5,
-        height: ACTION_ROW_HEIGHT,
-        left: 0,
-        right: 0,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 36,
-      }}
-    >
-      <ActionButton icon="close" label="Pass" onPress={onPass} />
-      <ActionButton
-        icon="check"
-        label="Interested"
-        primary
-        onPress={onInterested}
-      />
-      <ActionButton icon="bookmark" label="Save for later" onPress={onSave} />
     </View>
   )
 }

@@ -5,7 +5,7 @@ export type PortfolioTemplateId = (typeof portfolioTemplateIds)[number]
 
 /** Block order applied in one step when a talent picks a template. */
 export const portfolioTemplates: Record<PortfolioTemplateId, CoreSectionType[]> = {
-  editorial: ["hero", "gallery", "about", "skills", "credits", "attributes", "languages"],
+  editorial: ["hero", "about", "skills", "credits", "attributes", "languages"],
   reel_first: ["showreel", "hero", "credits", "about", "skills", "rates"],
-  case_study: ["gallery", "credits", "about", "skills", "showreel", "availability"],
+  case_study: ["credits", "about", "skills", "showreel", "availability"],
 }

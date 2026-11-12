@@ -1,7 +1,6 @@
 import { corePortfolioSectionTypes } from "@workspace/schema"
 
 import { aboutRenderer } from "./sections/about"
-import { galleryRenderer } from "./sections/gallery"
 import {
   attributesRenderer,
   availabilityRenderer,
@@ -24,7 +23,6 @@ import type { PortfolioSection } from "@workspace/schema"
 export const studioSectionRegistry = {
   hero: heroRenderer,
   about: aboutRenderer,
-  gallery: galleryRenderer,
   showreel: showreelRenderer,
   credits: creditsRenderer,
   attributes: attributesRenderer,

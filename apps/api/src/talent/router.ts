@@ -1,6 +1,7 @@
 import {
   applyTemplateInput,
   completeQuickStartInput,
+  deckCardSchema,
   liveTalentSlugsSchema,
   createPlaceholderPhotosInput,
   createSectionInput,
@@ -9,10 +10,21 @@ import {
   publicPortfolioInput,
   publicPortfolioSchema,
   reorderSectionsInput,
+  addTalentPhotoInput,
+  replaceTalentPhotoInput,
+  createCreditInput,
+  deleteCreditInput,
+  reorderCreditsInput,
   setCanvasInput,
+  setTalentAccentsInput,
+  setTalentPhotosInput,
+  setTalentAvailabilityInput,
   setTalentCategoriesInput,
   setTalentAttributeInput,
+  setTalentLanguagesInput,
+  setTalentRatesInput,
   setTalentSkillsInput,
+  updateCreditInput,
   studioStateSchema,
   updateSectionInput,
   updateStudioProfileInput,
@@ -20,6 +32,21 @@ import {
 
 import { callProcedure } from "../trpc/errors.js"
 import { publicProcedure, router, talentProcedure } from "../trpc/trpc.js"
+import {
+  addTalentPhoto,
+  createCredit,
+  deleteCredit,
+  reorderCredits,
+  setTalentAccents,
+  setTalentAttribute,
+  setTalentAvailability,
+  setTalentLanguages,
+  setTalentPhotos,
+  setTalentRates,
+  setTalentSkills,
+  swapTalentPhoto,
+  updateCredit,
+} from "./content-service.js"
 import { consumePublicRead } from "./public-rate-limit.js"
 import { getPublicPortfolio, listLiveTalentSlugs } from "./public-service.js"
 import {
@@ -29,12 +56,11 @@ import {
   createSection,
   deleteSection,
   getStudioState,
+  previewDeckCard,
   publishTalent,
   reorderSections,
   setStudioCanvas,
   setTalentCategories,
-  setTalentAttribute,
-  setTalentSkills,
   unpublishTalent,
   updateSection,
   updateStudioProfile,
@@ -72,6 +98,11 @@ export const talentRouter = router({
   studio: router({
     get: talentProcedure.output(studioStateSchema).query(({ ctx }) => {
       return callProcedure(() => getStudioState(ctx.db, ctx.userId))
+    }),
+
+    /** The talent's own card as a booker sees it (the studio preview). */
+    previewCard: talentProcedure.output(deckCardSchema).query(({ ctx }) => {
+      return callProcedure(() => previewDeckCard(ctx.db, ctx.userId))
     }),
 
     updateProfile: talentMutation
@@ -187,8 +218,99 @@ export const talentRouter = router({
       .output(studioStateSchema)
       .mutation(({ ctx, input }) => {
         return callProcedure(() =>
-          setTalentSkills(ctx.db, ctx.userId, input.skillIds)
+          setTalentSkills(ctx.db, ctx.userId, input.skillIds, input.proficiency)
         )
+      }),
+  }),
+
+  photos: router({
+    set: talentMutation
+      .input(setTalentPhotosInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() => setTalentPhotos(ctx.db, ctx.userId, input.mediaIds))
+      }),
+
+    add: talentMutation
+      .input(addTalentPhotoInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() => addTalentPhoto(ctx.db, ctx.userId, input.mediaId))
+      }),
+
+    replace: talentMutation
+      .input(replaceTalentPhotoInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() =>
+          swapTalentPhoto(ctx.db, ctx.userId, input.mediaId, input.withMediaId)
+        )
+      }),
+  }),
+
+  credits: router({
+    create: talentMutation
+      .input(createCreditInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() => createCredit(ctx.db, ctx.userId, input))
+      }),
+
+    update: talentMutation
+      .input(updateCreditInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() => updateCredit(ctx.db, ctx.userId, input))
+      }),
+
+    delete: talentMutation
+      .input(deleteCreditInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() => deleteCredit(ctx.db, ctx.userId, input.creditId))
+      }),
+
+    reorder: talentMutation
+      .input(reorderCreditsInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() => reorderCredits(ctx.db, ctx.userId, input.creditIds))
+      }),
+  }),
+
+  languages: router({
+    set: talentMutation
+      .input(setTalentLanguagesInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() => setTalentLanguages(ctx.db, ctx.userId, input.languages))
+      }),
+  }),
+
+  accents: router({
+    set: talentMutation
+      .input(setTalentAccentsInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() => setTalentAccents(ctx.db, ctx.userId, input.accentIds))
+      }),
+  }),
+
+  rates: router({
+    set: talentMutation
+      .input(setTalentRatesInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() => setTalentRates(ctx.db, ctx.userId, input.rates))
+      }),
+  }),
+
+  availability: router({
+    set: talentMutation
+      .input(setTalentAvailabilityInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() => setTalentAvailability(ctx.db, ctx.userId, input.months))
       }),
   }),
 

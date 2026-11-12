@@ -47,6 +47,19 @@ async function ensureCityId() {
   return created.id
 }
 
+const createdCategoryIds: string[] = []
+
+/** Publishing needs a category; each talent gets a throwaway one. */
+async function ensureCategoryId() {
+  const [created] = await db
+    .insert(schema.categories)
+    .values({ slug: `publish-cat-${randomUUID().slice(0, 8)}`, name: "Actors", kind: "on_camera" })
+    .returning({ id: schema.categories.id })
+  if (!created) throw new Error("category insert failed")
+  createdCategoryIds.push(created.id)
+  return created.id
+}
+
 async function ensureSkillIds() {
   const ids: string[] = []
   while (ids.length < 3) {
@@ -89,6 +102,7 @@ async function quickStart(userId: string) {
     bio: "Actor based in Lagos.",
     skillIds,
     photoMediaIds: photos.mediaIds,
+    categoryIds: [await ensureCategoryId()],
   })
 }
 
@@ -105,6 +119,10 @@ describe("talent publish", () => {
     while (createdLanguageIds.length > 0) {
       const id = createdLanguageIds.pop()
       if (id) await db.delete(schema.languages).where(eq(schema.languages.id, id))
+    }
+    while (createdCategoryIds.length > 0) {
+      const id = createdCategoryIds.pop()
+      if (id) await db.delete(schema.categories).where(eq(schema.categories.id, id))
     }
     while (createdCityIds.length > 0) {
       const id = createdCityIds.pop()
@@ -131,7 +149,10 @@ describe("talent publish", () => {
     const ready = await quickStart(userId)
     const beforeSection = Number(ready.talent.profile.completenessScore)
 
-    const withReel = await api.talent.sections.create({ type: "showreel" })
+    // An empty showreel section scores nothing; an About section with the bio does.
+    const emptyReel = await api.talent.sections.create({ type: "showreel" })
+    expect(emptyReel.talent.profile.completenessScore).toBe(beforeSection)
+    const withReel = await api.talent.sections.create({ type: "about" })
     expect(withReel.talent.profile.completenessScore).toBeGreaterThan(beforeSection)
     const [stored] = await db
       .select({ completenessScore: schema.talentProfiles.completenessScore })

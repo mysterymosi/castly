@@ -39,7 +39,12 @@ appId: com.okimmosi.mobile
     visible:
       id: "deck-card-2"
     timeout: 5000
-- tapOn: "Interested"
+# Interested by swipe: the buttons are at the end of the card's portfolio, inside the card's one
+# accessibility element, so a flow can't tap them by label.
+- swipe:
+    start: 25%, 45%
+    end: 90%, 45%
+    duration: 300
 - extendedWaitUntil:
     visible:
       id: "deck-card-3"

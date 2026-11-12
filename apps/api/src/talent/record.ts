@@ -10,7 +10,22 @@ import { and, asc, desc, eq, sql } from "drizzle-orm"
 
 type ProfileRow = typeof schema.talentProfiles.$inferSelect
 
-/** Media ids referenced by section configs (hero, about, gallery, showreel, audio). */
+/** The talent's photos, Main first, in studio order. */
+export async function loadPhotoMediaIds(db: Db, userId: string): Promise<string[]> {
+  const rows = await db
+    .select({ mediaId: schema.talentPhotos.mediaId })
+    .from(schema.talentPhotos)
+    .where(eq(schema.talentPhotos.talentId, userId))
+    .orderBy(asc(schema.talentPhotos.position))
+  return rows.map((row) => row.mediaId)
+}
+
+/** Media a serialized talent shows: its sections' and its photos. */
+export function talentMediaIds(talent: { sections: { config: unknown }[]; photoMediaIds: string[] }) {
+  return [...new Set([...sectionMediaIds(talent.sections), ...talent.photoMediaIds])]
+}
+
+/** Media ids referenced by section configs (hero, about, showreel, audio). */
 export function sectionMediaIds(sections: { config: unknown }[]): string[] {
   const ids: string[] = []
   for (const section of sections) {
@@ -24,13 +39,24 @@ export function sectionMediaIds(sections: { config: unknown }[]): string[] {
   return ids
 }
 
+/** "dark_brown" → "Dark brown": option values are slugs. */
+function optionLabel(value: string) {
+  const text = value.replaceAll("_", " ")
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
 /** Display text for a stored attribute value, or null when nothing is set. */
 function attributeValue(row: {
+  dataType: "text" | "number" | "boolean" | "select" | "multi_select"
   valueText: string | null
   valueNum: string | null
   valueBool: boolean | null
 }): string | null {
-  if (row.valueText?.trim()) return row.valueText.trim()
+  if (row.valueText?.trim()) {
+    if (row.dataType === "select" || row.dataType === "multi_select")
+      return row.valueText.split(",").map(optionLabel).join(", ")
+    return row.valueText.trim()
+  }
   if (row.valueNum !== null) return String(Number(row.valueNum))
   if (row.valueBool !== null) return row.valueBool ? "Yes" : "No"
   return null
@@ -48,6 +74,7 @@ async function loadContent(db: Db, userId: string): Promise<TalentRecord["conten
     .select({
       label: schema.attributeDefinitions.label,
       tier: schema.attributeDefinitions.tier,
+      dataType: schema.attributeDefinitions.dataType,
       isVisible: schema.talentAttributes.isVisible,
       valueText: schema.talentAttributes.valueText,
       valueNum: schema.talentAttributes.valueNum,
@@ -185,6 +212,7 @@ export async function loadTalentRecord(
         config: current.config,
       }
     }),
+    photoMediaIds: await loadPhotoMediaIds(db, userId),
     skillIds: skillRows.map((r) => r.skillId),
     rates: rateRows.map((r) => ({
       kind: r.kind,

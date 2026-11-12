@@ -11,6 +11,7 @@
 import { schema } from "@workspace/db"
 import {
   currentSchemaVersion,
+  PHOTO_SLOTS,
   validatePortfolioSectionWrite,
   type CoreSectionType,
 } from "@workspace/schema"
@@ -18,7 +19,6 @@ import { and, desc, eq, isNotNull } from "drizzle-orm"
 
 import { db } from "../db.js"
 
-const GALLERY_SIZE = 6
 
 const args = process.argv.slice(2).filter((arg) => arg !== "--")
 const email = args.find((arg) => !arg.startsWith("--"))
@@ -104,21 +104,10 @@ const sections: { type: CoreSectionType; config: Record<string, unknown> }[] = [
     },
   },
   { type: "showreel", config: { mediaId: video, headline: "2025 showreel" } },
-  {
-    type: "gallery",
-    config: { mediaIds: pickImages(2, GALLERY_SIZE), layout: "grid" },
-  },
   { type: "credits", config: { signatureOnly: false } },
   { type: "skills", config: {} },
   { type: "languages", config: { showAccents: true } },
   { type: "attributes", config: { showHidden: false } },
-  {
-    type: "gallery",
-    config: {
-      mediaIds: pickImages(2 + GALLERY_SIZE, GALLERY_SIZE),
-      layout: "grid",
-    },
-  },
   { type: "rates", config: { showCurrency: true } },
   { type: "availability", config: { horizonMonths: 3 } },
   {
@@ -160,6 +149,14 @@ await db.transaction(async (tx) => {
     .delete(schema.portfolioSections)
     .where(eq(schema.portfolioSections.talentId, user.id))
   await tx.insert(schema.portfolioSections).values(rows)
+  // Photos replace galleries: up to six distinct ones, spread between the sections above.
+  await tx.delete(schema.talentPhotos).where(eq(schema.talentPhotos.talentId, user.id))
+  const photoIds = [...new Set(pickImages(2, PHOTO_SLOTS * 2))].slice(0, PHOTO_SLOTS)
+  if (photoIds.length > 0) {
+    await tx
+      .insert(schema.talentPhotos)
+      .values(photoIds.map((mediaId, position) => ({ talentId: user.id, mediaId, position })))
+  }
 })
 
 console.log(
@@ -167,7 +164,7 @@ console.log(
 )
 if (images.length < 12) {
   console.warn(
-    `Only ${images.length} distinct photos, so galleries repeat images and cached repeats load ` +
+    `Only ${images.length} distinct photos, so sections repeat images and cached repeats load ` +
       "faster than they would for a real profile. Upload 12+ photos for a representative run."
   )
 }

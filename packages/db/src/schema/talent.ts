@@ -384,6 +384,29 @@ export const sectionMedia = pgTable(
   ],
 )
 
+/**
+ * The talent's photos, in the order they arranged them in the studio; position 0 is "Main", the
+ * card's lead. The card and the public page spread the rest between sections. At most
+ * `PHOTO_SLOTS` (six) per talent, enforced by the API. Deleting the media removes the photo.
+ */
+export const talentPhotos = pgTable(
+  "talent_photos",
+  {
+    talentId: uuid("talent_id")
+      .notNull()
+      .references(() => talentProfiles.userId, { onDelete: "cascade" }),
+    mediaId: uuid("media_id")
+      .notNull()
+      .references(() => mediaAssets.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.talentId, table.mediaId] }),
+    index("talent_photos_talent_position_idx").on(table.talentId, table.position),
+    index("talent_photos_media_id_idx").on(table.mediaId),
+  ],
+)
+
 /** Agency may act on a profile the talent owns; the talent remains the owner (see talent_profiles.user_id). */
 export const profileDelegates = pgTable(
   "profile_delegates",

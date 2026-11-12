@@ -29,6 +29,32 @@ export async function pickImages(max = 3) {
   return result.assets.map((asset) => asset.uri)
 }
 
+export type PickedImage = { uri: string; width: number; height: number }
+
+/** Photos with their pixel size, for the crop screen; empty when cancelled. */
+export async function pickImageAssets(max: number): Promise<PickedImage[]> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ["images"],
+    allowsMultipleSelection: max > 1,
+    selectionLimit: max,
+    quality: 1,
+  })
+  if (result.canceled) return []
+  return result.assets
+    .filter((asset) => asset.width > 0 && asset.height > 0)
+    .map((asset) => ({ uri: asset.uri, width: asset.width, height: asset.height }))
+}
+
+/** Cuts `rect` (image pixels) out of the photo; the upload queue compresses it afterwards. */
+export async function cropImage(
+  uri: string,
+  rect: { originX: number; originY: number; width: number; height: number }
+) {
+  const rendered = await ImageManipulator.manipulate(uri).crop(rect).renderAsync()
+  const saved = await rendered.saveAsync({ compress: 1, format: SaveFormat.JPEG })
+  return saved.uri
+}
+
 export async function pickVideo() {
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["videos"],

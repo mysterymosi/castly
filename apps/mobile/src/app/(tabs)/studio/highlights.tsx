@@ -8,7 +8,7 @@ import { InlineError, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
 import { TextField } from "@/components/ui/text-field"
 import { studioApi } from "@/studio/api"
-import { DecisionCardPreview } from "@/studio/decision-card-preview"
+import { DecisionCardPreview, mainPhotoUri } from "@/studio/decision-card-preview"
 import { useStudio } from "@/studio/studio-provider"
 
 const MAX_LENGTH = 80
@@ -64,6 +64,7 @@ export default function HighlightsScreen() {
         displayName={state.talent.profile.displayName}
         headline={state.talent.profile.headline}
         cardConfig={{ ...state.talent.profile.cardConfig, highlightFacts: facts }}
+        mainUri={mainPhotoUri(state)}
       />
 
       <View className="gap-4">

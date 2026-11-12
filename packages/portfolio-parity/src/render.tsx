@@ -2,6 +2,7 @@ import {
   CARD_WIDTH,
   mediaMetaFromStatus as nativeMediaMeta,
   PortfolioMediaProvider,
+  PortfolioPhoto,
   renderStudioSection,
   type PortfolioMediaComponents,
 } from "@workspace/portfolio-native"
@@ -10,7 +11,7 @@ import {
   mediaMetaFromStatus as webMediaMeta,
   PortfolioSections,
 } from "@workspace/portfolio-web"
-import { readVisibleSections } from "@workspace/schema"
+import { layoutPortfolioPage, readVisibleSections, withShowablePhotos } from "@workspace/schema"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import { extractSection, extractWebSections, isEmpty, type SemanticSection } from "./extract"
@@ -23,20 +24,35 @@ const nativeMedia: PortfolioMediaComponents = {
   ),
 }
 
-/** Native: each visible section in shared order, rendered as the card list renders it. */
+/**
+ * Native: each visible section in shared order with the photos spread between them, rendered as
+ * the card list renders them. Photos the media map lacks are left out, as on the web.
+ */
 export function nativeSemantics(portfolio: FixturePortfolio): SemanticSection[] {
   const mediaMeta = nativeMediaMeta(portfolio.media)
-  return readVisibleSections(portfolio.sections)
-    .map((section) => {
+  // Native media meta keeps unready media (no URL); only photos with an image URL show.
+  const content = withShowablePhotos(portfolio.content, (id) => Boolean(mediaMeta[id]?.imageUrl))
+  const photos = content.photoMediaIds ?? []
+  return layoutPortfolioPage(readVisibleSections(portfolio.sections), photos)
+    .map((item) => {
       const html = renderToStaticMarkup(
         <PortfolioMediaProvider components={nativeMedia}>
-          {renderStudioSection(section, mediaMeta, CARD_WIDTH, {
-            content: portfolio.content,
-            now: portfolio.now,
-          })}
+          {item.kind === "section"
+            ? renderStudioSection(item.section, mediaMeta, CARD_WIDTH, {
+                content,
+                now: portfolio.now,
+              })
+            : (
+                <PortfolioPhoto
+                  mediaId={item.mediaId}
+                  mediaMeta={mediaMeta}
+                  index={item.index}
+                  photoMediaIds={photos}
+                />
+              )}
         </PortfolioMediaProvider>
       )
-      return extractSection(section.type, html)
+      return extractSection(item.kind === "section" ? item.section.type : "photo", html)
     })
     .filter((section) => !isEmpty(section))
 }

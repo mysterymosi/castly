@@ -157,6 +157,10 @@ export class UploadQueueProcessor {
       if (working.goal === "canvas") {
         await studioApi.setCanvas(ready.id)
       }
+      if (working.goal === "photo") {
+        if (working.replaceMediaId) await studioApi.replacePhoto(working.replaceMediaId, ready.id)
+        else await studioApi.addPhoto(ready.id)
+      }
 
       this.patch(working.id, {
         phase: "completed",

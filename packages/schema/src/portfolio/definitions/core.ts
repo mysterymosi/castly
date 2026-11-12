@@ -5,11 +5,6 @@ export const aboutConfigV1 = z.object({
   mediaId: z.uuid().nullable().optional(),
 })
 
-export const galleryConfigV1 = z.object({
-  mediaIds: z.array(z.uuid()).max(24).default([]),
-  layout: z.enum(["grid", "masonry", "carousel"]).default("grid"),
-})
-
 export const showreelConfigV1 = z.object({
   mediaId: z.uuid().nullable(),
   headline: z.string().max(120).optional(),

@@ -7,6 +7,7 @@ import {
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
 import {
+  availabilityMonthKey,
   canvasProblem,
   cardConfigSchema,
   type CardConfig,
@@ -16,11 +17,14 @@ import {
 } from "@workspace/schema"
 import { randomUUID } from "node:crypto"
 
-import { and, asc, eq, inArray } from "drizzle-orm"
+import { and, asc, count, eq, gte, inArray, sql } from "drizzle-orm"
 
+import { deckCard } from "../deck/preview.js"
+import { scheduleMediaCleanup } from "../media/cleanup.js"
 import { getMediaStatuses } from "../media/service.js"
 import { StudioError } from "./errors.js"
-import { loadTalentRecord, sectionMediaIds } from "./record.js"
+import { countTalentPhotos, writeTalentPhotos } from "./photos.js"
+import { loadTalentRecord, talentMediaIds } from "./record.js"
 import { runQualityScoreJob } from "./quality-score-job.js"
 import { runSearchScoresJob } from "./search-scores-job.js"
 import {
@@ -32,7 +36,7 @@ function slugFromUserId(userId: string) {
   return `talent-${userId.replace(/-/g, "").slice(0, 12)}`
 }
 
-async function ensureProfile(db: Db, userId: string) {
+export async function ensureProfile(db: Db, userId: string) {
   const [existing] = await db
     .select()
     .from(schema.talentProfiles)
@@ -56,24 +60,26 @@ async function ensureProfile(db: Db, userId: string) {
   return created
 }
 
-function photoCountFromSections(
-  sections: { type: string; isVisible: boolean; config: unknown }[]
-): number {
-  let count = 0
-  for (const section of sections) {
-    if (!section.isVisible) continue
-    if (section.type === "gallery") {
-      const cfg = section.config as { mediaIds?: string[] }
-      count += cfg.mediaIds?.length ?? 0
-    }
-    if (section.type === "hero") {
-      const cfg = section.config as { mediaId?: string | null }
-      if (cfg.mediaId) count += 1
-    }
-  }
-  return count
+async function countRows(
+  db: Db,
+  table:
+    | typeof schema.credits
+    | typeof schema.talentLanguages
+    | typeof schema.talentRates
+    | typeof schema.talentCategories,
+  userId: string
+) {
+  const [row] = await db
+    .select({ n: count() })
+    .from(table)
+    .where(eq(table.talentId, userId))
+  return row?.n ?? 0
 }
 
+/**
+ * Recomputes and stores completeness. Only standard-tier attributes are counted, and rate
+ * visibility is never read, so neither sensitive data nor hiding rates moves the score.
+ */
 async function loadCompleteness(db: Db, userId: string) {
   const profile = await ensureProfile(db, userId)
   const sections = await db
@@ -87,7 +93,32 @@ async function loadCompleteness(db: Db, userId: string) {
     .from(schema.talentSkills)
     .where(eq(schema.talentSkills.talentId, userId))
 
-  const visibleTypes = sections.filter((s) => s.isVisible).map((s) => s.type)
+  const [standardAttributes] = await db
+    .select({ n: count() })
+    .from(schema.talentAttributes)
+    .innerJoin(
+      schema.attributeDefinitions,
+      eq(schema.talentAttributes.definitionId, schema.attributeDefinitions.id)
+    )
+    .where(
+      and(
+        eq(schema.talentAttributes.talentId, userId),
+        eq(schema.attributeDefinitions.tier, "standard"),
+        eq(schema.attributeDefinitions.active, true)
+      )
+    )
+
+  const [availabilityMonths] = await db
+    .select({ n: count() })
+    .from(schema.talentAvailability)
+    .where(
+      and(
+        eq(schema.talentAvailability.talentId, userId),
+        gte(schema.talentAvailability.month, availabilityMonthKey(new Date()))
+      )
+    )
+
+  const visible = sections.filter((s) => s.isVisible)
   const result = computeCompleteness({
     hasDisplayName:
       Boolean(profile.quickStartCompletedAt) ||
@@ -95,9 +126,20 @@ async function loadCompleteness(db: Db, userId: string) {
         profile.displayName !== "New talent"),
     hasCity: Boolean(profile.cityId),
     hasBio: Boolean(profile.bio?.trim()),
-    photoCount: photoCountFromSections(sections),
+    photoCount: await countTalentPhotos(db, userId),
     skillCount: skillRows.length,
-    visibleSectionTypes: visibleTypes,
+    visibleSectionTypes: visible.map((s) => s.type),
+    hasShowreelMedia: visible.some(
+      (s) => s.type === "showreel" && Boolean((s.config as { mediaId?: string | null }).mediaId)
+    ),
+    contentCounts: {
+      credits: await countRows(db, schema.credits, userId),
+      languages: await countRows(db, schema.talentLanguages, userId),
+      rates: await countRows(db, schema.talentRates, userId),
+      availabilityMonths: availabilityMonths?.n ?? 0,
+      standardAttributes: standardAttributes?.n ?? 0,
+    },
+    categoryCount: await countRows(db, schema.talentCategories, userId),
   })
 
   await db
@@ -109,10 +151,107 @@ async function loadCompleteness(db: Db, userId: string) {
     .where(eq(schema.talentProfiles.userId, userId))
 
   if (Number(profile.completenessScore) !== result.score) {
+    // Quality reads completeness, so a live talent's ranking follows the edit.
+    if (profile.status === "live") await runQualityScoreJob(db, userId)
     await runSearchScoresJob(db, userId)
   }
 
   return result
+}
+
+/** The owner's editable rows and the choices for each editor. */
+async function loadEditor(
+  db: Db,
+  profile: { willingToTravel: boolean; openToRelocate: boolean },
+  userId: string
+) {
+  const credits = await db
+    .select()
+    .from(schema.credits)
+    .where(eq(schema.credits.talentId, userId))
+    .orderBy(asc(schema.credits.sort), sql`${schema.credits.year} desc nulls last`)
+
+  const skills = await db
+    .select({ skillId: schema.talentSkills.skillId, proficiency: schema.talentSkills.proficiency })
+    .from(schema.talentSkills)
+    .where(eq(schema.talentSkills.talentId, userId))
+
+  const languages = await db
+    .select({ languageId: schema.talentLanguages.languageId, fluency: schema.talentLanguages.fluency })
+    .from(schema.talentLanguages)
+    .where(eq(schema.talentLanguages.talentId, userId))
+
+  const accents = await db
+    .select({ accentId: schema.talentAccents.accentId })
+    .from(schema.talentAccents)
+    .where(eq(schema.talentAccents.talentId, userId))
+
+  const attributes = await db
+    .select()
+    .from(schema.talentAttributes)
+    .where(eq(schema.talentAttributes.talentId, userId))
+
+  const definitions = await db
+    .select()
+    .from(schema.attributeDefinitions)
+    .where(eq(schema.attributeDefinitions.active, true))
+    .orderBy(asc(schema.attributeDefinitions.label))
+
+  const languageOptions = await db
+    .select({ id: schema.languages.id, name: schema.languages.name, slug: schema.languages.slug })
+    .from(schema.languages)
+    .where(eq(schema.languages.active, true))
+    .orderBy(asc(schema.languages.name))
+
+  const accentOptions = await db
+    .select({ id: schema.accents.id, name: schema.accents.name, slug: schema.accents.slug })
+    .from(schema.accents)
+    .where(eq(schema.accents.active, true))
+    .orderBy(asc(schema.accents.name))
+
+  return {
+    willingToTravel: profile.willingToTravel,
+    openToRelocate: profile.openToRelocate,
+    credits: credits.map((c) => ({
+      id: c.id,
+      title: c.title,
+      roleName: c.roleName,
+      productionCompany: c.productionCompany,
+      year: c.year,
+      type: c.type,
+      link: c.link,
+      isSignature: c.isSignature,
+      verified: c.verifiedAt !== null,
+    })),
+    skills,
+    languages,
+    accentIds: accents.map((a) => a.accentId),
+    attributes: attributes.map((a) => ({
+      definitionId: a.definitionId,
+      valueText: a.valueText,
+      valueNum: a.valueNum === null ? null : Number(a.valueNum),
+      valueBool: a.valueBool,
+      isVisible: a.isVisible,
+    })),
+    attributeDefinitions: definitions.flatMap((d) =>
+      // `prohibited` cannot be stored (DB check); taxonomy keys have their own editors.
+      d.tier === "prohibited" || isTaxonomyAttributeKey(d.key)
+        ? []
+        : [
+            {
+              id: d.id,
+              key: d.key,
+              label: d.label,
+              dataType: d.dataType,
+              tier: d.tier,
+              appliesToCategoryIds: d.appliesToCategoryIds,
+              options: d.options ?? null,
+            },
+          ]
+    ),
+    languageOptions,
+    accentOptions,
+  }
 }
 
 export async function getStudioState(db: Db, userId: string) {
@@ -142,6 +281,7 @@ export async function getStudioState(db: Db, userId: string) {
       name: schema.categories.name,
       slug: schema.categories.slug,
       kind: schema.categories.kind,
+      parentId: schema.categories.parentId,
     })
     .from(schema.categories)
     .where(eq(schema.categories.active, true))
@@ -154,10 +294,16 @@ export async function getStudioState(db: Db, userId: string) {
     .orderBy(asc(schema.talentCategories.sort))
 
   const completeness = await loadCompleteness(db, userId)
-  const record = await loadTalentRecord(db, profile, completeness.score)
+  // Re-read: completeness (and the jobs it may run) just wrote to the profile.
+  const [fresh] = await db
+    .select()
+    .from(schema.talentProfiles)
+    .where(eq(schema.talentProfiles.userId, userId))
+    .limit(1)
+  const record = await loadTalentRecord(db, fresh ?? profile, completeness.score)
   const talent = serializeTalent(record, { kind: "owner", userId }, {})
 
-  const mediaIds = new Set(sectionMediaIds(talent.sections))
+  const mediaIds = new Set(talentMediaIds(talent))
   const { leadMediaId, canvasMediaId } = talent.profile.cardConfig
   if (leadMediaId) mediaIds.add(leadMediaId)
   if (canvasMediaId) mediaIds.add(canvasMediaId)
@@ -171,6 +317,7 @@ export async function getStudioState(db: Db, userId: string) {
     categories,
     categoryIds: categoryRows.map((row) => row.categoryId),
     media,
+    editor: await loadEditor(db, fresh ?? profile, userId),
   }
 }
 
@@ -179,8 +326,12 @@ export async function updateStudioProfile(
   userId: string,
   input: {
     displayName?: string
+    headline?: string | null
     bio?: string
     cityId?: string | null
+    willingToTravel?: boolean
+    openToRelocate?: boolean
+    rateVisibility?: "public" | "verified_bookers" | "hidden"
     cardConfig?: Partial<CardConfig>
   }
 ) {
@@ -191,21 +342,31 @@ export async function updateStudioProfile(
     .where(eq(schema.talentProfiles.userId, userId))
     .limit(1)
 
+  if (input.cityId) {
+    const [city] = await db
+      .select({ id: schema.cities.id })
+      .from(schema.cities)
+      .where(and(eq(schema.cities.id, input.cityId), eq(schema.cities.active, true)))
+      .limit(1)
+    if (!city) throw new StudioError("Unknown city", "unknown_city")
+  }
+
   const nextCard = cardConfigSchema.parse({
     ...cardConfigSchema.parse(current?.cardConfig ?? {}),
     ...input.cardConfig,
   })
 
-  const patch: {
-    displayName?: string
-    bio?: string
-    cityId?: string | null
-    cardConfig: CardConfig
-    updatedAt: Date
-  } = { cardConfig: nextCard, updatedAt: new Date() }
+  const patch: Partial<typeof schema.talentProfiles.$inferInsert> = {
+    cardConfig: nextCard,
+    updatedAt: new Date(),
+  }
   if (input.displayName !== undefined) patch.displayName = input.displayName
+  if (input.headline !== undefined) patch.headline = input.headline?.trim() || null
   if (input.bio !== undefined) patch.bio = input.bio
   if (input.cityId !== undefined) patch.cityId = input.cityId
+  if (input.willingToTravel !== undefined) patch.willingToTravel = input.willingToTravel
+  if (input.openToRelocate !== undefined) patch.openToRelocate = input.openToRelocate
+  if (input.rateVisibility !== undefined) patch.rateVisibility = input.rateVisibility
 
   await db
     .update(schema.talentProfiles)
@@ -236,14 +397,16 @@ export async function setStudioCanvas(db: Db, userId: string, mediaId: string | 
     .from(schema.talentProfiles)
     .where(eq(schema.talentProfiles.userId, userId))
     .limit(1)
-  const cardConfig = cardConfigSchema.parse({
-    ...cardConfigSchema.parse(current?.cardConfig ?? {}),
-    canvasMediaId: mediaId,
-  })
+  const previous = cardConfigSchema.parse(current?.cardConfig ?? {})
+  const cardConfig = cardConfigSchema.parse({ ...previous, canvasMediaId: mediaId })
   await db
     .update(schema.talentProfiles)
     .set({ cardConfig, updatedAt: new Date() })
     .where(eq(schema.talentProfiles.userId, userId))
+  // A replaced or removed canvas is deleted unless something else still uses it.
+  if (previous.canvasMediaId && previous.canvasMediaId !== mediaId) {
+    scheduleMediaCleanup(db, userId, [previous.canvasMediaId])
+  }
 
   return getStudioState(db, userId)
 }
@@ -286,48 +449,8 @@ export async function completeQuickStart(
     })
     .where(eq(schema.talentProfiles.userId, userId))
 
-  let [gallery] = await db
-    .select()
-    .from(schema.portfolioSections)
-    .where(
-      and(
-        eq(schema.portfolioSections.talentId, userId),
-        eq(schema.portfolioSections.type, "gallery")
-      )
-    )
-    .limit(1)
-
-  const galleryConfig = {
-    mediaIds: input.photoMediaIds,
-    layout: "grid" as const,
-  }
-  const galleryVersion = defaultSchemaVersion("gallery")
-  validatePortfolioSectionWrite("gallery", galleryVersion, galleryConfig)
-
-  if (gallery) {
-    await db
-      .update(schema.portfolioSections)
-      .set({
-        config: galleryConfig,
-        schemaVersion: galleryVersion,
-        isVisible: true,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.portfolioSections.id, gallery.id))
-  } else {
-    const existing = await db
-      .select({ position: schema.portfolioSections.position })
-      .from(schema.portfolioSections)
-      .where(eq(schema.portfolioSections.talentId, userId))
-    const position = existing.length
-    await db.insert(schema.portfolioSections).values({
-      talentId: userId,
-      type: "gallery",
-      position,
-      schemaVersion: galleryVersion,
-      config: galleryConfig,
-    })
-  }
+  // The first photos, Main first; they replace any the talent had.
+  scheduleMediaCleanup(db, userId, await writeTalentPhotos(db, userId, input.photoMediaIds))
 
   return getStudioState(db, userId)
 }
@@ -491,26 +614,6 @@ export async function applyTemplate(
   return getStudioState(db, userId)
 }
 
-export async function setTalentSkills(
-  db: Db,
-  userId: string,
-  skillIds: string[]
-) {
-  await ensureProfile(db, userId)
-  await db
-    .delete(schema.talentSkills)
-    .where(eq(schema.talentSkills.talentId, userId))
-  if (skillIds.length > 0) {
-    await db.insert(schema.talentSkills).values(
-      skillIds.map((skillId) => ({
-        talentId: userId,
-        skillId,
-      }))
-    )
-  }
-  return getStudioState(db, userId)
-}
-
 /**
  * Replaces the talent's categories, the first as primary. Each must be an active category. The
  * `talent_search` triggers pick the change up, so role decks see it at once.
@@ -546,47 +649,28 @@ export async function setTalentCategories(
   return getStudioState(db, userId)
 }
 
-export async function setTalentAttribute(
-  db: Db,
-  userId: string,
-  input: { definitionKey: string; valueText?: string; valueNum?: number }
-) {
-  await ensureProfile(db, userId)
-  const [definition] = await db
+const publishBlockerMessage = {
+  quick_start: "Finish quick start before publishing",
+  category: "Pick what you do before publishing, so bookers can find you for roles",
+} as const
+
+/**
+ * A booker who is not the talent and not verified: the preview shows what such a booker would
+ * get, so owner-only fields, hidden sections and verified-only rates stay out. No row has this id.
+ */
+const PREVIEW_VIEWER_ID = "00000000-0000-4000-8000-000000000000"
+
+/** The talent's own deck card exactly as a booker receives it, for the studio preview. */
+export async function previewDeckCard(db: Db, userId: string) {
+  // Recompute first, so the card reflects the latest edits.
+  await getStudioState(db, userId)
+  const [profile] = await db
     .select()
-    .from(schema.attributeDefinitions)
-    .where(eq(schema.attributeDefinitions.key, input.definitionKey))
+    .from(schema.talentProfiles)
+    .where(eq(schema.talentProfiles.userId, userId))
     .limit(1)
-  if (!definition)
-    throw new StudioError("Unknown attribute", "unknown_attribute")
-  // Languages and accents have their own tables; one source of truth per value.
-  if (isTaxonomyAttributeKey(definition.key))
-    throw new StudioError(
-      `Set ${definition.label.toLowerCase()} from its own list, not as an attribute`,
-      "unknown_attribute"
-    )
-
-  await db
-    .insert(schema.talentAttributes)
-    .values({
-      talentId: userId,
-      definitionId: definition.id,
-      valueText: input.valueText,
-      valueNum: input.valueNum != null ? String(input.valueNum) : null,
-    })
-    .onConflictDoUpdate({
-      target: [
-        schema.talentAttributes.talentId,
-        schema.talentAttributes.definitionId,
-      ],
-      set: {
-        valueText: input.valueText,
-        valueNum: input.valueNum != null ? String(input.valueNum) : null,
-      },
-    })
-
-  // Sensitive attributes never affect completeness — recompute without reading attribute values.
-  return getStudioState(db, userId)
+  if (!profile) throw new StudioError("Profile not found", "talent_not_found")
+  return deckCard(db, PREVIEW_VIEWER_ID, profile)
 }
 
 export async function publishTalent(db: Db, userId: string) {
@@ -596,11 +680,9 @@ export async function publishTalent(db: Db, userId: string) {
   }
 
   const state = await getStudioState(db, userId)
-  if (!state.completeness.canPublish) {
-    throw new StudioError(
-      "Finish quick start before publishing",
-      "publish_not_ready"
-    )
+  const [blocker] = state.completeness.publishBlockers
+  if (blocker) {
+    throw new StudioError(publishBlockerMessage[blocker], "publish_not_ready")
   }
 
   await db

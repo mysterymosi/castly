@@ -15,6 +15,12 @@ function StudioStack() {
         <Stack.Screen name="quick-start" options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }} />
         <Stack.Screen name="highlights" />
         <Stack.Screen name="categories" />
+        <Stack.Screen name="edit/[type]" />
+        <Stack.Screen name="credit" options={{ presentation: "modal" }} />
+        <Stack.Screen
+          name="crop"
+          options={{ presentation: "fullScreenModal", animation: "slide_from_bottom", gestureEnabled: false }}
+        />
         <Stack.Screen
           name="add-section"
           options={{

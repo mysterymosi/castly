@@ -138,5 +138,12 @@ describe("studio canvas", () => {
     const card = await deckCard(db, booker.userId, await profileRow())
     expect(card.decision.canvasMediaId).toBe(mediaId)
     expect(card.media[mediaId]?.playbackUrl).toBeTruthy()
+
+    // The talent can turn the canvas off in the studio: the card shows photos, the canvas stays.
+    const off = await api.talent.studio.updateProfile({ cardConfig: { canvasEnabled: false } })
+    expect(off.talent.profile.cardConfig).toMatchObject({ canvasEnabled: false, canvasMediaId: mediaId })
+    expect((await deckCard(db, booker.userId, await profileRow())).decision.canvasMediaId).toBeNull()
+    await api.talent.studio.updateProfile({ cardConfig: { canvasEnabled: true } })
+    expect((await deckCard(db, booker.userId, await profileRow())).decision.canvasMediaId).toBe(mediaId)
   })
 })

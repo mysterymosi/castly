@@ -247,7 +247,7 @@ export default function QuickStartScreen() {
           <>
             <StepTitle
               title="Add 3 photos"
-              body="Choose three clear photos from your library. Headshots work best. They start your gallery."
+              body="Choose three clear photos from your library. Headshots work best. The first is your Main photo, the one bookers see first."
             />
             <View className="gap-3 rounded-xl border border-border bg-surface p-5">
               <Text variant="caption" tone="muted">

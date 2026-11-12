@@ -1,88 +1,96 @@
-import { portfolioContentFromDto } from "@workspace/schema"
-import { router, useLocalSearchParams } from "expo-router"
-import { useEffect, useMemo, useRef, useState } from "react"
-import { Platform, ScrollView, useWindowDimensions, View } from "react-native"
+import { useQuery } from "@tanstack/react-query"
+import { deckCardSchema } from "@workspace/schema"
+import { router } from "expo-router"
+import { useMemo, useState } from "react"
+import { Alert, Linking, Platform, Pressable, Share, View, type LayoutChangeEvent } from "react-native"
+import { Gesture } from "react-native-gesture-handler"
+import { useSharedValue } from "react-native-reanimated"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 
 import { ScreenHeader } from "@/components/ui/screen-header"
-import { SegmentedControl } from "@/components/ui/segmented-control"
-import { EmptyState, LoadingState } from "@/components/ui/states"
-import { DecisionCardPreview } from "@/studio/decision-card-preview"
-import { mediaMetaFromStudio } from "@/studio/portfolio-media"
-import { PortfolioPreview } from "@/studio/portfolio-preview"
+import { ErrorState, LoadingState } from "@/components/ui/states"
+import { Text } from "@/components/ui/text"
+import { errorMessage } from "@/auth/session-provider"
+import { DeckCard } from "@/deck/deck-card"
 import { useStudio } from "@/studio/studio-provider"
+import { trpcQuery } from "@/trpc/query-client"
 
-type Tab = "portfolio" | "card"
-const tabs: readonly { value: Tab; label: string }[] = [
-  { value: "portfolio", label: "Portfolio" },
-  { value: "card", label: "Decision card" },
-]
+const SITE_URL = (process.env.EXPO_PUBLIC_SITE_URL ?? "https://castly.app").replace(/\/$/, "")
 
+/**
+ * The talent's own card exactly as a booker sees it (`talent.studio.previewCard`, serialized for
+ * an unverified booker): the same component the deck renders, so hidden sections, empty sections,
+ * rate visibility, the canvas and the photo layout all match. It doesn't swipe, and the decision
+ * buttons only explain themselves.
+ */
 export default function PreviewScreen() {
-  const params = useLocalSearchParams<{ tab?: Tab }>()
   const { state } = useStudio()
-  const { width } = useWindowDimensions()
   const insets = useSafeAreaInsets()
-  const pager = useRef<ScrollView>(null)
-  const initial: Tab = params.tab === "card" ? "card" : "portfolio"
-  const [tab, setTab] = useState<Tab>(initial)
-  const mediaMeta = useMemo(() => (state ? mediaMetaFromStudio(state.media) : {}), [state])
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null)
+  // Fetched fresh on every open, so it reflects the edits just made.
+  // Parsed as the deck parses its pages, which applies the schema defaults the card relies on.
+  const card = useQuery({
+    ...trpcQuery.talent.studio.previewCard.queryOptions(undefined, {
+      select: (data) => deckCardSchema.parse(data),
+    }),
+    staleTime: 0,
+  })
+  const scrollGesture = useMemo(() => Gesture.Native(), [])
+  const scrollMomentum = useSharedValue(false)
+  const chrome = useMemo(() => ({ top: 8, bottom: insets.bottom + 16 }), [insets.bottom])
 
-  useEffect(() => {
-    if (initial === "card") {
-      requestAnimationFrame(() => pager.current?.scrollTo({ x: width, animated: false }))
-    }
-    // Only on mount: later changes come from the control or a swipe.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const profile = state?.talent.profile
+  const live = profile?.status === "live"
 
-  function select(next: Tab) {
-    setTab(next)
-    pager.current?.scrollTo({ x: next === "card" ? width : 0, animated: true })
+  function onLayout(event: LayoutChangeEvent) {
+    const { width, height } = event.nativeEvent.layout
+    setSize((s) => (s && s.width === width && s.height === height ? s : { width, height }))
   }
-
-  if (!state) return <LoadingState />
-
-  const hasVisible = state.talent.sections.some((s) => s.isVisible)
 
   return (
     <View className="flex-1 bg-bg" style={{ paddingTop: Platform.OS === "ios" ? 8 : insets.top }}>
-      <ScreenHeader title="Preview" backIcon="close" onBack={() => router.back()} />
-      <SegmentedControl options={tabs} value={tab} onChange={select} className="mb-3" />
-      <ScrollView
-        ref={pager}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={(event) => {
-          setTab(event.nativeEvent.contentOffset.x >= width / 2 ? "card" : "portfolio")
-        }}
-        className="flex-1"
-      >
-        <View style={{ width }} className="flex-1 px-4" accessibilityLabel="Portfolio preview">
-          {hasVisible ? (
-            <PortfolioPreview
-              sections={state.talent.sections}
-              mediaMeta={mediaMeta}
-              content={portfolioContentFromDto(state.talent)}
-            />
-          ) : (
-            <EmptyState icon="eye-off" title="Nothing visible yet" body="Visible sections will show here as bookers see them." />
-          )}
-        </View>
-        <ScrollView
-          style={{ width }}
-          contentContainerClassName="px-5 pt-2"
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-          accessibilityLabel="Decision card preview"
-        >
-          <DecisionCardPreview
-            displayName={state.talent.profile.displayName}
-            headline={state.talent.profile.headline}
-            cardConfig={state.talent.profile.cardConfig}
+      <ScreenHeader
+        title="Preview"
+        backIcon="close"
+        onBack={() => router.back()}
+        right={
+          live && profile ? (
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Open your public page"
+              onPress={() => void Linking.openURL(`${SITE_URL}/${profile.slug}`)}
+              hitSlop={8}
+              className="active:opacity-70"
+            >
+              <Text variant="label">Public page</Text>
+            </Pressable>
+          ) : null
+        }
+      />
+      <View className="flex-1" onLayout={onLayout} accessibilityLabel="Your card as bookers see it">
+        {card.data && size ? (
+          <DeckCard
+            card={card.data}
+            width={size.width}
+            height={size.height}
+            chrome={chrome}
+            scrollGesture={scrollGesture}
+            scrollMomentum={scrollMomentum}
+            onShare={() =>
+              void Share.share({
+                message: `${card.data.talent.profile.displayName} on Castly: ${SITE_URL}/${card.data.talent.profile.slug}`,
+              })
+            }
+            onDecide={() =>
+              Alert.alert("This is a preview", "Bookers pass, show interest or save you here.")
+            }
           />
-        </ScrollView>
-      </ScrollView>
+        ) : card.error ? (
+          <ErrorState message={errorMessage(card.error, "Could not load the preview")} onRetry={() => void card.refetch()} />
+        ) : (
+          <LoadingState />
+        )}
+      </View>
     </View>
   )
 }

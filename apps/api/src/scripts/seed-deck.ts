@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto"
 import { LOCAL_DATABASE_URL, schema } from "@workspace/db"
 import {
   currentSchemaVersion,
+  PHOTO_SLOTS,
   validatePortfolioSectionWrite,
   type CoreSectionType,
 } from "@workspace/schema"
@@ -183,14 +184,19 @@ for (const [index, demo] of demos.entries()) {
     }
   }
 
-  const gallery = { type: "gallery" as const, config: { mediaIds: imageIds.slice(1), layout: "grid" } }
+  // Photos, Main first: the card leads with Main and spreads the rest between sections.
+  const photoIds = [...new Set(imageIds)].slice(0, PHOTO_SLOTS)
+  if (photoIds.length > 0) {
+    await db
+      .insert(schema.talentPhotos)
+      .values(photoIds.map((mediaId, position) => ({ talentId: userId, mediaId, position })))
+  }
   const showreel = videoId
     ? [{ type: "showreel" as const, config: { mediaId: videoId, headline: isCrew ? "Recent work" : "2025 showreel" } }]
     : []
   // Crew portfolios lead with work samples and credits; on-camera with the hero shot.
   const sections: { type: CoreSectionType; config: Record<string, unknown> }[] = isCrew
     ? [
-        gallery,
         ...showreel,
         { type: "credits", config: { signatureOnly: false } },
         { type: "about", config: { body: `${demo.headline} based in ${demo.city === "lagos" ? "Lagos" : "Abuja"}.` } },
@@ -200,7 +206,6 @@ for (const [index, demo] of demos.entries()) {
         { type: "hero", config: { style: "full_bleed", mediaId: imageIds[0] ?? null, headline: demo.headline, showBadges: false } },
         { type: "about", config: { body: `${demo.headline}. ${demo.facts.join(". ")}.` } },
         ...showreel,
-        gallery,
         { type: "credits", config: { signatureOnly: false } },
         { type: "skills", config: {} },
       ]
