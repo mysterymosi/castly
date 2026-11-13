@@ -21,16 +21,6 @@ function StudioStack() {
           name="crop"
           options={{ presentation: "fullScreenModal", animation: "slide_from_bottom", gestureEnabled: false }}
         />
-        <Stack.Screen
-          name="add-section"
-          options={{
-            presentation: "formSheet",
-            sheetAllowedDetents: [0.6, 1],
-            sheetGrabberVisible: true,
-            sheetCornerRadius: 24,
-            contentStyle: { backgroundColor: color.surface },
-          }}
-        />
         <Stack.Screen name="preview" options={{ presentation: "modal" }} />
       </Stack>
     </UploadQueueProvider>

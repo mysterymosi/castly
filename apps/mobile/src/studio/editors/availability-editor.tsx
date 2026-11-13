@@ -10,7 +10,7 @@ import { Text } from "@/components/ui/text"
 import { cn } from "@/lib/cn"
 import { haptics } from "@/lib/haptics"
 import { studioApi } from "@/studio/api"
-import { EditorScreen, useAutosave } from "@/studio/editors/kit"
+import { EditorScreen, isDirty } from "@/studio/editors/kit"
 import { useStudio } from "@/studio/studio-provider"
 
 type Status = "available" | "partial" | "booked"
@@ -32,8 +32,8 @@ function monthName(key: string, withYear: boolean) {
 }
 
 /**
- * Twelve months from this one; a tap cycles free → some days → booked (2b.6). The whole strip is
- * saved, so a saved strip is what makes the section show; past months drop off on every save.
+ * Twelve months from this one; a tap cycles free → some days → booked (2b.6). Save stores the whole
+ * strip, so a saved strip is what makes the section show; past months drop off on every save.
  */
 export function AvailabilityEditor({ state }: { state: StudioState }) {
   const { run } = useStudio()
@@ -45,27 +45,31 @@ export function AvailabilityEditor({ state }: { state: StudioState }) {
     const now = new Date()
     return Array.from({ length: AVAILABILITY_WINDOW_MONTHS }, (_, i) => availabilityMonthKey(now, i))
   }, [])
-  const [statuses, setStatuses] = useState<Record<string, Status>>(() => {
+  const savedStatuses = useMemo(() => {
     const stored = new Map(state.talent.content.availability.map((m) => [m.month, m.status]))
-    return Object.fromEntries(months.map((m) => [m, stored.get(m) ?? "available"]))
-  })
-  const [touched, setTouched] = useState(state.talent.content.availability.length > 0)
+    return Object.fromEntries(months.map((m) => [m, stored.get(m) ?? "available"])) as Record<string, Status>
+  }, [months, state.talent.content.availability])
+  const [statuses, setStatuses] = useState<Record<string, Status>>(() => savedStatuses)
+  // A talent who never saved months has no strip; tapping one is what makes it worth saving.
+  const [touched, setTouched] = useState(false)
 
-  useAutosave(touched ? statuses : null, (value) =>
-    value
-      ? run(
-          "availability",
-          () =>
-            studioApi.setAvailability(months.map((month) => ({ month, status: value[month] ?? "available" }))),
-          "Could not save your availability"
-        )
-      : Promise.resolve(true)
-  )
+  async function save() {
+    return run(
+      "availability",
+      () => studioApi.setAvailability(months.map((month) => ({ month, status: statuses[month] ?? "available" }))),
+      "Could not save your availability"
+    )
+  }
 
   return (
     <EditorScreen
       title="Availability"
       intro="Tap a month to cycle it: free, some days, booked. Bookers see the months ahead on your page."
+      save={{
+        // An all-free strip is still worth saving the first time: it shows bookers you're free.
+        dirty: isDirty(statuses, savedStatuses) || (touched && state.talent.content.availability.length === 0),
+        onSave: save,
+      }}
     >
       <View className="flex-row flex-wrap gap-2" accessibilityLabel="Next 12 months">
         {months.map((month, i) => {

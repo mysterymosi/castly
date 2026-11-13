@@ -12,12 +12,7 @@
 import { randomUUID } from "node:crypto"
 
 import { LOCAL_DATABASE_URL, schema } from "@workspace/db"
-import {
-  currentSchemaVersion,
-  PHOTO_SLOTS,
-  validatePortfolioSectionWrite,
-  type CoreSectionType,
-} from "@workspace/schema"
+import { PHOTO_SLOTS } from "@workspace/schema"
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm"
 import postgres from "postgres"
 
@@ -157,7 +152,7 @@ for (const [index, demo] of demos.entries()) {
     slug: `demo-${demo.name.toLowerCase().replace(/[^a-z]+/g, "-")}`,
     displayName: demo.name,
     headline: demo.headline,
-    bio: `${demo.headline}. Demo talent for the deck shell.`,
+    bio: `${demo.headline}. ${demo.facts.join(". ")}.`,
     cityId,
     status: "live",
     publishedAt: new Date(Date.now() - index * 60_000),
@@ -191,31 +186,13 @@ for (const [index, demo] of demos.entries()) {
       .insert(schema.talentPhotos)
       .values(photoIds.map((mediaId, position) => ({ talentId: userId, mediaId, position })))
   }
-  const showreel = videoId
-    ? [{ type: "showreel" as const, config: { mediaId: videoId, headline: isCrew ? "Recent work" : "2025 showreel" } }]
-    : []
-  // Crew portfolios lead with work samples and credits; on-camera with the hero shot.
-  const sections: { type: CoreSectionType; config: Record<string, unknown> }[] = isCrew
-    ? [
-        ...showreel,
-        { type: "credits", config: { signatureOnly: false } },
-        { type: "about", config: { body: `${demo.headline} based in ${demo.city === "lagos" ? "Lagos" : "Abuja"}.` } },
-        { type: "skills", config: {} },
-      ]
-    : [
-        { type: "hero", config: { style: "full_bleed", mediaId: imageIds[0] ?? null, headline: demo.headline, showBadges: false } },
-        { type: "about", config: { body: `${demo.headline}. ${demo.facts.join(". ")}.` } },
-        ...showreel,
-        { type: "credits", config: { signatureOnly: false } },
-        { type: "skills", config: {} },
-      ]
-  await db.insert(schema.portfolioSections).values(
-    sections.map((section, position) => {
-      const schemaVersion = currentSchemaVersion(section.type)
-      const valid = validatePortfolioSectionWrite(section.type, schemaVersion, section.config)
-      return { talentId: userId, type: section.type, position, isVisible: true, schemaVersion, config: valid.config }
-    }),
-  )
+  // The layout is fixed by category; the showreel is a profile field.
+  if (videoId) {
+    await db
+      .update(schema.talentProfiles)
+      .set({ showreelMediaId: videoId })
+      .where(eq(schema.talentProfiles.userId, userId))
+  }
   console.log(`${isCrew ? "crew     " : "on-camera"}  ${demo.name}`)
 }
 

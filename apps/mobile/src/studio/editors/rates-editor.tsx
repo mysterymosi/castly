@@ -2,14 +2,13 @@ import type { StudioState } from "@workspace/schema"
 import { useState } from "react"
 import { View } from "react-native"
 
-import { Button } from "@/components/ui/button"
 import { PressableCard } from "@/components/ui/card"
 import { Icon } from "@/components/ui/icon"
 import { Text } from "@/components/ui/text"
 import { TextField } from "@/components/ui/text-field"
 import { cn } from "@/lib/cn"
 import { studioApi } from "@/studio/api"
-import { EditorScreen, FieldGroup, ToggleRow } from "@/studio/editors/kit"
+import { EditorScreen, FieldGroup, isDirty, ToggleRow } from "@/studio/editors/kit"
 import { useStudio } from "@/studio/studio-provider"
 
 type Kind = "day" | "half_day" | "project"
@@ -56,12 +55,15 @@ function draftsFrom(state: StudioState): Record<Kind, Draft> {
   ) as Record<Kind, Draft>
 }
 
-/** Rates in naira and who sees them (2b.5). Rates save with the button; visibility on tap. */
+/** Rates in naira and who sees them (2b.5), saved together with the button. */
 export function RatesEditor({ state }: { state: StudioState }) {
-  const { run, pending } = useStudio()
-  const [drafts, setDrafts] = useState(() => draftsFrom(state))
+  const { run } = useStudio()
+  const savedDrafts = draftsFrom(state)
+  const savedVisibility = state.talent.profile.rateVisibility
+  const [drafts, setDrafts] = useState(() => savedDrafts)
+  const [visibility, setVisibility] = useState<Visibility>(savedVisibility)
   const [errors, setErrors] = useState<Partial<Record<Kind, string>>>({})
-  const visibility = state.talent.profile.rateVisibility
+  const ratesChanged = isDirty(drafts, savedDrafts)
 
   function patch(kind: Kind, next: Partial<Draft>) {
     setDrafts((current) => ({ ...current, [kind]: { ...current[kind], ...next } }))
@@ -82,17 +84,23 @@ export function RatesEditor({ state }: { state: StudioState }) {
       return [{ kind, amountMin, amountMax, currency: "NGN", negotiable: draft.negotiable }]
     })
     setErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) return
-    await run("rates", () => studioApi.setRates(rates), "Could not save your rates")
+    if (Object.keys(nextErrors).length > 0) return false
+    if (ratesChanged && !(await run("rates", () => studioApi.setRates(rates), "Could not save your rates")))
+      return false
+    if (visibility !== savedVisibility)
+      return run(
+        "rate-visibility",
+        () => studioApi.updateProfile({ rateVisibility: visibility }),
+        "Could not change who sees your rates"
+      )
+    return true
   }
 
   return (
     <EditorScreen
       title="Rates"
       intro="In naira. Leave the amounts empty with negotiable on to show “On request”."
-      footer={
-        <Button label="Save rates" loading={pending === "rates"} disabled={pending !== null} onPress={() => void save()} />
-      }
+      save={{ dirty: ratesChanged || visibility !== savedVisibility, onSave: save }}
     >
       {kinds.map(({ kind, label }) => {
         const draft = drafts[kind]
@@ -144,14 +152,7 @@ export function RatesEditor({ state }: { state: StudioState }) {
                 accessibilityRole="radio"
                 accessibilityState={{ selected }}
                 accessibilityLabel={`${option.label}. ${option.body}`}
-                onPress={() => {
-                  if (!selected)
-                    void run(
-                      "rate-visibility",
-                      () => studioApi.updateProfile({ rateVisibility: option.value }),
-                      "Could not change who sees your rates"
-                    )
-                }}
+                onPress={() => setVisibility(option.value)}
                 className={cn("flex-row items-center gap-3 p-4", selected && "border-2 border-focus")}
               >
                 <View className="flex-1 gap-0.5">

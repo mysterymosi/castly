@@ -3,46 +3,22 @@ import { schema } from "@workspace/db"
 import {
   AVAILABILITY_WINDOW_MONTHS,
   availabilityMonthKey,
-  type CoreSectionType,
   isTaxonomyAttributeKey,
-  validatePortfolioSectionWrite,
 } from "@workspace/schema"
 import { and, eq, inArray, max } from "drizzle-orm"
 
 import { StudioError } from "./errors.js"
 import { scheduleMediaCleanup } from "../media/cleanup.js"
 import { appendTalentPhoto, replaceTalentPhoto, writeTalentPhotos } from "./photos.js"
-import { defaultSchemaVersion, defaultSectionConfig } from "./section-defaults.js"
-import { ensureProfile, getStudioState } from "./studio-service.js"
+import { contentEdited, ensureProfile } from "./studio-service.js"
 
 /**
- * Writes for the studio's content editors (M2b). Every write returns the fresh studio state,
- * which recomputes completeness; the `talent_search` triggers project the rows themselves.
+ * Writes for the studio's content editors (M2b). Every write stamps `content_updated_at` and returns
+ * the fresh studio state, which recomputes completeness; the `talent_search` triggers project the
+ * rows themselves.
  */
 
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0]
-
-/**
- * Adds the section that displays `type` when the talent has none, so the first credit (say) shows
- * on the page. An existing section, hidden or not, is left alone: hiding it was the talent's call.
- */
-async function ensureSection(tx: Db | Tx, userId: string, type: CoreSectionType) {
-  const rows = await tx
-    .select({ type: schema.portfolioSections.type })
-    .from(schema.portfolioSections)
-    .where(eq(schema.portfolioSections.talentId, userId))
-  if (rows.some((row) => row.type === type)) return
-  const schemaVersion = defaultSchemaVersion(type)
-  const config = defaultSectionConfig(type)
-  validatePortfolioSectionWrite(type, schemaVersion, config)
-  await tx.insert(schema.portfolioSections).values({
-    talentId: userId,
-    type,
-    position: rows.length,
-    schemaVersion,
-    config,
-  })
-}
 
 /** Throws unless every id is an active row of `table`. */
 async function assertActive(
@@ -66,21 +42,21 @@ export async function setTalentPhotos(db: Db, userId: string, mediaIds: string[]
   await ensureProfile(db, userId)
   const removed = await writeTalentPhotos(db, userId, mediaIds)
   scheduleMediaCleanup(db, userId, removed)
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 /** A finished upload takes the next free slot. */
 export async function addTalentPhoto(db: Db, userId: string, mediaId: string) {
   await ensureProfile(db, userId)
   await appendTalentPhoto(db, userId, mediaId)
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 /** A replacement upload takes the old photo's slot. */
 export async function swapTalentPhoto(db: Db, userId: string, mediaId: string, withMediaId: string) {
   await ensureProfile(db, userId)
   scheduleMediaCleanup(db, userId, await replaceTalentPhoto(db, userId, mediaId, withMediaId))
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 // --- Skills -------------------------------------------------------------------------------
@@ -103,10 +79,9 @@ export async function setTalentSkills(
           ...(proficiency[skillId] ? { proficiency: proficiency[skillId] } : {}),
         }))
       )
-      await ensureSection(tx, userId, "skills")
     }
   })
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 // --- Credits ------------------------------------------------------------------------------
@@ -143,9 +118,8 @@ export async function createCredit(db: Db, userId: string, input: CreditFields) 
       ...input,
       sort: (last?.sort ?? -1) + 1,
     })
-    await ensureSection(tx, userId, "credits")
   })
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 async function ownedCredit(db: Db | Tx, userId: string, creditId: string) {
@@ -178,13 +152,13 @@ export async function updateCredit(
       .set({ ...fields, ...(changed ? { verifiedAt: null } : {}) })
       .where(eq(schema.credits.id, creditId))
   })
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 export async function deleteCredit(db: Db, userId: string, creditId: string) {
   await ownedCredit(db, userId, creditId)
   await db.delete(schema.credits).where(eq(schema.credits.id, creditId))
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 /** `creditIds` must list every one of the talent's credits, in the new order. */
@@ -202,7 +176,7 @@ export async function reorderCredits(db: Db, userId: string, creditIds: string[]
       await tx.update(schema.credits).set({ sort }).where(eq(schema.credits.id, creditIds[sort]!))
     }
   })
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 // --- Languages and accents ----------------------------------------------------------------
@@ -225,10 +199,9 @@ export async function setTalentLanguages(
       await tx
         .insert(schema.talentLanguages)
         .values(languages.map((l) => ({ talentId: userId, ...l })))
-      await ensureSection(tx, userId, "languages")
     }
   })
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 export async function setTalentAccents(db: Db, userId: string, accentIds: string[]) {
@@ -240,10 +213,9 @@ export async function setTalentAccents(db: Db, userId: string, accentIds: string
       await tx
         .insert(schema.talentAccents)
         .values(accentIds.map((accentId) => ({ talentId: userId, accentId })))
-      await ensureSection(tx, userId, "languages")
     }
   })
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 // --- Rates --------------------------------------------------------------------------------
@@ -273,10 +245,9 @@ export async function setTalentRates(
           negotiable: rate.negotiable,
         }))
       )
-      await ensureSection(tx, userId, "rates")
     }
   })
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 // --- Availability -------------------------------------------------------------------------
@@ -309,10 +280,9 @@ export async function setTalentAvailability(
       await tx
         .insert(schema.talentAvailability)
         .values(months.map((m) => ({ talentId: userId, ...m })))
-      await ensureSection(tx, userId, "availability")
     }
   })
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }
 
 // --- Attributes ---------------------------------------------------------------------------
@@ -408,10 +378,8 @@ export async function setTalentAttribute(db: Db, userId: string, input: Attribut
           target: [schema.talentAttributes.talentId, schema.talentAttributes.definitionId],
           set: { ...values, ...(input.isVisible !== undefined ? { isVisible: input.isVisible } : {}) },
         })
-      // Sensitive values never display, so they never add the section either.
-      if (definition.tier === "standard") await ensureSection(tx, userId, "attributes")
     })
   }
 
-  return getStudioState(db, userId)
+  return contentEdited(db, userId)
 }

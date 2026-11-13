@@ -12,6 +12,7 @@ import {
   text,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core"
 
 import { primaryUuid, timestamptz } from "./columns.js"
@@ -99,12 +100,26 @@ export const talentProfiles = pgTable(
       .notNull()
       .default("0"),
     rateVisibility: rateVisibility("rate_visibility").notNull().default("public"),
+    /**
+     * The talent's showreel (a ready Mux video), shown in the portfolio's Showreel slot. The
+     * portfolio's layout is fixed by category (`portfolioLayoutFor`), so this is a field, not a
+     * section. Deleting the media clears it.
+     */
+    showreelMediaId: uuid("showreel_media_id").references((): AnyPgColumn => mediaAssets.id, {
+      onDelete: "set null",
+    }),
     cardConfig: jsonb("card_config")
       .notNull()
       .default(sql`'{"leadMediaId":null,"highlightFacts":[]}'::jsonb`),
     quickStartCompletedAt: timestamptz("quick_start_completed_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
+    /** Any write to the row, including derived scores. Not a signal of the talent's activity. */
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    /**
+     * When the talent last changed something a booker sees: profile text, photos, showreel, card,
+     * categories or any portfolio content. Freshness and the sitemap read this, never `updatedAt`.
+     */
+    contentUpdatedAt: timestamptz("content_updated_at").notNull().defaultNow(),
   },
   (table) => [uniqueIndex("talent_profiles_slug_uidx").on(table.slug)],
 )
@@ -321,27 +336,6 @@ export const socialLinks = pgTable(
   ],
 )
 
-export const portfolioSections = pgTable(
-  "portfolio_sections",
-  {
-    id: primaryUuid(),
-    talentId: uuid("talent_id")
-      .notNull()
-      .references(() => talentProfiles.userId, { onDelete: "cascade" }),
-    type: text("type").notNull(),
-    position: integer("position").notNull().default(0),
-    isVisible: boolean("is_visible").notNull().default(true),
-    schemaVersion: integer("schema_version").notNull().default(1),
-    config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
-  },
-  (table) => [
-    index("portfolio_sections_talent_id_idx").on(table.talentId),
-    index("portfolio_sections_talent_position_idx").on(table.talentId, table.position),
-  ],
-)
-
 export const mediaAssets = pgTable(
   "media_assets",
   {
@@ -364,24 +358,6 @@ export const mediaAssets = pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [index("media_assets_owner_id_idx").on(table.ownerId)],
-)
-
-export const sectionMedia = pgTable(
-  "section_media",
-  {
-    sectionId: uuid("section_id")
-      .notNull()
-      .references(() => portfolioSections.id, { onDelete: "cascade" }),
-    mediaId: uuid("media_id")
-      .notNull()
-      .references(() => mediaAssets.id, { onDelete: "cascade" }),
-    position: integer("position").notNull().default(0),
-    caption: text("caption"),
-  },
-  (table) => [
-    primaryKey({ columns: [table.sectionId, table.mediaId] }),
-    index("section_media_media_id_idx").on(table.mediaId),
-  ],
 )
 
 /**

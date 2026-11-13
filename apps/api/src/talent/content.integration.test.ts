@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import { serializeTalent } from "@workspace/core"
+import { portfolioLayouts, serializeTalent } from "@workspace/core"
 import { schema } from "@workspace/db"
 import { attributeAppliesTo, availabilityMonthKey, type StudioState } from "@workspace/schema"
 import { eq, inArray } from "drizzle-orm"
@@ -133,9 +133,8 @@ describe("studio content", () => {
     const { userId, api, state } = await talent("content-credits")
     const before = state.completeness.score
 
-    // An empty Credits section scores nothing.
-    const withSection = await api.talent.sections.create({ type: "credits" })
-    expect(withSection.completeness.score).toBe(before)
+    // Credits is in every layout, but scores nothing until it has a credit.
+    expect(state.talent.sections.map((s) => s.type)).toContain("credits")
 
     const one = await api.talent.credits.create({
       title: "Ìjọ̀ba",
@@ -277,7 +276,8 @@ describe("studio content", () => {
     const afterSensitive = await profileRow(userId)
     expect(afterSensitive.completenessScore).toBe(baseline.completenessScore)
     expect(afterSensitive.qualityScore).toBe(baseline.qualityScore)
-    expect(sensitive.talent.sections.some((s) => s.type === "attributes")).toBe(false)
+    // The default template has an Attributes section; a sensitive value adds nothing to it.
+    expect(sensitive.talent.content.attributes).toEqual([])
 
     await expect(
       api.talent.attributes.set({ definitionKey: "hair", valueText: "purple" })
@@ -301,6 +301,44 @@ describe("studio content", () => {
 
     const cleared = await api.talent.attributes.set({ definitionKey: "height_cm" })
     expect(cleared.editor.attributes.some((a) => a.definitionId === height.id)).toBe(false)
+  })
+
+  it("only booker-visible edits move content_updated_at; studio visits and score writes don't", async () => {
+    const { userId, api } = await talent("content-stamp")
+    const old = new Date("2026-01-01T00:00:00Z")
+    await db
+      .update(schema.talentProfiles)
+      .set({ updatedAt: old, contentUpdatedAt: old })
+      .where(eq(schema.talentProfiles.userId, userId))
+
+    // Opening the studio recomputes completeness (unchanged) and must leave the row alone.
+    await api.talent.studio.get()
+    await api.talent.studio.get()
+    let row = await profileRow(userId)
+    expect(row.updatedAt).toEqual(old)
+    expect(row.contentUpdatedAt).toEqual(old)
+
+    // A content edit stored outside the profile row still stamps it.
+    await api.talent.credits.create({ title: "Stamp" })
+    row = await profileRow(userId)
+    expect(row.contentUpdatedAt.getTime()).toBeGreaterThan(old.getTime())
+
+    // A profile edit stamps it too.
+    await db.update(schema.talentProfiles).set({ contentUpdatedAt: old }).where(eq(schema.talentProfiles.userId, userId))
+    await api.talent.studio.updateProfile({ headline: "Model and actor" })
+    row = await profileRow(userId)
+    expect(row.contentUpdatedAt.getTime()).toBeGreaterThan(old.getTime())
+  })
+
+  it("lays the portfolio out by the primary category, with nothing for the talent to arrange", async () => {
+    const onCamera = await talent("content-layout-model", "models")
+    expect(onCamera.state.talent.sections.map((s) => s.type)).toEqual([...portfolioLayouts.on_camera])
+    const crew = await talent("content-layout-crew", "makeup-and-hair")
+    expect(crew.state.talent.sections.map((s) => s.type)).toEqual([...portfolioLayouts.work])
+    // Changing what they do changes the layout; nothing stored has to move.
+    const models = onCamera.state.categoryIds
+    const changed = await crew.api.talent.categories.set({ categoryIds: models })
+    expect(changed.talent.sections.map((s) => s.type)).toEqual([...portfolioLayouts.on_camera])
   })
 
   it("previews the card exactly as a booker gets it", async () => {

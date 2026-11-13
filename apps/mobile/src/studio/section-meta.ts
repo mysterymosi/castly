@@ -1,10 +1,8 @@
 import type { corePortfolioSectionTypes } from "@workspace/schema"
 
 import type { IconName } from "@/components/ui/icon"
-import type { studioApi } from "@/studio/api"
 
 export type CoreSectionType = (typeof corePortfolioSectionTypes)[number]
-export type TemplateId = Parameters<typeof studioApi.applyTemplate>[0]
 
 export const sectionMeta: Record<CoreSectionType, { label: string; description: string; icon: IconName }> = {
   hero: { label: "Hero", description: "Your name, headline and lead image", icon: "person" },
@@ -18,11 +16,6 @@ export const sectionMeta: Record<CoreSectionType, { label: string; description: 
   availability: { label: "Availability", description: "When you're free to work", icon: "calendar" },
 }
 
-export const templates: readonly { id: TemplateId; label: string; description: string; icon: IconName }[] = [
-  { id: "editorial", label: "Editorial", description: "Photos lead, story follows", icon: "photo" },
-  { id: "reel_first", label: "Reel-first", description: "Showreel at the top", icon: "film" },
-  { id: "case_study", label: "Case study", description: "Credits and detail up front", icon: "layers" },
-]
 
 /** Section types with a content editor, and the editor each opens (`studio/edit/[type]`). */
 export const editableSectionTypes = [
@@ -52,12 +45,12 @@ export function editorRoute(type: string) {
 
 const emptyPrompts: Partial<Record<CoreSectionType, string>> = {
   about: "Write your bio",
-  credits: "Add your first credit",
+  credits: "Add your credits",
   attributes: "Add your casting details",
-  skills: "Pick your skills",
-  languages: "Add the languages you speak",
-  rates: "Set your rates",
-  availability: "Mark the months you're free",
+  skills: "Add your skills",
+  languages: "Add your languages",
+  rates: "Add your rates",
+  availability: "Add your availability",
 }
 
 export function emptySectionPrompt(type: CoreSectionType) {

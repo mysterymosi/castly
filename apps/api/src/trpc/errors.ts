@@ -41,6 +41,7 @@ const studioCode = {
   invalid_credit_order: "BAD_REQUEST",
   invalid_availability: "BAD_REQUEST",
   invalid_photo: "BAD_REQUEST",
+  invalid_showreel: "BAD_REQUEST",
   photo_slots_full: "BAD_REQUEST",
 } as const
 

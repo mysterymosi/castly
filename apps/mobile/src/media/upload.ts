@@ -272,15 +272,3 @@ export async function uploadVideoFromUri(uri: string): Promise<MediaStatusOutput
   await transferUpload(upload, uri, mimeType)
   return waitForReady(upload.mediaId)
 }
-
-export async function uploadQuickStartPhotos(count = 3) {
-  const uris = await pickImages(count)
-  if (uris.length < count) {
-    throw new Error(`Select at least ${count} photos`)
-  }
-  const statuses: MediaStatusOutput[] = []
-  for (const uri of uris.slice(0, count)) {
-    statuses.push(await uploadImageFromUri(uri))
-  }
-  return statuses.map((row) => row.id)
-}

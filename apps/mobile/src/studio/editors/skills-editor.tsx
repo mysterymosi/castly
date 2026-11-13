@@ -6,7 +6,7 @@ import { Chip } from "@/components/ui/chip"
 import { Text } from "@/components/ui/text"
 import { haptics } from "@/lib/haptics"
 import { studioApi } from "@/studio/api"
-import { EditorScreen, FieldGroup, useAutosave } from "@/studio/editors/kit"
+import { EditorScreen, FieldGroup, isDirty } from "@/studio/editors/kit"
 import { useStudio } from "@/studio/studio-provider"
 
 type Proficiency = StudioState["editor"]["skills"][number]["proficiency"]
@@ -23,17 +23,17 @@ export function SkillsEditor({ state }: { state: StudioState }) {
   const { run } = useStudio()
   const [picked, setPicked] = useState(() => state.editor.skills)
 
-  useAutosave(picked, (skills) =>
-    run(
+  async function save() {
+    return run(
       "skills",
       () =>
         studioApi.setSkills({
-          skillIds: skills.map((s) => s.skillId),
-          proficiency: Object.fromEntries(skills.map((s) => [s.skillId, s.proficiency])),
+          skillIds: picked.map((s) => s.skillId),
+          proficiency: Object.fromEntries(picked.map((s) => [s.skillId, s.proficiency])),
         }),
       "Could not save your skills"
     )
-  )
+  }
 
   function toggle(skillId: string) {
     setPicked((current) => {
@@ -49,7 +49,11 @@ export function SkillsEditor({ state }: { state: StudioState }) {
   const name = (id: string) => state.skills.find((s) => s.id === id)?.name ?? "Skill"
 
   return (
-    <EditorScreen title="Skills" intro="What you can do on set. Bookers search by these.">
+    <EditorScreen
+      title="Skills"
+      intro="What you can do on set. Bookers search by these."
+      save={{ dirty: isDirty(picked, state.editor.skills), onSave: save }}
+    >
       <View className="flex-row flex-wrap gap-2" accessibilityLabel="Skills">
         {state.skills.map((skill) => (
           <Chip

@@ -68,7 +68,14 @@ export {
   type TalentRateVisibility,
   type TalentViewer,
 } from "./serialize-talent.js"
-export { portfolioTemplates, portfolioTemplateIds, type PortfolioTemplateId } from "./portfolio-templates.js"
+export {
+  portfolioLayoutFor,
+  portfolioLayoutKind,
+  portfolioLayouts,
+  portfolioSections,
+  type CategoryKind,
+  type PortfolioLayoutKind,
+} from "./portfolio-layout.js"
 export { releaseFromEnv } from "./release.js"
 export {
   checkAttributeFilters,

@@ -1,21 +1,18 @@
 import {
-  applyTemplateInput,
   completeQuickStartInput,
   deckCardSchema,
   liveTalentSlugsSchema,
   createPlaceholderPhotosInput,
-  createSectionInput,
-  deleteSectionInput,
   placeholderPhotosResultSchema,
   publicPortfolioInput,
   publicPortfolioSchema,
-  reorderSectionsInput,
   addTalentPhotoInput,
   replaceTalentPhotoInput,
   createCreditInput,
   deleteCreditInput,
   reorderCreditsInput,
   setCanvasInput,
+  setShowreelInput,
   setTalentAccentsInput,
   setTalentPhotosInput,
   setTalentAvailabilityInput,
@@ -26,7 +23,6 @@ import {
   setTalentSkillsInput,
   updateCreditInput,
   studioStateSchema,
-  updateSectionInput,
   updateStudioProfileInput,
 } from "@workspace/schema"
 
@@ -50,19 +46,15 @@ import {
 import { consumePublicRead } from "./public-rate-limit.js"
 import { getPublicPortfolio, listLiveTalentSlugs } from "./public-service.js"
 import {
-  applyTemplate,
   completeQuickStart,
   createPlaceholderPhotos,
-  createSection,
-  deleteSection,
   getStudioState,
   previewDeckCard,
   publishTalent,
-  reorderSections,
   setStudioCanvas,
+  setStudioShowreel,
   setTalentCategories,
   unpublishTalent,
-  updateSection,
   updateStudioProfile,
 } from "./studio-service.js"
 import { schedulePublicPortfolioRevalidate } from "./web-revalidate.js"
@@ -123,6 +115,14 @@ export const talentRouter = router({
         )
       }),
 
+    /** The showreel: a ready video, or null to remove it. */
+    setShowreel: talentMutation
+      .input(setShowreelInput)
+      .output(studioStateSchema)
+      .mutation(({ ctx, input }) => {
+        return callProcedure(() => setStudioShowreel(ctx.db, ctx.userId, input.mediaId))
+      }),
+
     publish: talentMutation.output(studioStateSchema).mutation(({ ctx }) => {
       return callProcedure(() => publishTalent(ctx.db, ctx.userId))
     }),
@@ -152,52 +152,6 @@ export const talentRouter = router({
           )
           return { mediaIds }
         })
-      }),
-  }),
-
-  sections: router({
-    create: talentMutation
-      .input(createSectionInput)
-      .output(studioStateSchema)
-      .mutation(({ ctx, input }) => {
-        return callProcedure(async () => {
-          await createSection(ctx.db, ctx.userId, input.type)
-          return getStudioState(ctx.db, ctx.userId)
-        })
-      }),
-
-    update: talentMutation
-      .input(updateSectionInput)
-      .output(studioStateSchema)
-      .mutation(({ ctx, input }) => {
-        return callProcedure(() => updateSection(ctx.db, ctx.userId, input))
-      }),
-
-    reorder: talentMutation
-      .input(reorderSectionsInput)
-      .output(studioStateSchema)
-      .mutation(({ ctx, input }) => {
-        return callProcedure(() =>
-          reorderSections(ctx.db, ctx.userId, input.sectionIds)
-        )
-      }),
-
-    delete: talentMutation
-      .input(deleteSectionInput)
-      .output(studioStateSchema)
-      .mutation(({ ctx, input }) => {
-        return callProcedure(() =>
-          deleteSection(ctx.db, ctx.userId, input.sectionId)
-        )
-      }),
-
-    applyTemplate: talentMutation
-      .input(applyTemplateInput)
-      .output(studioStateSchema)
-      .mutation(({ ctx, input }) => {
-        return callProcedure(() =>
-          applyTemplate(ctx.db, ctx.userId, input.templateId)
-        )
       }),
   }),
 

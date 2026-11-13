@@ -1,65 +1,44 @@
-import { router } from "expo-router"
 import { useState } from "react"
 import { View } from "react-native"
 
-import { Screen } from "@/components/ui/screen"
-import { ScreenHeader } from "@/components/ui/screen-header"
-import { InlineError, LoadingState } from "@/components/ui/states"
-import { Text } from "@/components/ui/text"
+import { LoadingState } from "@/components/ui/states"
 import { TextField } from "@/components/ui/text-field"
 import { studioApi } from "@/studio/api"
 import { DecisionCardPreview, mainPhotoUri } from "@/studio/decision-card-preview"
+import { EditorScreen, isDirty } from "@/studio/editors/kit"
 import { useStudio } from "@/studio/studio-provider"
 
 const MAX_LENGTH = 80
 const examples = ["Lead in a Netflix Naija series", "Fluent Yorùbá and Pidgin", "Trained at Royal Arts Academy"]
 
+function threeFacts(saved: string[] | undefined) {
+  const facts = [...(saved ?? [])]
+  while (facts.length < 3) facts.push("")
+  return facts.slice(0, 3)
+}
+
+/** Three facts on the decision card, previewed live and saved together with the button. */
 export default function HighlightsScreen() {
-  const { state, run, pending, actionError } = useStudio()
-  const [facts, setFacts] = useState<string[]>(() => {
-    const initial = [...(state?.talent.profile.cardConfig.highlightFacts ?? [])]
-    while (initial.length < 3) initial.push("")
-    return initial.slice(0, 3)
-  })
+  const { state, run } = useStudio()
+  const saved = threeFacts(state?.talent.profile.cardConfig.highlightFacts)
+  const [facts, setFacts] = useState<string[]>(saved)
 
   if (!state) return <LoadingState />
 
-  function save(index: number, value: string) {
-    const saved = state!.talent.profile.cardConfig.highlightFacts[index] ?? ""
-    if (value === saved) return
-    const next = [...facts]
-    next[index] = value
-    void run(
-      "highlights",
-      () => studioApi.updateProfile({ cardConfig: { highlightFacts: next.slice(0, 3) } }),
-      "Could not save card",
-    )
-  }
-
   return (
-    <Screen
-      scroll
-      header={
-        <ScreenHeader
-          title="Highlights"
-          onBack={() => router.back()}
-          right={
-            pending === "highlights" ? (
-              <Text variant="footnote" tone="muted">
-                Saving…
-              </Text>
-            ) : null
-          }
-        />
-      }
-      contentClassName="gap-6 pt-2"
+    <EditorScreen
+      title="Highlights"
+      intro="Three short facts shown on your decision card. Bookers read these before deciding."
+      save={{
+        dirty: isDirty(facts, saved),
+        onSave: () =>
+          run(
+            "highlights",
+            () => studioApi.updateProfile({ cardConfig: { highlightFacts: facts.map((f) => f.trim()) } }),
+            "Could not save your highlights"
+          ),
+      }}
     >
-      <View className="gap-1">
-        <Text variant="body" tone="muted">
-          Three short facts shown on your decision card. Bookers read these before deciding.
-        </Text>
-      </View>
-
       <DecisionCardPreview
         displayName={state.talent.profile.displayName}
         headline={state.talent.profile.headline}
@@ -80,11 +59,9 @@ export default function HighlightsScreen() {
             onChangeText={(value) =>
               setFacts((current) => current.map((item, i) => (i === index ? value : item)))
             }
-            onBlur={() => save(index, fact)}
           />
         ))}
-        {actionError ? <InlineError message={actionError} /> : null}
       </View>
-    </Screen>
+    </EditorScreen>
   )
 }

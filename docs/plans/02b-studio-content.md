@@ -116,6 +116,18 @@ PRD §7.1.3 requires data saver to be "reachable in one tap from the deck" and "
 
 Follow-ups, done: × asks Replace / Remove (and confirms the remove); a replacement keeps its slot (`talent.photos.replace`). New photos go through a 4:5 crop screen (`studio/crop`) before upload; slot 1 marks the part that fills the card's first screen. The studio preview is the real deck card, served as an unverified booker sees it (`talent.studio.previewCard`); the separate decision-card tab is gone, and the hub marks empty sections instead. Media nothing uses is deleted (provider file, then row) after a photo or canvas is removed or replaced (`apps/api/src/media/cleanup.ts`), and `pnpm --filter api media:cleanup` sweeps uploads left unattached for 24 hours. Quick start's photo step does not crop yet.
 
+### 2b.12 Fixed layout replaces templates and arranging
+
+**Status:** Done (2026-11-12, PRD §7.1.2 revised). Talent no longer pick templates, add, hide or reorder sections. The layout is fixed by the primary category's kind (`packages/core/src/portfolio-layout.ts`) and computed on read; empty sections stay off the page. The studio hub shows "Your portfolio" in that order, each row saying what it holds or what to add. The showreel is a profile field (`talent.studio.setShowreel`). Migration `0015_fixed_portfolio_layout` moved each talent's showreel and any About text into the profile, then dropped `portfolio_sections` and `section_media`. This supersedes 2b.1's up/down buttons and the template default chosen at quick start.
+
+### 2b.13 Studio sections, Save button, content timestamp
+
+**Status:** Done (2026-11-12).
+
+- **Hub:** each section is a heading, a line on what goes there, and one field (Bumble's profile pattern): "Add your …" with `+` while empty, the entered values as pills with `>` once filled (`apps/mobile/src/studio/profile-section.tsx`, `portfolio-sections.tsx`). Photos, What you do, Highlights and Canvas come first, then the portfolio sections in layout order.
+- **Saving:** every studio editor holds a draft and saves with one Save button (`EditorScreen`'s `save` prop); nothing saves on blur or on a timer. Leaving with unsaved edits asks to discard. The credits list keeps its immediate star and reorder; each credit's form already saved with a button.
+- **Timestamps:** `talent_profiles.content_updated_at` (migration `0016_content_updated_at`) is stamped only by edits a booker sees. Freshness and the sitemap read it. Completeness is written only when it changes and, like quality, no longer touches `updated_at`, so opening the studio no longer looks like activity.
+
 ---
 
 ## Exit gate

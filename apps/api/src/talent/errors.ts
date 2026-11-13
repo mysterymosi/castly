@@ -17,6 +17,7 @@ export type StudioErrorCode =
   | "invalid_credit_order"
   | "invalid_availability"
   | "invalid_photo"
+  | "invalid_showreel"
   | "photo_slots_full"
 
 export class StudioError extends Error {

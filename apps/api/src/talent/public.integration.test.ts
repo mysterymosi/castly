@@ -123,7 +123,7 @@ async function seedListRows(userId: string) {
   await db.insert(schema.talentAvailability).values({ talentId: userId, month: "2026-11", status: "partial" })
 }
 
-/** A live talent with a hidden about section, a public rate, and a rates section. */
+/** A live talent with a public day rate (the Rates section is part of every layout). */
 async function publishedTalent(label: string) {
   const userId = await seedAuthUser(label, adult)
   seededUserIds.push(userId)
@@ -143,16 +143,6 @@ async function publishedTalent(label: string) {
     .set({ headline: "Actor · Ibadan" })
     .where(eq(schema.talentProfiles.userId, userId))
 
-  const withAbout = await api.talent.sections.create({ type: "about" })
-  const about = withAbout.talent.sections.filter((s) => s.type === "about").at(-1)
-  if (!about) throw new Error("about section missing")
-  await api.talent.sections.update({
-    sectionId: about.id,
-    schemaVersion: about.schemaVersion,
-    config: { body: "Hidden draft bio" },
-    isVisible: false,
-  })
-  await api.talent.sections.create({ type: "rates" })
   await db.insert(schema.talentRates).values({
     talentId: userId,
     kind: "day",

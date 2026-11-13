@@ -111,7 +111,7 @@ Works steadily but through word of mouth. Needs to show movement, not photos —
 
 | Concept       | Definition                                                                                                                                 |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Portfolio** | A talent's public, self-designed profile page. Composed of content blocks, with a selectable layout and theme. Has a shareable public URL. |
+| **Portfolio** | A talent's public profile page. Composed of content blocks that Castly lays out in a fixed order for the talent's kind of work; it fills out as the talent adds information. Has a shareable public URL. |
 | **Card**      | The condensed, swipeable representation of a talent inside a deck. Auto-generated from the portfolio; talent controls which media leads.   |
 | **Deck**      | The ordered set of cards a booker swipes through in a session. Curated, filterable, and scoped to a project when one is active.            |
 | **Project**   | A booker's container for a casting need — e.g. "Bank commercial — March." Holds one or more roles, and the shortlists built for them.      |
@@ -131,9 +131,9 @@ Works steadily but through word of mouth. Needs to show movement, not photos —
 
 1. Download app, sign up with phone number (OTP) — phone-first, because email is secondary for much of the market. Email/Google/Apple optional.
 2. Choose primary role: **"I'm looking for work"** / **"I'm looking for talent"** / **"Both."**
-3. Pick primary talent category (e.g. Actor) and up to two secondary categories (e.g. Voice Artist, Model). Category drives which portfolio blocks are suggested.
+3. Pick primary talent category (e.g. Actor) and up to two secondary categories (e.g. Voice Artist, Model). The primary category decides the portfolio's layout (§7.1.2).
 4. **Guided quick-start** — the minimum viable portfolio in under 5 minutes: name, location, 3 photos, one line about yourself, top 3 skills. The card can go live at this point.
-5. **Portfolio studio** — the open-ended builder. Add blocks, reorder them, pick a layout and theme, upload showreel, add credits, set rate range and availability.
+5. **Portfolio studio** — fill in your information: photos, showreel, credits, attributes, skills, languages, rates and availability. Castly arranges it; nothing to lay out, and empty parts stay off the page until they're filled.
 6. **Completeness meter** shows what's missing and what each addition does for visibility (e.g. "Talents with a showreel get 3× more interest"). This is the primary driver of portfolio depth.
 7. Optional verification: ID check, and for crew, portfolio review.
 8. Go live. Get a shareable link (`castly.app/tunde-adeyemi`).
@@ -165,17 +165,19 @@ Works steadily but through word of mouth. Needs to show movement, not photos —
 
 ### 7.1 The portfolio studio (talent)
 
-This is the product's defensible surface. The requirement is a **storefront builder, not a profile form** — a talent should be able to express range, taste, and personality, and the output should be good enough to use as their primary professional link.
+This is the product's defensible surface. The output should be good enough to use as a talent's primary professional link, and the effort should go into **what** they show, not how it's arranged.
+
+> **Revised 2026-11-12.** The studio was specified as a builder (templates, reordering, show/hide, themes). It is now a fixed layout the talent fills in, as dating apps do: talent aren't designers, and bookers scan faster when every card of a kind has the same structure. Range and personality come through photos, showreel, canvas, credits and bio. See §7.1.2.
 
 #### 7.1.1 Block library
 
-Talents compose their portfolio from blocks. Block availability and defaults are driven by talent category.
+A portfolio is made of these blocks. Which appear, and in what order, is fixed by the talent's primary category (§7.1.2); a block with nothing in it is left out. The v1 set is About, Photos, Showreel, Credits, Attributes, Skills, Languages & accents, Rates and Availability; the rest are later additions.
 
 | Block                     | Description                                                                                                                                                                                                                                  |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Hero**                  | Header photo or video, name, headline, location, primary categories, verification badges. Multiple hero styles (full-bleed image, video loop, split, minimal).                                                                               |
 | **About**                 | Long-form bio, with optional voice-note intro — valuable for voice artists, presenters, and low-literacy accessibility.                                                                                                                      |
-| **Gallery**               | Photo sets with captions. Supports grouping (e.g. "Headshots", "Editorial", "Commercial"). Multiple display styles: grid, masonry, carousel, full-bleed slideshow.                                                                           |
+| **Photos**                | Up to six photos in the talent's order; the first ("Main") leads the card and the page, and the rest are spread between the other blocks. Cropped to 4:5 on upload. (Replaces the earlier Gallery block.)                                    |
 | **Showreel / Video**      | Primary showreel plus additional clips. Native upload and external embed (YouTube, Vimeo, Instagram).                                                                                                                                        |
 | **Audio**                 | Tracks, voice demos, accent reels, mix samples. Essential for musicians, voice artists, sound engineers.                                                                                                                                     |
 | **Credits**               | Structured work history: title, role, production company, year, type (film, TV, commercial, music video, theatre, campaign), link. The closest thing to a verifiable CV.                                                                     |
@@ -193,11 +195,10 @@ Talents compose their portfolio from blocks. Block availability and defaults are
 
 #### 7.1.2 Layout and appearance
 
-- **Templates** — a set of designed starting points tuned per category (e.g. "Editorial" for models, "Reel-first" for actors, "Case study" for crew and creatives). Choosing a template sets block order, layout, and theme in one step.
-- **Block reordering** — drag to reorder; show/hide without deleting.
-- **Themes** — curated palettes, type pairings, corner radius, and density. Curated sets rather than a free-for-all, so that every portfolio looks credible. A modest custom accent colour is allowed.
+- **Fixed layout per kind of talent** — no templates, reordering, show/hide or themes. On-camera talent: About, Attributes, Skills, Languages, Credits, Showreel, Availability, Rates. Crew, production and events: Credits, Showreel, About, Skills, Attributes, Languages, Availability, Rates. Main photo first; the other photos spread evenly through. Every booker sees the same structure for the same kind of talent.
+- **Privacy stays with the information** — rate visibility, per-attribute hide, and leaving a block empty, instead of hiding whole blocks.
 - **Card configuration** — the talent picks which media and which three facts lead on their swipe card. The card is derived from the portfolio, but explicitly art-directable, because it's what wins the swipe.
-- **Live preview** — see the portfolio and the card as a booker sees them, before publishing.
+- **Live preview** — the talent's real card exactly as a booker receives it (same component, same visibility rules), before publishing.
 - **Public page** — responsive web page at a vanity URL, with rich link previews for WhatsApp and Instagram sharing. This doubles as the organic growth loop: talents share their own portfolios.
 
 #### 7.1.3 Constraints to respect
@@ -390,7 +391,7 @@ Free tier for talents is fully functional — the marketplace needs supply liqui
 
 - **See who viewed and who liked you** — the strongest single driver of conversion in swipe products.
 - **Priority placement** — a bounded boost in relevant decks. Must be capped and labelled so it cannot hollow out deck quality; paid placement that degrades the booker's deck destroys the product.
-- **Full portfolio studio** — all templates, themes, custom blocks, unlimited media. Free tier gets a solid subset.
+- **Fuller portfolio** — later blocks (audio, press, custom), unlimited media. Free tier gets the full v1 layout.
 - **Advanced portfolio analytics** — views, sources, swipe-through rate, which media performs.
 - **More media storage and longer video.**
 - **Custom vanity URL and branding removal** on the public page.
@@ -545,7 +546,7 @@ The resolution is structural rather than a matter of degree:
 | **Swipe metaphor reads as superficial or degrading** for professional work                                       | High     | Substance on every card; "interested" not "liked"; professional tone; shortlist-as-output framing; no looks-based ranking                         |
 | **Discrimination surface** — complexion and body filters enable systematic bias                                  | High     | Three-tier attribute policy (§7.3.1): sensitive filters bound to a declared role, logged and audited; prohibited attributes never collected      |
 | **Winner-take-all exposure** — top talent absorbs all interest, everyone else churns                             | High     | Exposure fairness injection; per-talent appearance caps; % of talents with ≥1 interest as a tracked metric                                        |
-| **Portfolio builder scope creep** — the studio becomes an unshippable website builder                            | High     | Ship curated templates and themes, not free-form design; block library is fixed and versioned; one custom block as the escape hatch               |
+| **Portfolio builder scope creep** — the studio becomes an unshippable website builder                            | High     | Resolved by design (2026-11-12): fixed layout per kind of talent, no templates, reordering or themes; the block set is fixed and versioned |
 | **Low-end device and data constraints** kill a media-heavy product                                               | High     | Aggressive compression; proactive data-saver mode; resumable queued uploads; offline tolerance; hard performance budgets                          |
 | **Inline-portfolio cards are too heavy to swipe smoothly** on entry-level Android                                | High     | Focused card only mounts the depth layer; virtualised section list; one video at a time; 12-section cap; card-width rendering as a block-library constraint; prototype on a low-end device before locking the studio |
 | **Accidental swipes while scrolling** — a booker loses a talent they were reading                                | Medium   | Direction lock on first significant movement; swipe suppressed during scroll momentum; undo always available; left-swipes are never permanent (§7.2.2) |

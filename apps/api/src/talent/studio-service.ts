@@ -1,8 +1,7 @@
 import {
   computeCompleteness,
-  portfolioTemplates,
+  portfolioLayoutFor,
   serializeTalent,
-  type PortfolioTemplateId,
 } from "@workspace/core"
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
@@ -13,27 +12,36 @@ import {
   type CardConfig,
   type CoreSectionType,
   isTaxonomyAttributeKey,
-  validatePortfolioSectionWrite,
 } from "@workspace/schema"
 import { randomUUID } from "node:crypto"
 
-import { and, asc, count, eq, gte, inArray, sql } from "drizzle-orm"
+import { and, asc, count, desc, eq, gte, inArray, sql } from "drizzle-orm"
 
 import { deckCard } from "../deck/preview.js"
 import { scheduleMediaCleanup } from "../media/cleanup.js"
 import { getMediaStatuses } from "../media/service.js"
 import { StudioError } from "./errors.js"
 import { countTalentPhotos, writeTalentPhotos } from "./photos.js"
-import { loadTalentRecord, talentMediaIds } from "./record.js"
+import { loadTalentRecord, primaryCategoryKind, talentMediaIds } from "./record.js"
 import { runQualityScoreJob } from "./quality-score-job.js"
 import { runSearchScoresJob } from "./search-scores-job.js"
-import {
-  defaultSchemaVersion,
-  defaultSectionConfig,
-} from "./section-defaults.js"
 
 function slugFromUserId(userId: string) {
   return `talent-${userId.replace(/-/g, "").slice(0, 12)}`
+}
+
+/**
+ * Stamps `content_updated_at` after an edit to something bookers see stored outside the profile row
+ * (photos, credits, skills, …), then returns the fresh studio state. Profile-row edits set the stamp
+ * in their own update.
+ */
+export async function contentEdited(db: Db, userId: string) {
+  const now = new Date()
+  await db
+    .update(schema.talentProfiles)
+    .set({ contentUpdatedAt: now, updatedAt: now })
+    .where(eq(schema.talentProfiles.userId, userId))
+  return getStudioState(db, userId)
 }
 
 export async function ensureProfile(db: Db, userId: string) {
@@ -82,12 +90,6 @@ async function countRows(
  */
 async function loadCompleteness(db: Db, userId: string) {
   const profile = await ensureProfile(db, userId)
-  const sections = await db
-    .select()
-    .from(schema.portfolioSections)
-    .where(eq(schema.portfolioSections.talentId, userId))
-    .orderBy(asc(schema.portfolioSections.position))
-
   const skillRows = await db
     .select()
     .from(schema.talentSkills)
@@ -118,7 +120,8 @@ async function loadCompleteness(db: Db, userId: string) {
       )
     )
 
-  const visible = sections.filter((s) => s.isVisible)
+  // Every section in the talent's layout counts once it has content; nothing is hidden by hand.
+  const layout = portfolioLayoutFor(await primaryCategoryKind(db, userId))
   const result = computeCompleteness({
     hasDisplayName:
       Boolean(profile.quickStartCompletedAt) ||
@@ -128,10 +131,8 @@ async function loadCompleteness(db: Db, userId: string) {
     hasBio: Boolean(profile.bio?.trim()),
     photoCount: await countTalentPhotos(db, userId),
     skillCount: skillRows.length,
-    visibleSectionTypes: visible.map((s) => s.type),
-    hasShowreelMedia: visible.some(
-      (s) => s.type === "showreel" && Boolean((s.config as { mediaId?: string | null }).mediaId)
-    ),
+    visibleSectionTypes: [...layout],
+    hasShowreelMedia: Boolean(profile.showreelMediaId),
     contentCounts: {
       credits: await countRows(db, schema.credits, userId),
       languages: await countRows(db, schema.talentLanguages, userId),
@@ -142,15 +143,13 @@ async function loadCompleteness(db: Db, userId: string) {
     categoryCount: await countRows(db, schema.talentCategories, userId),
   })
 
-  await db
-    .update(schema.talentProfiles)
-    .set({
-      completenessScore: String(result.score),
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.talentProfiles.userId, userId))
-
+  // A cached score: written only when it moves, and never as an edit (no timestamps). Opening the
+  // studio recomputes it, so an unconditional write here would make every visit look like activity.
   if (Number(profile.completenessScore) !== result.score) {
+    await db
+      .update(schema.talentProfiles)
+      .set({ completenessScore: String(result.score) })
+      .where(eq(schema.talentProfiles.userId, userId))
     // Quality reads completeness, so a live talent's ranking follows the edit.
     if (profile.status === "live") await runQualityScoreJob(db, userId)
     await runSearchScoresJob(db, userId)
@@ -359,6 +358,7 @@ export async function updateStudioProfile(
   const patch: Partial<typeof schema.talentProfiles.$inferInsert> = {
     cardConfig: nextCard,
     updatedAt: new Date(),
+    contentUpdatedAt: new Date(),
   }
   if (input.displayName !== undefined) patch.displayName = input.displayName
   if (input.headline !== undefined) patch.headline = input.headline?.trim() || null
@@ -401,7 +401,7 @@ export async function setStudioCanvas(db: Db, userId: string, mediaId: string | 
   const cardConfig = cardConfigSchema.parse({ ...previous, canvasMediaId: mediaId })
   await db
     .update(schema.talentProfiles)
-    .set({ cardConfig, updatedAt: new Date() })
+    .set({ cardConfig, updatedAt: new Date(), contentUpdatedAt: new Date() })
     .where(eq(schema.talentProfiles.userId, userId))
   // A replaced or removed canvas is deleted unless something else still uses it.
   if (previous.canvasMediaId && previous.canvasMediaId !== mediaId) {
@@ -446,6 +446,7 @@ export async function completeQuickStart(
       bio: input.bio,
       quickStartCompletedAt: new Date(),
       updatedAt: new Date(),
+      contentUpdatedAt: new Date(),
     })
     .where(eq(schema.talentProfiles.userId, userId))
 
@@ -455,162 +456,26 @@ export async function completeQuickStart(
   return getStudioState(db, userId)
 }
 
-export async function createSection(
-  db: Db,
-  userId: string,
-  type: CoreSectionType
-) {
-  await ensureProfile(db, userId)
-  const schemaVersion = defaultSchemaVersion(type)
-  const config = defaultSectionConfig(type)
-  validatePortfolioSectionWrite(type, schemaVersion, config)
-
-  const rows = await db
-    .select({ position: schema.portfolioSections.position })
-    .from(schema.portfolioSections)
-    .where(eq(schema.portfolioSections.talentId, userId))
-
-  const [created] = await db
-    .insert(schema.portfolioSections)
-    .values({
-      talentId: userId,
-      type,
-      position: rows.length,
-      schemaVersion,
-      config,
-    })
-    .returning()
-
-  await loadCompleteness(db, userId)
-  return created
-}
-
-export async function updateSection(
-  db: Db,
-  userId: string,
-  input: {
-    sectionId: string
-    schemaVersion: number
-    config: unknown
-    isVisible?: boolean
+/**
+ * Sets or clears the showreel (a video the talent owns). It shows in the Showreel slot of the
+ * fixed layout; a replaced or cleared one is deleted unless something else still uses it.
+ */
+export async function setStudioShowreel(db: Db, userId: string, mediaId: string | null) {
+  const profile = await ensureProfile(db, userId)
+  if (mediaId) {
+    const media = (await getMediaStatuses(db, userId, [mediaId]))[mediaId]
+    if (!media || media.kind !== "video")
+      throw new StudioError("Pick a video for your showreel", "invalid_showreel")
+    if (media.status === "failed" || media.status === "quarantined")
+      throw new StudioError("That upload didn't go through", "invalid_showreel")
   }
-) {
-  const [row] = await db
-    .select()
-    .from(schema.portfolioSections)
-    .where(
-      and(
-        eq(schema.portfolioSections.id, input.sectionId),
-        eq(schema.portfolioSections.talentId, userId)
-      )
-    )
-    .limit(1)
-  if (!row) throw new StudioError("Section not found", "section_not_found")
-
-  const type = row.type as CoreSectionType
-  validatePortfolioSectionWrite(type, input.schemaVersion, input.config)
-
   await db
-    .update(schema.portfolioSections)
-    .set({
-      config: input.config,
-      schemaVersion: input.schemaVersion,
-      isVisible: input.isVisible ?? row.isVisible,
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.portfolioSections.id, input.sectionId))
-
-  await loadCompleteness(db, userId)
-  return getStudioState(db, userId)
-}
-
-export async function reorderSections(
-  db: Db,
-  userId: string,
-  sectionIds: string[]
-) {
-  const rows = await db
-    .select({ id: schema.portfolioSections.id })
-    .from(schema.portfolioSections)
-    .where(eq(schema.portfolioSections.talentId, userId))
-
-  const owned = new Set(rows.map((r) => r.id))
-  if (sectionIds.some((id) => !owned.has(id))) {
-    throw new StudioError(
-      "Invalid section id in reorder list",
-      "invalid_section_order"
-    )
+    .update(schema.talentProfiles)
+    .set({ showreelMediaId: mediaId, updatedAt: new Date(), contentUpdatedAt: new Date() })
+    .where(eq(schema.talentProfiles.userId, userId))
+  if (profile.showreelMediaId && profile.showreelMediaId !== mediaId) {
+    scheduleMediaCleanup(db, userId, [profile.showreelMediaId])
   }
-
-  await db.transaction(async (tx) => {
-    for (let position = 0; position < sectionIds.length; position++) {
-      await tx
-        .update(schema.portfolioSections)
-        .set({ position, updatedAt: new Date() })
-        .where(eq(schema.portfolioSections.id, sectionIds[position]!))
-    }
-  })
-
-  return getStudioState(db, userId)
-}
-
-export async function deleteSection(db: Db, userId: string, sectionId: string) {
-  await db
-    .delete(schema.portfolioSections)
-    .where(
-      and(
-        eq(schema.portfolioSections.id, sectionId),
-        eq(schema.portfolioSections.talentId, userId)
-      )
-    )
-  await loadCompleteness(db, userId)
-  return getStudioState(db, userId)
-}
-
-export async function applyTemplate(
-  db: Db,
-  userId: string,
-  templateId: PortfolioTemplateId
-) {
-  await ensureProfile(db, userId)
-  const order = portfolioTemplates[templateId]
-
-  await db.transaction(async (tx) => {
-    const existing = await tx
-      .select()
-      .from(schema.portfolioSections)
-      .where(eq(schema.portfolioSections.talentId, userId))
-
-    const byType = new Map(existing.map((s) => [s.type, s]))
-
-    for (let position = 0; position < order.length; position++) {
-      const type = order[position]!
-      const schemaVersion = defaultSchemaVersion(type)
-      const config = defaultSectionConfig(type)
-      validatePortfolioSectionWrite(type, schemaVersion, config)
-
-      const found = byType.get(type)
-      if (found) {
-        await tx
-          .update(schema.portfolioSections)
-          .set({
-            position,
-            isVisible: true,
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.portfolioSections.id, found.id))
-      } else {
-        await tx.insert(schema.portfolioSections).values({
-          talentId: userId,
-          type,
-          position,
-          schemaVersion,
-          config,
-        })
-      }
-    }
-  })
-
   return getStudioState(db, userId)
 }
 
@@ -646,7 +511,8 @@ export async function setTalentCategories(
 ) {
   await ensureProfile(db, userId)
   await replaceTalentCategories(db, userId, categoryIds)
-  return getStudioState(db, userId)
+  // Categories pick the portfolio's layout, so this is a visible edit.
+  return contentEdited(db, userId)
 }
 
 const publishBlockerMessage = {

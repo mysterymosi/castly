@@ -11,8 +11,8 @@ import { muxClient, muxConfigured } from "./mux-client.js"
  * were never attached (`scripts/media-cleanup.ts`). Stored photos of a person should not outlive
  * their use (NDPA); the storage bill agrees.
  *
- * "In use" is anything that can show a media id: a photo slot, a section config (`mediaId`,
- * `mediaIds`), the card config (canvas, the old lead), `section_media`. A media row with any of
+ * "In use" is anything that can show a media id: a photo slot, the showreel, the card config
+ * (canvas, the old lead). A media row with any of
  * those is never touched. The provider file is deleted first; if that fails the row stays, so a
  * later sweep tries again rather than leaving an orphaned file nobody can find.
  */
@@ -33,15 +33,7 @@ async function referencedMediaIds(db: Db, ids: string[]): Promise<Set<string>> {
     SELECT DISTINCT id::text FROM (
       SELECT media_id AS id FROM talent_photos WHERE media_id = ANY(${idArray})
       UNION ALL
-      SELECT media_id FROM section_media WHERE media_id = ANY(${idArray})
-      UNION ALL
-      SELECT (config->>'mediaId')::uuid FROM portfolio_sections
-        WHERE config->>'mediaId' IS NOT NULL AND (config->>'mediaId')::uuid = ANY(${idArray})
-      UNION ALL
-      SELECT m.value::uuid FROM portfolio_sections ps,
-        jsonb_array_elements_text(CASE WHEN jsonb_typeof(ps.config->'mediaIds') = 'array'
-          THEN ps.config->'mediaIds' ELSE '[]'::jsonb END) AS m(value)
-        WHERE m.value::uuid = ANY(${idArray})
+      SELECT showreel_media_id FROM talent_profiles WHERE showreel_media_id = ANY(${idArray})
       UNION ALL
       SELECT (card_config->>'canvasMediaId')::uuid FROM talent_profiles
         WHERE card_config->>'canvasMediaId' IS NOT NULL
@@ -119,7 +111,12 @@ export async function deleteProviderFile(row: MediaRow): Promise<void> {
 export async function deleteUnusedMedia(
   db: Db,
   ids: string[],
-  options: { ownerId?: string; deleteFile?: (row: MediaRow) => Promise<void> } = {}
+  options: {
+    ownerId?: string
+    deleteFile?: (row: MediaRow) => Promise<void>
+    /** Return what would be deleted; delete nothing (no provider calls, no row deletes). */
+    dryRun?: boolean
+  } = {}
 ): Promise<string[]> {
   if (ids.length === 0) return []
   const deleteFile = options.deleteFile ?? deleteProviderFile
@@ -136,6 +133,10 @@ export async function deleteUnusedMedia(
   const deleted: string[] = []
   for (const row of rows) {
     if (used.has(row.id)) continue
+    if (options.dryRun) {
+      deleted.push(row.id)
+      continue
+    }
     try {
       await deleteFile(row)
     } catch (error) {
@@ -178,8 +179,10 @@ export async function sweepUnusedMedia(
     batch?: number
     /** Only this owner's media (tests, and a talent's own cleanup). */
     ownerId?: string
-    /** Replaces the provider delete; throwing skips that media (the dry run uses this). */
+    /** Replaces the provider delete; throwing skips that media (tests). */
     deleteFileOverride?: (mediaId: string) => Promise<void>
+    /** Return what would be deleted; delete nothing. */
+    dryRun?: boolean
   } = {}
 ) {
   const cutoff = new Date((options.now ?? new Date()).getTime() - (options.graceMs ?? UNATTACHED_GRACE_MS))
@@ -197,5 +200,6 @@ export async function sweepUnusedMedia(
   return deleteUnusedMedia(db, candidates.map((row) => row.id), {
     ownerId: options.ownerId,
     deleteFile: override ? (row) => override(row.id) : undefined,
+    dryRun: options.dryRun,
   })
 }

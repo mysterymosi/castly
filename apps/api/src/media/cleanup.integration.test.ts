@@ -55,27 +55,26 @@ describe("media cleanup", () => {
 
   it("deletes the file and row of unused media, and keeps anything still in use", async () => {
     const userId = await owner("cleanup-use")
-    const [unused, photo, inSection, inGallery, canvas] = await Promise.all(
+    const [unused, photo, showreel, oldLead, canvas] = await Promise.all(
       Array.from({ length: 5 }, () => media(userId))
     )
     await db.insert(schema.talentPhotos).values({ talentId: userId, mediaId: photo!, position: 0 })
-    await db.insert(schema.portfolioSections).values([
-      { talentId: userId, type: "about", position: 0, config: { mediaId: inSection } },
-      { talentId: userId, type: "custom", position: 1, config: { mediaIds: [inGallery] } },
-    ])
     await db
       .update(schema.talentProfiles)
-      .set({ cardConfig: { canvasMediaId: canvas, highlightFacts: [] } })
+      .set({
+        showreelMediaId: showreel,
+        cardConfig: { leadMediaId: oldLead, canvasMediaId: canvas, highlightFacts: [] },
+      })
       .where(eq(schema.talentProfiles.userId, userId))
 
-    const ids = [unused!, photo!, inSection!, inGallery!, canvas!]
+    const ids = [unused!, photo!, showreel!, oldLead!, canvas!]
     const files = recorder()
     const deleted = await deleteUnusedMedia(db, ids, { ownerId: userId, deleteFile: files.deleteFile })
     expect(deleted).toEqual([unused])
     expect(files.deleted).toEqual([unused])
     const left = await exists(ids)
     expect(left.has(unused!)).toBe(false)
-    for (const id of [photo, inSection, inGallery, canvas]) expect(left.has(id!)).toBe(true)
+    for (const id of [photo, showreel, oldLead, canvas]) expect(left.has(id!)).toBe(true)
   })
 
   it("keeps the row when the provider delete fails, so a later run retries", async () => {
@@ -114,5 +113,22 @@ describe("media cleanup", () => {
     expect(deleted).toContain(old)
     expect(deleted).not.toContain(fresh)
     expect((await exists([fresh])).has(fresh)).toBe(true)
+  })
+
+  it("a dry run reports what would go and deletes nothing", async () => {
+    const userId = await owner("cleanup-dry")
+    const now = new Date()
+    const old = await media(userId, new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000))
+    const files = recorder()
+    const wouldDelete = await sweepUnusedMedia(db, {
+      now,
+      ownerId: userId,
+      dryRun: true,
+      // Must never be reached in a dry run.
+      deleteFileOverride: async (mediaId) => void files.deleted.push(mediaId),
+    })
+    expect(wouldDelete).toEqual([old])
+    expect(files.deleted).toEqual([])
+    expect((await exists([old])).has(old)).toBe(true)
   })
 })

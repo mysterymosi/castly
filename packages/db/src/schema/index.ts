@@ -40,8 +40,6 @@ export const rlsTables = [
   "press",
   "testimonials",
   "social_links",
-  "portfolio_sections",
-  "section_media",
   "media_assets",
   "media_upload_tokens",
   "media_moderation_jobs",

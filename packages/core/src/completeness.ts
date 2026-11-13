@@ -8,8 +8,9 @@ export type CompletenessInput = {
   hasBio: boolean
   photoCount: number
   skillCount: number
+  /** The sections the portfolio's layout includes (`portfolioLayoutFor`). */
   visibleSectionTypes: string[]
-  /** A visible showreel section with a video in it. */
+  /** A showreel is uploaded. */
   hasShowreelMedia: boolean
   /** Rows behind the list sections. A visible section scores only when it has some. */
   contentCounts: {
@@ -55,9 +56,8 @@ const SECTION_POINTS = 4
 
 /** List and text sections in the order the meter suggests them, with what counts as content. */
 const sectionContent: { type: string; label: string; has: (input: CompletenessInput) => boolean }[] = [
-  { type: "hero", label: "Add a hero section", has: () => true },
-  { type: "about", label: "Add an About section", has: (i) => i.hasBio },
-  { type: "skills", label: "Add a Skills section", has: (i) => i.skillCount > 0 },
+  { type: "about", label: "Write your bio", has: (i) => i.hasBio },
+  { type: "skills", label: "Add your skills", has: (i) => i.skillCount > 0 },
   { type: "credits", label: "Add your first credit", has: (i) => i.contentCounts.credits > 0 },
   { type: "languages", label: "Add the languages you speak", has: (i) => i.contentCounts.languages > 0 },
   {

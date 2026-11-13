@@ -59,37 +59,10 @@ export const studioApi = {
       trpc.talent.studio.createPlaceholderPhotos.mutate({ count })
     )
   },
-  createSection(
-    type: Parameters<typeof trpc.talent.sections.create.mutate>[0]["type"]
-  ) {
+  /** The showreel; null removes it. */
+  setShowreel(mediaId: string | null) {
     return invoke(async () =>
-      asStudioState(await trpc.talent.sections.create.mutate({ type }))
-    )
-  },
-  updateSection(input: Parameters<typeof trpc.talent.sections.update.mutate>[0]) {
-    return invoke(async () =>
-      asStudioState(await trpc.talent.sections.update.mutate(input))
-    )
-  },
-  deleteSection(sectionId: string) {
-    return invoke(async () =>
-      asStudioState(await trpc.talent.sections.delete.mutate({ sectionId }))
-    )
-  },
-  reorderSections(sectionIds: string[]) {
-    return invoke(async () =>
-      asStudioState(await trpc.talent.sections.reorder.mutate({ sectionIds }))
-    )
-  },
-  applyTemplate(
-    templateId: Parameters<
-      typeof trpc.talent.sections.applyTemplate.mutate
-    >[0]["templateId"]
-  ) {
-    return invoke(async () =>
-      asStudioState(
-        await trpc.talent.sections.applyTemplate.mutate({ templateId })
-      )
+      asStudioState(await trpc.talent.studio.setShowreel.mutate({ mediaId }))
     )
   },
   publish() {

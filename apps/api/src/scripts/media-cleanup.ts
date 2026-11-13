@@ -7,7 +7,7 @@
  *   pnpm --filter api media:cleanup --dry-run  # only count
  */
 import { schema } from "@workspace/db"
-import { lt } from "drizzle-orm"
+import { count, lt } from "drizzle-orm"
 
 import { db } from "../db.js"
 import { sweepUnusedMedia, UNATTACHED_GRACE_MS } from "../media/cleanup.js"
@@ -15,20 +15,13 @@ import { sweepUnusedMedia, UNATTACHED_GRACE_MS } from "../media/cleanup.js"
 const dryRun = process.argv.includes("--dry-run")
 
 if (dryRun) {
-  const old = await db
-    .select({ id: schema.mediaAssets.id })
+  // One batch covering every row past the grace period, so the count is the full set.
+  const [{ n } = { n: 0 }] = await db
+    .select({ n: count() })
     .from(schema.mediaAssets)
     .where(lt(schema.mediaAssets.createdAt, new Date(Date.now() - UNATTACHED_GRACE_MS)))
-  const kept: string[] = []
-  const deleted = await sweepUnusedMedia(db, {
-    batch: old.length || 1,
-    // Dry run: report what would go, delete nothing.
-    deleteFileOverride: async (id) => {
-      kept.push(id)
-      throw new Error("dry run")
-    },
-  })
-  console.log(`Dry run: ${kept.length} unused media older than 24h would be deleted (${deleted.length} deleted).`)
+  const wouldDelete = await sweepUnusedMedia(db, { batch: n || 1, dryRun: true })
+  console.log(`Dry run: ${wouldDelete.length} unused media older than 24h would be deleted. Nothing was deleted.`)
 } else {
   let total = 0
   for (;;) {

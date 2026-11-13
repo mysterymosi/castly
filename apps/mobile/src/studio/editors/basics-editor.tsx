@@ -5,70 +5,96 @@ import { View } from "react-native"
 import { Chip } from "@/components/ui/chip"
 import { TextField } from "@/components/ui/text-field"
 import { studioApi } from "@/studio/api"
-import { EditorScreen, FieldGroup, ToggleRow } from "@/studio/editors/kit"
+import { EditorScreen, FieldGroup, isDirty, ToggleRow } from "@/studio/editors/kit"
 import { useStudio } from "@/studio/studio-provider"
 
 const BIO_MAX = 2000
 const HEADLINE_MAX = 120
 
-/** Name, headline, bio, city, travel and relocation (2b.2). Text saves on blur, the rest on tap. */
+function saved(state: StudioState) {
+  const { profile } = state.talent
+  return {
+    displayName: profile.displayName,
+    headline: profile.headline ?? "",
+    bio: profile.bio ?? "",
+    cityId: profile.cityId,
+    willingToTravel: state.editor.willingToTravel,
+    openToRelocate: state.editor.openToRelocate,
+  }
+}
+
+type Draft = ReturnType<typeof saved>
+
+/** Name, headline, bio, city, travel and relocation (2b.2), saved together with the button. */
 export function BasicsEditor({ state }: { state: StudioState }) {
   const { run } = useStudio()
-  const { profile } = state.talent
-  const [displayName, setDisplayName] = useState(profile.displayName)
-  const [headline, setHeadline] = useState(profile.headline ?? "")
-  const [bio, setBio] = useState(profile.bio ?? "")
+  const [draft, setDraft] = useState(() => saved(state))
   const [nameError, setNameError] = useState<string | null>(null)
-  // Local so the switches move at once; the save follows.
-  const [travel, setTravel] = useState(state.editor.willingToTravel)
-  const [relocate, setRelocate] = useState(state.editor.openToRelocate)
 
-  type Patch = Parameters<typeof studioApi.updateProfile>[0]
-  function save(patch: Patch) {
-    void run("basics", () => studioApi.updateProfile(patch), "Could not save your profile")
+  function set(patch: Partial<Draft>) {
+    setDraft((current) => ({ ...current, ...patch }))
+  }
+
+  /** Only the fields that changed, trimmed; null when something is invalid. */
+  function changes() {
+    const was = saved(state)
+    const displayName = draft.displayName.trim()
+    if (!displayName) {
+      setNameError("Your name can't be empty")
+      return null
+    }
+    const headline = draft.headline.trim()
+    const patch: Parameters<typeof studioApi.updateProfile>[0] = {}
+    if (displayName !== was.displayName) patch.displayName = displayName
+    if (headline !== was.headline) patch.headline = headline || null
+    if (draft.bio !== was.bio) patch.bio = draft.bio
+    if (draft.cityId && draft.cityId !== was.cityId) patch.cityId = draft.cityId
+    if (draft.willingToTravel !== was.willingToTravel) patch.willingToTravel = draft.willingToTravel
+    if (draft.openToRelocate !== was.openToRelocate) patch.openToRelocate = draft.openToRelocate
+    return patch
   }
 
   return (
-    <EditorScreen title="Profile" intro="What bookers read at the top of your page and on your card.">
+    <EditorScreen
+      title="Profile"
+      intro="What bookers read at the top of your page and on your card."
+      save={{
+        dirty: isDirty(draft, saved(state)),
+        onSave: async () => {
+          const patch = changes()
+          if (!patch) return false
+          if (Object.keys(patch).length === 0) return true
+          return run("basics", () => studioApi.updateProfile(patch), "Could not save your profile")
+        },
+      }}
+    >
       <View className="gap-4">
         <TextField
           label="Name"
-          value={displayName}
+          value={draft.displayName}
           maxLength={120}
           autoComplete="name"
           error={nameError}
-          onChangeText={(value) => {
-            setDisplayName(value)
+          onChangeText={(displayName) => {
+            set({ displayName })
             setNameError(null)
-          }}
-          onBlur={() => {
-            const next = displayName.trim()
-            if (!next) return setNameError("Your name can't be empty")
-            if (next !== profile.displayName) save({ displayName: next })
           }}
         />
         <TextField
           label="Headline"
-          value={headline}
+          value={draft.headline}
           maxLength={HEADLINE_MAX}
           placeholder="Actor and voice artist"
           hint="One line under your name"
-          onChangeText={setHeadline}
-          onBlur={() => {
-            const next = headline.trim()
-            if (next !== (profile.headline ?? "")) save({ headline: next || null })
-          }}
+          onChangeText={(headline) => set({ headline })}
         />
         <TextField
           label="Bio"
-          value={bio}
+          value={draft.bio}
           multiline
           maxLength={BIO_MAX}
-          hint={`${bio.length}/${BIO_MAX}`}
-          onChangeText={setBio}
-          onBlur={() => {
-            if (bio !== (profile.bio ?? "")) save({ bio })
-          }}
+          hint={`${draft.bio.length}/${BIO_MAX}`}
+          onChangeText={(bio) => set({ bio })}
         />
       </View>
 
@@ -78,12 +104,10 @@ export function BasicsEditor({ state }: { state: StudioState }) {
             <Chip
               key={city.id}
               label={city.name}
-              selected={profile.cityId === city.id}
+              selected={draft.cityId === city.id}
               accessibilityRole="radio"
-              accessibilityState={{ selected: profile.cityId === city.id }}
-              onPress={() => {
-                if (profile.cityId !== city.id) save({ cityId: city.id })
-              }}
+              accessibilityState={{ selected: draft.cityId === city.id }}
+              onPress={() => set({ cityId: city.id })}
             />
           ))}
         </View>
@@ -93,20 +117,14 @@ export function BasicsEditor({ state }: { state: StudioState }) {
         <ToggleRow
           label="Willing to travel"
           hint="For shoots outside your city"
-          value={travel}
-          onChange={(willingToTravel) => {
-            setTravel(willingToTravel)
-            save({ willingToTravel })
-          }}
+          value={draft.willingToTravel}
+          onChange={(willingToTravel) => set({ willingToTravel })}
         />
         <ToggleRow
           label="Open to relocating"
           hint="For long productions"
-          value={relocate}
-          onChange={(openToRelocate) => {
-            setRelocate(openToRelocate)
-            save({ openToRelocate })
-          }}
+          value={draft.openToRelocate}
+          onChange={(openToRelocate) => set({ openToRelocate })}
         />
       </FieldGroup>
     </EditorScreen>

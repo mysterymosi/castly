@@ -185,10 +185,11 @@ training / affiliations / press / testimonials / social_links
 
 ### 5.4 Portfolio composition
 
+The portfolio's layout is **not stored**. It is the fixed order for the talent's primary category kind (`portfolioLayouts` in `packages/core/src/portfolio-layout.ts`: on-camera, or work-led for crew, production and events), computed on read by `portfolioSections()` and sent in the same section shape renderers already take. Sections with no content are left out on the public page and the card (`sectionHasContent`). Photos are not sections: `talent_photos` holds them in order, Main first, and `layoutPortfolio` spreads them between sections. Revised 2026-11-12: `portfolio_sections` and `section_media` (and the 12-section cap trigger) were dropped in migration `0015_fixed_portfolio_layout`.
+
 ```
-portfolio_sections       id, talent_id, type, position, is_visible,
-                         schema_version, config jsonb
-section_media            section_id, media_id, position, caption
+talent_profiles          … showreel_media_id → media_assets (set null on delete)
+talent_photos            talent_id, media_id, position   (≤ 6, Main = position 0)
 media_assets             id, owner_id, kind(image|video|audio|document),
                          provider(cf_images|mux|supabase),
                          provider_ref, status(pending|processing|ready|failed|quarantined),
@@ -196,9 +197,7 @@ media_assets             id, owner_id, kind(image|video|audio|document),
                          moderation_status, moderation_payload jsonb
 ```
 
-A CHECK constraint enforces the 12-section cap from §7.2.1 via a trigger counting visible sections per talent.
-
-`config` is validated against the Zod schema for `(type, schema_version)` at the API boundary on every write. Never trusted on read.
+Each section's display settings are fixed defaults in `portfolio-layout.ts`; the Zod registry still validates them for `(type, schema_version)`, so renderers keep a single contract.
 
 ### 5.5 Booker, projects, roles
 
@@ -316,7 +315,8 @@ tRPC routers in `apps/api/src/routers`. Every procedure declares its auth requir
 ```
 auth        requestOtp · verifyOtp · refresh · me · enableMode
 talent      getProfile · updateProfile · publish · unpublish
-            sections.list|create|update|reorder|delete
+            studio.get · studio.setShowreel · studio.setCanvas · studio.previewCard
+            photos.set|add|replace · categories.set · skills.set · languages.set · accents.set
             attributes.set · credits.* · rates.* · availability.*
             completeness · analytics
 media       createUploadUrl · confirmUpload · delete · status

@@ -45,11 +45,12 @@ export async function listLiveTalentSlugs(db: Db) {
   const rows = await db
     .select({
       slug: schema.talentProfiles.slug,
-      updatedAt: schema.talentProfiles.updatedAt,
+      updatedAt: schema.talentProfiles.contentUpdatedAt,
     })
     .from(schema.talentProfiles)
     .where(eq(schema.talentProfiles.status, "live"))
-    .orderBy(desc(schema.talentProfiles.updatedAt), asc(schema.talentProfiles.slug))
+    // A page's lastmod is its last booker-visible edit, not a score refresh.
+    .orderBy(desc(schema.talentProfiles.contentUpdatedAt), asc(schema.talentProfiles.slug))
     // The sitemap protocol caps a file at 50,000 URLs; split with generateSitemaps before then.
     .limit(50_000)
   return rows.map((r) => ({ slug: r.slug, updatedAt: r.updatedAt.toISOString() }))

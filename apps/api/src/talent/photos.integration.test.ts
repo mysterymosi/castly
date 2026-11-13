@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 
+import { portfolioLayoutFor } from "@workspace/core"
 import { schema } from "@workspace/db"
 import { PHOTO_SLOTS } from "@workspace/schema"
 import { eq } from "drizzle-orm"
@@ -151,8 +152,9 @@ describe("talent photos", () => {
     })
     expect(started.talent.photoMediaIds).toEqual(ids.slice(0, 3))
     expect(started.completeness.quickStartMet).toBe(true)
-    // No gallery section: photos are not a section.
-    expect(started.talent.sections.map((s) => s.type)).not.toContain("gallery")
+    // Photos are not a section; the layout is fixed by category (none here, so on-camera).
+    expect(started.talent.sections.map((s) => s.type)).toEqual([...portfolioLayoutFor(null)])
+    expect(started.talent.sections.every((s) => s.isVisible)).toBe(true)
 
     await api.talent.photos.set({ mediaIds: [ids[3]!, ids[0]!] })
     const card = await deckCard(db, booker.userId, await profileRow(userId))

@@ -4,12 +4,6 @@ import { mediaStatusOutput } from "../media"
 import { corePortfolioSectionTypes } from "../portfolio/types"
 import { cardConfigSchema, ownerTalentDtoSchema } from "./dto"
 
-export const portfolioTemplateIdSchema = z.enum([
-  "editorial",
-  "reel_first",
-  "case_study",
-])
-
 export const completenessBreakdownSchema = z.object({
   score: z.number().min(0).max(100),
   quickStartMet: z.boolean(),
@@ -174,25 +168,6 @@ export const completeQuickStartInput = z.object({
   categoryIds: z.array(z.uuid()).min(1).max(3).optional(),
 })
 
-export const createSectionInput = z.object({
-  type: z.enum(corePortfolioSectionTypes),
-})
-
-export const updateSectionInput = z.object({
-  sectionId: z.uuid(),
-  schemaVersion: z.number().int().min(1),
-  config: z.unknown(),
-  isVisible: z.boolean().optional(),
-})
-
-export const reorderSectionsInput = z.object({
-  sectionIds: z.array(z.uuid()).min(1).max(12),
-})
-
-export const deleteSectionInput = z.object({
-  sectionId: z.uuid(),
-})
-
 export const createPlaceholderPhotosInput = z.object({
   count: z.number().int().min(1).max(12).default(3),
 })
@@ -201,9 +176,8 @@ export const placeholderPhotosResultSchema = z.object({
   mediaIds: z.array(z.uuid()),
 })
 
-export const applyTemplateInput = z.object({
-  templateId: portfolioTemplateIdSchema,
-})
+/** Sets or clears the showreel: a video the talent uploaded. */
+export const setShowreelInput = z.object({ mediaId: z.uuid().nullable() })
 
 /** Primary first; replaces every category the talent had. */
 export const setTalentCategoriesInput = z.object({

@@ -1,7 +1,9 @@
-import { router } from "expo-router"
-import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from "react"
-import { Switch, View } from "react-native"
+import { router, useNavigation } from "expo-router"
+import { usePreventRemove } from "expo-router/react-navigation"
+import { useEffect, useState, type ReactNode } from "react"
+import { Alert, Switch, View } from "react-native"
 
+import { Button } from "@/components/ui/button"
 import { Screen } from "@/components/ui/screen"
 import { ScreenHeader } from "@/components/ui/screen-header"
 import { InlineError } from "@/components/ui/states"
@@ -10,36 +12,82 @@ import { useTokens } from "@/hooks/use-tokens"
 import { haptics } from "@/lib/haptics"
 import { useStudio } from "@/studio/studio-provider"
 
-/** A studio content editor: header with a save indicator, intro line, the latest save error. */
+export type EditorSave = {
+  /** Whether the screen holds edits that aren't saved yet. */
+  dirty: boolean
+  /** Saves every edit; true on success. The screen closes after a successful save. */
+  onSave: () => Promise<boolean>
+  label?: string
+  /** Blocks the button (e.g. invalid input) without discarding the edits. */
+  disabled?: boolean
+}
+
+/**
+ * A studio editor: header, intro line, the latest save error, and one Save button. Edits stay on
+ * the screen until Save (nothing saves on blur or on a timer); leaving with unsaved edits asks
+ * first.
+ */
 export function EditorScreen({
   title,
   intro,
   children,
+  save,
   footer,
 }: {
   title: string
   intro?: string
   children?: ReactNode
+  save?: EditorSave
+  /** For screens without a draft (a list that opens its own forms): its main action. */
   footer?: ReactNode
 }) {
-  const { pending, actionError } = useStudio()
+  const navigation = useNavigation()
+  const { actionError, clearActionError } = useStudio()
+  const [saving, setSaving] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const dirty = !!save?.dirty
+
+  // A stale error from another screen doesn't belong here.
+  useEffect(() => clearActionError(), [clearActionError])
+
+  usePreventRemove(dirty && !closing, ({ data }) => {
+    Alert.alert("Discard your changes?", "You haven't saved them.", [
+      { text: "Keep editing", style: "cancel" },
+      { text: "Discard", style: "destructive", onPress: () => navigation.dispatch(data.action) },
+    ])
+  })
+
+  // Close once the guard is off (the render after a save), so leaving isn't stopped.
+  useEffect(() => {
+    if (closing) router.back()
+  }, [closing])
+
+  async function onSave() {
+    if (!save) return
+    setSaving(true)
+    const ok = await save.onSave()
+    setSaving(false)
+    if (ok) setClosing(true)
+  }
+
   return (
     <Screen
       scroll
-      footer={footer}
-      header={
-        <ScreenHeader
-          title={title}
-          onBack={() => router.back()}
-          right={
-            pending ? (
-              <Text variant="footnote" tone="muted" accessibilityLiveRegion="polite">
-                Saving…
-              </Text>
-            ) : null
-          }
-        />
+      footer={
+        save ? (
+          <Button
+            label={save.label ?? "Save"}
+            size="md"
+            style={{ minHeight: 48 }}
+            loading={saving}
+            disabled={!dirty || saving || !!save.disabled}
+            onPress={() => void onSave()}
+          />
+        ) : (
+          footer
+        )
       }
+      header={<ScreenHeader title={title} onBack={() => router.back()} />}
       contentClassName="gap-6 pt-2 pb-10"
     >
       {intro ? (
@@ -51,6 +99,11 @@ export function EditorScreen({
       {children}
     </Screen>
   )
+}
+
+/** Whether a draft differs from what's saved (plain data only). */
+export function isDirty(draft: unknown, saved: unknown) {
+  return JSON.stringify(draft) !== JSON.stringify(saved)
 }
 
 export function FieldGroup({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
@@ -113,49 +166,4 @@ export function ToggleRow({
 export function humanize(value: string) {
   const text = value.replaceAll("_", " ")
   return text.charAt(0).toUpperCase() + text.slice(1)
-}
-
-/**
- * Saves `value` once it has been still for `delay` ms, and on leaving the screen. Saves never
- * overlap: a change made while one is in flight is saved after it, so the last value always wins.
- * A failed save is not retried until the value changes again (the error shows on the screen).
- */
-export function useAutosave<T>(value: T, persist: (value: T) => Promise<boolean>, delay = 600) {
-  const key = JSON.stringify(value)
-  const latest = useRef({ value, key })
-  const persistRef = useRef(persist)
-  const saved = useRef(key)
-  const failed = useRef<string | null>(null)
-  const inFlight = useRef(false)
-
-  useLayoutEffect(() => {
-    latest.current = { value, key }
-    persistRef.current = persist
-  })
-
-  const flush = useCallback(async () => {
-    if (inFlight.current) return
-    inFlight.current = true
-    try {
-      // Keep going until the latest value is saved: edits made mid-save are picked up here.
-      while (latest.current.key !== saved.current && latest.current.key !== failed.current) {
-        const { value: snapshot, key: snapshotKey } = latest.current
-        if (await persistRef.current(snapshot)) {
-          saved.current = snapshotKey
-          failed.current = null
-        } else {
-          failed.current = snapshotKey
-        }
-      }
-    } finally {
-      inFlight.current = false
-    }
-  }, [])
-
-  useEffect(() => {
-    const timer = setTimeout(() => void flush(), delay)
-    return () => clearTimeout(timer)
-  }, [key, delay, flush])
-
-  useEffect(() => () => void flush(), [flush])
 }

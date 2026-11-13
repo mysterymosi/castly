@@ -16,9 +16,11 @@ import { InlineError, LoadingState } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
 import { TextField } from "@/components/ui/text-field"
 import { haptics } from "@/lib/haptics"
-import { mediaApi } from "@/media/api"
+import { isIntentActive } from "@/media/upload-intent"
+import { useUploadQueue } from "@/media/upload-queue-provider"
 import { studioApi } from "@/studio/api"
 import { CategoryPicker, toggleCategory } from "@/studio/category-picker"
+import { PhotosGrid } from "@/studio/photos-grid"
 import { useStudio } from "@/studio/studio-provider"
 
 const steps = ["name", "category", "city", "bio", "skills", "photos"] as const
@@ -41,6 +43,7 @@ function StepTitle({ title, body }: { title: string; body: string }) {
 
 export default function QuickStartScreen() {
   const { state, setState } = useStudio()
+  const { intents } = useUploadQueue()
   const [stepIndex, setStepIndex] = useState(0)
   const [displayName, setDisplayName] = useState(
     state && state.talent.profile.displayName !== "New talent" ? state.talent.profile.displayName : "",
@@ -54,6 +57,11 @@ export default function QuickStartScreen() {
 
   if (!state) return <LoadingState />
 
+  // The grid uploads as photos are picked; Finish waits for enough of them to be in.
+  const photoIds = state.talent.photoMediaIds
+  const uploading = intents.some((row) => row.goal === "photo" && isIntentActive(row))
+  const enoughPhotos = photoIds.length >= PHOTO_COUNT
+
   const step: Step = steps[stepIndex]!
   const canContinue: Record<Step, boolean> = {
     name: displayName.trim().length > 0,
@@ -61,7 +69,7 @@ export default function QuickStartScreen() {
     city: cityId.length > 0,
     bio: bio.trim().length > 0,
     skills: skillIds.length >= SKILL_COUNT,
-    photos: true,
+    photos: enoughPhotos && !uploading,
   }
 
   function back() {
@@ -90,13 +98,12 @@ export default function QuickStartScreen() {
     setPending(true)
     setError(null)
     try {
-      const photoMediaIds = await mediaApi.uploadQuickStartPhotos(PHOTO_COUNT)
       const next = await studioApi.completeQuickStart({
         displayName: displayName.trim(),
         cityId,
         bio: bio.trim(),
         skillIds,
-        photoMediaIds,
+        photoMediaIds: photoIds,
         categoryIds,
       })
       haptics.success()
@@ -138,9 +145,16 @@ export default function QuickStartScreen() {
         step === "photos" ? (
           <View className="gap-3 pb-1">
             <Button
-              label={pending ? "Uploading photos" : `Choose ${PHOTO_COUNT} photos and finish`}
-              icon="photo"
-              loading={pending}
+              label={
+                uploading
+                  ? "Uploading photos"
+                  : enoughPhotos
+                    ? "Finish"
+                    : `Add ${PHOTO_COUNT - photoIds.length} more photo${PHOTO_COUNT - photoIds.length === 1 ? "" : "s"}`
+              }
+              icon={enoughPhotos ? "check" : "photo"}
+              loading={pending || uploading}
+              disabled={!canContinue.photos}
               onPress={finish}
             />
           </View>
@@ -246,9 +260,10 @@ export default function QuickStartScreen() {
         {step === "photos" ? (
           <>
             <StepTitle
-              title="Add 3 photos"
-              body="Choose three clear photos from your library. Headshots work best. The first is your Main photo, the one bookers see first."
+              title="Add your photos"
+              body="Add at least 3 clear photos from your library, and crop each to fit. Headshots work best. The first is your Main photo, the one bookers see first. You can add up to six and rearrange them later."
             />
+            <PhotosGrid state={state} />
             <View className="gap-3 rounded-xl border border-border bg-surface p-5">
               <Text variant="caption" tone="muted">
                 Your quick start
@@ -273,9 +288,9 @@ export default function QuickStartScreen() {
                 </View>
               ))}
             </View>
-            {pending ? (
+            {uploading ? (
               <Text variant="footnote" tone="muted" accessibilityLiveRegion="polite">
-                Uploading and processing your photos. This can take a minute on slower connections.
+                Uploading your photos. This can take a minute on slower connections.
               </Text>
             ) : null}
             {error ? <InlineError message={error} /> : null}

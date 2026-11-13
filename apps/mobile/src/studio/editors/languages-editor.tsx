@@ -5,29 +5,40 @@ import { View } from "react-native"
 import { Chip } from "@/components/ui/chip"
 import { Text } from "@/components/ui/text"
 import { studioApi } from "@/studio/api"
-import { EditorScreen, FieldGroup, humanize, useAutosave } from "@/studio/editors/kit"
+import { EditorScreen, FieldGroup, humanize, isDirty } from "@/studio/editors/kit"
 import { useStudio } from "@/studio/studio-provider"
 
 type Fluency = StudioState["editor"]["languages"][number]["fluency"]
 const fluencies: Fluency[] = ["basic", "conversational", "fluent", "native"]
 
-/** Languages with fluency, and accents (2b.4). Both lists replace the stored ones on save. */
+/** Languages with fluency, and accents (2b.4). Save replaces whichever list changed. */
 export function LanguagesEditor({ state }: { state: StudioState }) {
   const { run } = useStudio()
   const [languages, setLanguages] = useState(() => state.editor.languages)
   const [accentIds, setAccentIds] = useState(() => state.editor.accentIds)
 
-  useAutosave(languages, (next) =>
-    run("languages", () => studioApi.setLanguages(next), "Could not save your languages")
-  )
-  useAutosave(accentIds, (next) =>
-    run("accents", () => studioApi.setAccents(next), "Could not save your accents")
-  )
+  const languagesChanged = isDirty(languages, state.editor.languages)
+  const accentsChanged = isDirty(accentIds, state.editor.accentIds)
+
+  async function save() {
+    if (
+      languagesChanged &&
+      !(await run("languages", () => studioApi.setLanguages(languages), "Could not save your languages"))
+    )
+      return false
+    if (accentsChanged)
+      return run("accents", () => studioApi.setAccents(accentIds), "Could not save your accents")
+    return true
+  }
 
   const name = (id: string) => state.editor.languageOptions.find((l) => l.id === id)?.name ?? "Language"
 
   return (
-    <EditorScreen title="Languages" intro="Languages you can work in, and accents you can do on cue.">
+    <EditorScreen
+      title="Languages"
+      intro="Languages you can work in, and accents you can do on cue."
+      save={{ dirty: languagesChanged || accentsChanged, onSave: save }}
+    >
       <FieldGroup title="Languages">
         <View className="flex-row flex-wrap gap-2">
           {state.editor.languageOptions.map((language) => {

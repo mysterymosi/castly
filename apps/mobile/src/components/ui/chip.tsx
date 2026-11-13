@@ -20,15 +20,17 @@ export function Chip({ label, selected = false, icon, className, disabled, ...re
       accessibilityState={{ checked: selected, disabled: !!disabled }}
       accessibilityLabel={label}
       disabled={disabled}
+      // 40pt tall to read light; the slop keeps the touch target at 44pt.
+      hitSlop={4}
       className={cn(
-        "min-h-11 flex-row items-center gap-1.5 rounded-pill px-4",
+        "min-h-10 flex-row items-center gap-1.5 rounded-pill px-3",
         selected ? "bg-inverse" : "bg-surfaceMuted",
         disabled && !selected && "opacity-40",
         className,
       )}
       {...rest}
     >
-      {selected ? <Icon name="check" size={14} tone="onInverse" /> : icon ? <Icon name={icon} size={14} /> : null}
+      {selected ? <Icon name="check" size={13} tone="onInverse" /> : icon ? <Icon name={icon} size={13} /> : null}
       <Text variant="label" tone={selected ? "onInverse" : "default"}>
         {label}
       </Text>

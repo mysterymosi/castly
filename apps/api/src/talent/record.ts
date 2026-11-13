@@ -1,14 +1,22 @@
-import type { TalentAttributeRow, TalentRecord } from "@workspace/core"
+import { portfolioSections, type TalentAttributeRow, type TalentRecord } from "@workspace/core"
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
-import {
-  cardConfigSchema,
-  type CoreSectionType,
-  readStoredPortfolioSection,
-} from "@workspace/schema"
+import { cardConfigSchema } from "@workspace/schema"
 import { and, asc, desc, eq, sql } from "drizzle-orm"
 
 type ProfileRow = typeof schema.talentProfiles.$inferSelect
+
+/** The kind of the talent's primary category, which picks their portfolio layout; null without one. */
+export async function primaryCategoryKind(db: Db, userId: string) {
+  const [row] = await db
+    .select({ kind: schema.categories.kind })
+    .from(schema.talentCategories)
+    .innerJoin(schema.categories, eq(schema.talentCategories.categoryId, schema.categories.id))
+    .where(eq(schema.talentCategories.talentId, userId))
+    .orderBy(desc(schema.talentCategories.isPrimary), asc(schema.talentCategories.sort))
+    .limit(1)
+  return row?.kind ?? null
+}
 
 /** The talent's photos, Main first, in studio order. */
 export async function loadPhotoMediaIds(db: Db, userId: string): Promise<string[]> {
@@ -146,9 +154,8 @@ async function loadContent(db: Db, userId: string): Promise<TalentRecord["conten
 }
 
 /**
- * Everything `serializeTalent` needs for one talent. Section configs are migrated to their
- * current version on read, so the version sent with them is the current one too — writes only
- * accept the current version.
+ * Everything `serializeTalent` needs for one talent. The sections are not stored: they are the
+ * fixed layout for the talent's primary category (`portfolioSections`), with the showreel in place.
  */
 export async function loadTalentRecord(
   db: Db,
@@ -156,12 +163,6 @@ export async function loadTalentRecord(
   completenessScore: number
 ): Promise<TalentRecord> {
   const userId = profile.userId
-  const sections = await db
-    .select()
-    .from(schema.portfolioSections)
-    .where(eq(schema.portfolioSections.talentId, userId))
-    .orderBy(asc(schema.portfolioSections.position))
-
   const skillRows = await db
     .select({ skillId: schema.talentSkills.skillId })
     .from(schema.talentSkills)
@@ -197,21 +198,7 @@ export async function loadTalentRecord(
       qualityScore: Number(profile.qualityScore),
       rateVisibility: profile.rateVisibility,
     },
-    sections: sections.map((s) => {
-      const current = readStoredPortfolioSection({
-        type: s.type as CoreSectionType,
-        schemaVersion: s.schemaVersion,
-        config: s.config,
-      })
-      return {
-        id: s.id,
-        type: s.type as CoreSectionType,
-        schemaVersion: current.schemaVersion,
-        position: s.position,
-        isVisible: s.isVisible,
-        config: current.config,
-      }
-    }),
+    sections: portfolioSections(await primaryCategoryKind(db, userId), profile.showreelMediaId),
     photoMediaIds: await loadPhotoMediaIds(db, userId),
     skillIds: skillRows.map((r) => r.skillId),
     rates: rateRows.map((r) => ({
