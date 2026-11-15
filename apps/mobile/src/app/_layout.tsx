@@ -2,30 +2,29 @@ import "@/observability/sentry-init"
 
 import { QueryClientProvider } from "@tanstack/react-query"
 import { useFonts } from "expo-font"
-import { DarkTheme, Stack, ThemeProvider } from "expo-router"
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router"
 import * as SplashScreen from "expo-splash-screen"
 import { StatusBar } from "expo-status-bar"
 import { useEffect, useMemo } from "react"
-import { Appearance, Platform } from "react-native"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
 
 import "../global.css"
 
 import { SessionProvider, useSession } from "@/auth/session-provider"
 import { useTokens } from "@/hooks/use-tokens"
+import { applyStoredAppearance } from "@/theme/appearance"
 import { appFonts } from "@/theme/fonts"
 import { queryClient } from "@/trpc/query-client"
 import { motion } from "@workspace/ui-tokens"
 
 void SplashScreen.preventAutoHideAsync()
 SplashScreen.setOptions({ fade: true, duration: motion.slow })
-// Dark-only: native controls (alerts, keyboards, sheets, menus) match the palette. `app.json`
-// sets the same for the next native build.
-if (Platform.OS !== "web") Appearance.setColorScheme("dark")
+// Light, dark or the phone's setting (Account); applied before the first render.
+applyStoredAppearance()
 
 function RootNavigator() {
   const { status } = useSession()
-  const { color } = useTokens()
+  const { scheme, color } = useTokens()
   const [fontsLoaded, fontError] = useFonts(appFonts)
   const ready = (fontsLoaded || !!fontError) && status !== "loading"
 
@@ -38,10 +37,11 @@ function RootNavigator() {
   }, [ready])
 
   const navigationTheme = useMemo(() => {
+    const base = scheme === "dark" ? DarkTheme : DefaultTheme
     return {
-      ...DarkTheme,
+      ...base,
       colors: {
-        ...DarkTheme.colors,
+        ...base.colors,
         primary: color.accentText,
         background: color.bg,
         card: color.surface,
@@ -49,7 +49,7 @@ function RootNavigator() {
         border: color.border,
       },
     }
-  }, [color])
+  }, [scheme, color])
 
   if (!ready) return null
 
@@ -57,7 +57,7 @@ function RootNavigator() {
 
   return (
     <ThemeProvider value={navigationTheme}>
-      <StatusBar style="light" />
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Stack
         screenOptions={{
           headerShown: false,

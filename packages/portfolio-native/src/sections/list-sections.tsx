@@ -220,12 +220,13 @@ function SkillsSection({ config, content, cardWidth = CARD_WIDTH }: SectionRende
         {selectSkills(config, content).map((skill) => (
           <View
             key={skill.name}
-            className={`h-7 justify-center rounded-pill px-3 ${skill.highlighted ? "bg-accent" : "bg-surfaceMuted"}`}
+            // Grey in both schemes (surfaceMuted is each scheme's grey), highlighted or not.
+            className="h-7 justify-center rounded-pill bg-surfaceMuted px-3"
           >
             <Text
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
-              className={`font-bodyMedium text-footnote ${skill.highlighted ? "text-onAccent" : "text-text"}`}
+              className="font-bodyMedium text-footnote text-text"
             >
               {skill.name}
             </Text>

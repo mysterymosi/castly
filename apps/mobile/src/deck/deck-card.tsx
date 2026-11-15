@@ -1,3 +1,4 @@
+import { fontFamily, shadow } from "@workspace/ui-tokens"
 import {
   FlashList,
   type FlashListRef,
@@ -44,11 +45,14 @@ import { ImageViewer, type ImageViewerState } from "@/deck/image-viewer"
 import { useFrameMeter } from "@/lib/frame-meter"
 import { useDataSaver } from "@/media/data-saver"
 import { portfolioMediaComponents } from "@/studio/portfolio-media"
+import { DarkScope } from "@/theme/dark-scope"
+import { GlassPane } from "@/components/ui/glass"
 
 type NativeGesture = ReturnType<typeof Gesture.Native>
 
 type Item =
   | { kind: "lead"; key: string }
+  | { kind: "reason"; key: string; text: string }
   | { kind: "section"; key: string; section: PortfolioSection }
   | { kind: "photo"; key: string; mediaId: string; index: number }
   | { kind: "depth"; key: string }
@@ -90,18 +94,20 @@ export function mediaUri(card: DeckCardData, id: string) {
 }
 
 /**
- * (The deck is pinned dark, so default-tone text is the light ink photos need.)
- *
- * Name, category, place, age range, signature credit, why the card is here (`deck.next`'s
- * `reasonText`; preview cards have none) and the highlight facts, laid over the photo's lower
- * third — the now-playing title block. Share sits at its right, where a player puts "add".
+ * Name, category, place, age range, signature credit and the highlight facts, laid over the
+ * photo's lower third (in a `DarkScope`, so the text stays light) — the now-playing title block.
+ * Share sits at its right, where a player puts "add". Why the card is here has its own card below
+ * the photo (`ReasonCard`).
  */
 function PhotoCaption({
   card,
   onShare,
+  glass,
 }: {
-  card: DeckCardData & Partial<Pick<DeckQueuedCard, "reasonText">>
+  card: DeckCardData
   onShare?: () => void
+  /** Liquid Glass chips and share button; off for the cards behind the top one (GPU cost). */
+  glass: boolean
 }) {
   const { profile } = card.talent
   const { decision } = card
@@ -155,14 +161,21 @@ function PhotoCaption({
             accessibilityLabel={`Share ${profile.displayName}'s portfolio`}
             onPress={onShare}
             hitSlop={8}
-            className="rounded-pill mb-1 h-11 w-11 items-center justify-center border-2 active:opacity-70"
-            style={{ borderColor: "rgba(255, 255, 255, 0.9)" }}
+            className="mb-1 active:opacity-70"
           >
-            <Icon name="share" size={18} color="#FFFFFF" />
+            <GlassPane
+              enabled={glass}
+              interactive
+              style={glassButton}
+              // Without glass: the outlined circle it was.
+              fallbackStyle={{ borderWidth: 2, borderColor: "rgba(255, 255, 255, 0.9)" }}
+            >
+              <Icon name="share" size={18} color="#FFFFFF" />
+            </GlassPane>
           </Pressable>
         ) : null}
       </View>
-      {creditLine || card.reasonText ? (
+      {creditLine ? (
         <View className="gap-1.5" pointerEvents="none">
           {creditLine ? (
             <View
@@ -180,25 +193,6 @@ function PhotoCaption({
               </Text>
             </View>
           ) : null}
-          {card.reasonText ? (
-            <View
-              className="flex-row items-center gap-2"
-              style={{ opacity: 0.85 }}
-              accessible
-              accessibilityLabel={`Why you're seeing this: ${card.reasonText}`}
-              testID="deck-card-reason"
-            >
-              <Icon name="sparkle" size={15} color="#FFFFFF" />
-              <Text
-                variant="body-sm"
-               
-                numberOfLines={2}
-                className="flex-1"
-              >
-                {card.reasonText}
-              </Text>
-            </View>
-          ) : null}
         </View>
       ) : null}
       {facts.length > 0 ? (
@@ -208,21 +202,36 @@ function PhotoCaption({
           accessibilityLabel={`Highlights: ${facts.join(", ")}`}
         >
           {facts.map((fact) => (
-            <View
-              key={fact}
-              className="rounded-pill px-3 py-1.5"
-              style={{ backgroundColor: "rgba(255, 255, 255, 0.16)" }}
-            >
-              <Text variant="footnote" numberOfLines={1}>
+            <GlassPane key={fact} enabled={glass} style={glassChip}>
+              {/* A step heavier than the footnote's medium: thin text washes out on glass. */}
+              <Text
+                variant="footnote"
+                numberOfLines={1}
+                style={{ fontFamily: fontFamily.bodyBold }}
+              >
                 {fact}
               </Text>
-            </View>
+            </GlassPane>
           ))}
         </View>
       ) : null}
     </View>
   )
 }
+
+// Plain styles: GlassView is a native view NativeWind doesn't style.
+const glassChip = {
+  borderRadius: 999,
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+} as const
+const glassButton = {
+  width: 44,
+  height: 44,
+  borderRadius: 22,
+  alignItems: "center",
+  justifyContent: "center",
+} as const
 
 export type CardCanvas =
   | { kind: "video"; playbackUrl: string }
@@ -365,7 +374,8 @@ function LeadBlock({
           photoScrim,
         ]}
       />
-      <View
+      {/* Over the photo's dark scrim: light text in both schemes. */}
+      <DarkScope
         pointerEvents="box-none"
         style={{
           position: "absolute",
@@ -375,7 +385,55 @@ function LeadBlock({
           gap: 16,
         }}
       >
-        <PhotoCaption card={card} onShare={interactive ? onShare : undefined} />
+        <PhotoCaption
+          card={card}
+          onShare={interactive ? onShare : undefined}
+          glass={interactive}
+        />
+      </DarkScope>
+    </View>
+  )
+}
+
+/**
+ * Why the deck served this card (`deck.next`'s `reasonText`), as the first card under the photo:
+ * kept off the hero so the caption stays short. Styled like the portfolio's section cards.
+ */
+function ReasonCard({
+  text,
+  width,
+  sectionWidth,
+}: {
+  text: string
+  width: number
+  sectionWidth: number
+}) {
+  return (
+    <View className="items-center pt-4" style={{ width }}>
+      <View
+        className="bg-surface gap-1 rounded-lg px-4 py-3"
+        style={{ width: sectionWidth, boxShadow: shadow.card }}
+        accessible
+        accessibilityLabel={`Why you're seeing this: ${text}`}
+        testID="deck-card-reason"
+      >
+        {/* Matches the section cards' titles (portfolio-native `SectionTitle`). */}
+        <Text className="font-heading text-body" maxFontSizeMultiplier={1.3}>
+          {"Why you're seeing this"}
+        </Text>
+        {/* One pill per reason (the server joins them with " · ", `deckReasonText`). */}
+        <View className="flex-row flex-wrap gap-2 pt-1">
+          {text.split(" · ").map((reason) => (
+            <View
+              key={reason}
+              className="bg-surfaceMuted min-h-8 justify-center rounded-pill px-3"
+            >
+              <Text variant="footnote" style={{ fontFamily: fontFamily.bodySemibold }}>
+                {reason}
+              </Text>
+            </View>
+          ))}
+        </View>
       </View>
     </View>
   )
@@ -568,24 +626,24 @@ export function DeckCard({
   const [activeVideo, setActiveVideo] = useState<string | null>("lead")
   const dataSaver = useDataSaver()
   const canvas = useMemo(() => cardCanvas(card), [card])
+  // Why the deck served this card (`deck.next`); the studio preview has none.
+  const reasonText = (card as Partial<Pick<DeckQueuedCard, "reasonText">>).reasonText ?? null
   const items = useMemo<Item[]>(() => {
+    const top: Item[] = [
+      { kind: "lead", key: "lead" },
+      ...(reasonText ? [{ kind: "reason", key: "reason", text: reasonText } as const] : []),
+    ]
     // The lead block is the card's hero; a portfolio hero section would repeat it.
     // Empty list sections are left out, as on the public page.
     const sections = readRenderableSections(card.talent.sections, content, new Date()).filter(
       (section) => section.type !== "hero"
     )
     if (sections.length === 0 && photos.rest.length === 0)
-      return [
-        { kind: "lead", key: "lead" },
-        { kind: "end", key: "end" },
-      ]
+      return [...top, { kind: "end", key: "end" }]
     if (!expanded)
-      return [
-        { kind: "lead", key: "lead" },
-        { kind: "depth", key: "depth" },
-      ]
+      return [...top, { kind: "depth", key: "depth" }]
     return [
-      { kind: "lead", key: "lead" },
+      ...top,
       ...layoutPortfolio(sections, photos.rest, photos.firstIndex).map(
         (item): Item =>
           item.kind === "section"
@@ -594,7 +652,7 @@ export function DeckCard({
       ),
       { kind: "end", key: "end" },
     ]
-  }, [card.talent.sections, content, expanded, photos])
+  }, [card.talent.sections, content, expanded, photos, reasonText])
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken<Item>[] }) => {
       const reelSection = viewableItems.find(
@@ -680,6 +738,8 @@ export function DeckCard({
               }
               if (item.kind === "end")
                 return <EndOfPortfolio onShare={onShare} onDecide={onDecide} />
+              if (item.kind === "reason")
+                return <ReasonCard text={item.text} width={width} sectionWidth={sectionWidth} />
               if (item.kind === "photo")
                 return (
                   <View className="items-center pt-3" style={{ width }}>
@@ -700,19 +760,22 @@ export function DeckCard({
               // items, and a fixed estimate clips whatever it under-counts (wrapped chips,
               // long credits, large text sizes).
               return (
-                <View className="items-center pt-3" style={{ width }}>
+                <View className="items-center pt-4" style={{ width }}>
+                  {/* The shadow sits outside the clip: one view can't both clip and cast it. */}
                   <View
-                    className="bg-surface overflow-hidden rounded-lg"
-                    style={{ width: sectionWidth }}
+                    className="bg-surface rounded-lg"
+                    style={{ width: sectionWidth, boxShadow: shadow.card }}
                   >
-                    <PortfolioVideoGate active={item.key === activeVideo}>
-                      {renderStudioSection(
-                        item.section,
-                        mediaMeta,
-                        sectionWidth,
-                        { content }
-                      )}
-                    </PortfolioVideoGate>
+                    <View className="overflow-hidden rounded-lg">
+                      <PortfolioVideoGate active={item.key === activeVideo}>
+                        {renderStudioSection(
+                          item.section,
+                          mediaMeta,
+                          sectionWidth,
+                          { content }
+                        )}
+                      </PortfolioVideoGate>
+                    </View>
                   </View>
                 </View>
               )

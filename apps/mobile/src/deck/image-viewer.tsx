@@ -140,13 +140,13 @@ function ViewerPages({
             backgroundColor: "rgba(255, 255, 255, 0.16)",
           }}
         >
-          <Icon name="close" size={18} tone="onInverse" />
+          <Icon name="close" size={18} color="#FFFFFF" />
         </Pressable>
         {count > 1 ? (
           <Text
             variant="body-sm"
-            tone="onInverse"
-            style={{ fontVariant: ["tabular-nums"] }}
+            // Always on the viewer's black, whatever the scheme.
+            style={{ color: "#FFFFFF", fontVariant: ["tabular-nums"] }}
           >
             {page + 1} / {count}
           </Text>

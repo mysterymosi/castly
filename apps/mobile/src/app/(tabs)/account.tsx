@@ -1,6 +1,6 @@
 import { router } from "expo-router"
 import { useState } from "react"
-import { ActivityIndicator, View } from "react-native"
+import { ActivityIndicator, Pressable, View } from "react-native"
 
 import { authApi } from "@/auth/client"
 import { errorMessage, useSession } from "@/auth/session-provider"
@@ -21,6 +21,11 @@ import {
   useActiveMode,
   type ActiveMode,
 } from "@/mode/active-mode"
+import {
+  setAppearance,
+  useAppearancePreference,
+  type AppearancePreference,
+} from "@/theme/appearance"
 import { queryClient, trpcQuery } from "@/trpc/query-client"
 
 const modes: Record<
@@ -143,6 +148,13 @@ export default function AccountScreen() {
         ) : null}
       </View>
 
+      <View className="gap-3">
+        <Text variant="caption" tone="muted">
+          Appearance
+        </Text>
+        <AppearanceSwitch />
+      </View>
+
       <Button
         label="Sign out"
         variant="ghost"
@@ -234,6 +246,50 @@ function ModeTile({
           </Text>
         </View>
       </PressableScale>
+    </View>
+  )
+}
+
+const appearanceOptions: { value: AppearancePreference; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+]
+
+/** System (the default) follows the phone; Light and Dark override it on this device. */
+function AppearanceSwitch() {
+  const preference = useAppearancePreference()
+  return (
+    <View
+      className="flex-row gap-1 rounded-pill border border-border bg-surface p-1"
+      accessibilityRole="radiogroup"
+      accessibilityLabel="Appearance"
+    >
+      {appearanceOptions.map((option) => {
+        const selected = option.value === preference
+        return (
+          // Plain Pressable: PressableScale's full-width wrapper breaks a row of segments.
+          <Pressable
+            key={option.value}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            accessibilityLabel={option.label}
+            onPress={() => {
+              if (selected) return
+              haptics.selection()
+              setAppearance(option.value)
+            }}
+            className={cn(
+              "min-h-11 flex-1 items-center justify-center rounded-pill active:opacity-70",
+              selected && "bg-inverse"
+            )}
+          >
+            <Text variant="label" tone={selected ? "onInverse" : "default"}>
+              {option.label}
+            </Text>
+          </Pressable>
+        )
+      })}
     </View>
   )
 }

@@ -27,8 +27,9 @@ module.exports = {
     "../../packages/portfolio-native/src/**/*.{js,jsx,ts,tsx}",
   ],
   presets: [require("nativewind/preset")],
-  // Dark-only: no `dark:` variant; the dark palette is the root palette.
-  darkMode: "class",
+  // Light and dark palettes swap through CSS variables; the scheme follows `Appearance`, which
+  // the Account setting (system, light, dark) overrides.
+  darkMode: "media",
   theme: {
     colors: {
       transparent: "transparent",
@@ -54,7 +55,8 @@ module.exports = {
   plugins: [
     plugin(({ addBase }) => {
       addBase({
-        ":root": cssVars("dark"),
+        ":root": cssVars("light"),
+        "@media (prefers-color-scheme: dark)": { ":root": cssVars("dark") },
       })
     }),
   ],

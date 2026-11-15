@@ -1,4 +1,4 @@
-import { palette, shadow } from "@workspace/ui-tokens"
+import { shadow } from "@workspace/ui-tokens"
 import { View } from "react-native"
 
 import { Icon, type IconName } from "@/components/ui/icon"
@@ -6,7 +6,7 @@ import { PressableScale } from "@/components/ui/pressable-scale"
 
 export type DeckDecision = "pass" | "interested" | "save"
 
-/** Spotify's transport row: glass circles either side of a big white play button. */
+/** Spotify's transport row: two quiet circles either side of a big ink one (tokens, so both schemes work). */
 function ActionButton({
   icon,
   label,
@@ -28,21 +28,13 @@ function ActionButton({
       accessibilityLabel={label}
       onPress={onPress}
       testID={testID}
-      className={`rounded-pill items-center justify-center ${primary ? "h-[72px] w-[72px]" : "h-14 w-14"}`}
-      style={
-        primary
-          ? { backgroundColor: "#FFFFFF", boxShadow: shadow.raised }
-          : {
-              backgroundColor: "rgba(255, 255, 255, 0.14)",
-              borderWidth: 1,
-              borderColor: "rgba(255, 255, 255, 0.22)",
-            }
-      }
+      className={`rounded-pill items-center justify-center ${primary ? "h-[72px] w-[72px] bg-inverse" : "h-14 w-14 border border-border bg-surface"}`}
+      style={primary ? { boxShadow: shadow.raised } : undefined}
     >
       <Icon
         name={icon}
         size={primary ? 30 : 22}
-        color={primary ? palette.ink : "#FFFFFF"}
+        tone={primary ? "onInverse" : "text"}
       />
     </PressableScale>
   )
@@ -60,7 +52,6 @@ export function DecisionActions({
 }) {
   return (
     <View
-      // The deck is dark, so each button uses light-on-dark colours whatever the system theme.
       className="flex-row items-center justify-center"
       style={{ gap: 36 }}
     >

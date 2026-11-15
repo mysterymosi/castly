@@ -9,6 +9,10 @@ export const palette = {
   sand: "#EFE9DF",
   sandBorder: "#E3DCCF",
   sandBorderStrong: "#8C857A",
+  /** Light mode's neutrals (Bumble's): white page and cards, grey chips, hairline dividers. */
+  mist: "#F3F3F3",
+  mistBorder: "#E4E4E4",
+  mistBorderStrong: "#8E8E8E",
   muted: "#8A8F98",
   mutedOnLight: "#5C6169",
   gold: "#F5B83D",
@@ -46,11 +50,12 @@ export type ColorRole =
 
 export const colors: Record<ColorScheme, Record<ColorRole, string>> = {
   light: {
-    bg: palette.ivory,
+    // White on white: cards stand off the page by their shadow (`shadow.card`), not a tint.
+    bg: palette.paper,
     surface: palette.paper,
-    surfaceMuted: palette.sand,
-    border: palette.sandBorder,
-    borderStrong: palette.sandBorderStrong,
+    surfaceMuted: palette.mist,
+    border: palette.mistBorder,
+    borderStrong: palette.mistBorderStrong,
     text: palette.ink,
     textMuted: palette.mutedOnLight,
     accent: palette.gold,
@@ -201,7 +206,8 @@ export const radius = {
 } as const
 
 export const shadow = {
-  card: "0px 2px 12px rgba(14, 15, 19, 0.06)",
+  /** Soft and wide, so white cards read on a white page (light mode). */
+  card: "0px 2px 16px rgba(0, 0, 0, 0.08)",
   raised: "0px 8px 24px rgba(14, 15, 19, 0.14)",
 } as const
 

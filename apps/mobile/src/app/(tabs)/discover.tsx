@@ -34,6 +34,9 @@ const SITE_URL = (
   process.env.EXPO_PUBLIC_SITE_URL ?? "https://castly.app"
 ).replace(/\/$/, "")
 
+/** Space around the card: from the screen edges, and above the tab bar. */
+const CARD_GUTTER = 8
+
 const DIRECTION = {
   pass: "pass",
   interested: "interest",
@@ -70,7 +73,6 @@ export default function DiscoverScreen() {
     frame && screenHeight > 0
       ? { top: frame.y, bottom: screenHeight - frame.y - frame.height }
       : null
-  const [headerHeight, setHeaderHeight] = useState(0)
   // The measured frame's bottom includes the tab bar; its top can come back 0, so the status bar
   // height comes from the safe-area context.
   const insets = useSafeAreaInsets()
@@ -155,9 +157,9 @@ export default function DiscoverScreen() {
   if (!deck.cards || !deck.goal) return <LoadingState label="Loading talent" />
   const goal = deck.goal
 
-  // The deck runs full bleed, under the status bar and the tab bar, like a now-playing screen; the
-  // header floats over it. Native tabs only inset the first ScrollView on iOS, so a SafeAreaView
-  // (whose bottom edge includes the tab bar) is measured for the insets instead.
+  // Header on top, the card below it as a rounded panel inset from the edges and clear of the tab
+  // bar (Bumble's layout). Native tabs only inset the first ScrollView on iOS, so a SafeAreaView
+  // (whose bottom edge includes the tab bar) is measured for the bottom inset instead.
   return (
     <View
       className="bg-bg flex-1"
@@ -179,39 +181,10 @@ export default function DiscoverScreen() {
           }}
         />
       </SafeAreaView>
-      {safe ? (
-        <SwipeDeck
-          key={deck.sessionId}
-          ref={deckRef}
-          cards={deck.cards}
-          exhausted={deck.exhausted}
-          loadMoreError={
-            deck.loadMoreError
-              ? errorMessage(deck.loadMoreError, "Could not load more talent")
-              : null
-          }
-          onNearEnd={deck.loadMore}
-          onDecision={onDecision}
-          onShare={onShare}
-          onRestart={deck.restart}
-          insets={{ top: headerHeight, bottom: safe.bottom }}
-        />
-      ) : null}
       <View
-        pointerEvents="box-none"
-        onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
-        style={[
-          {
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            // Above the deck's cards, which carry their own zIndex.
-            zIndex: 10,
-            paddingTop: Math.max(safe?.top ?? 0, insets.top),
-          },
-          topScrim,
-        ]}
+        // Above the deck's cards, which carry their own zIndex, so a card swiped up passes under it.
+        style={{ zIndex: 10, paddingTop: Math.max(safe?.top ?? 0, insets.top) }}
+        className="bg-bg"
       >
         <View className="flex-row items-center gap-3 px-5 pt-2 pb-3">
           <View className="flex-1">
@@ -227,7 +200,7 @@ export default function DiscoverScreen() {
           <IconButton
             icon="undo"
             shape="squircle"
-            variant="glass"
+            variant="raised"
             size={48}
             accessibilityLabel={
               deck.undosLeft === null
@@ -241,7 +214,7 @@ export default function DiscoverScreen() {
           <IconButton
             icon="data-saver"
             shape="squircle"
-            variant={dataSaver ? "accent" : "glass"}
+            variant={dataSaver ? "accent" : "raised"}
             size={48}
             testID="deck-data-saver"
             accessibilityRole="switch"
@@ -257,7 +230,7 @@ export default function DiscoverScreen() {
           <IconButton
             icon="settings"
             shape="squircle"
-            variant="glass"
+            variant="raised"
             size={48}
             accessibilityLabel="Deck settings"
             onPress={() => setSettingsOpen(true)}
@@ -280,6 +253,34 @@ export default function DiscoverScreen() {
         ) : null}
         <DataSaverOffer />
       </View>
+      <View
+        className="flex-1"
+        style={{
+          marginHorizontal: CARD_GUTTER,
+          // The safe-area inset already reaches over the floating tab bar.
+          marginBottom: Math.min(safe?.bottom ?? 0, insets.bottom) + CARD_GUTTER,
+        }}
+      >
+        {safe ? (
+          <SwipeDeck
+            key={deck.sessionId}
+            ref={deckRef}
+            cards={deck.cards}
+            exhausted={deck.exhausted}
+            loadMoreError={
+              deck.loadMoreError
+                ? errorMessage(deck.loadMoreError, "Could not load more talent")
+                : null
+            }
+            onNearEnd={deck.loadMore}
+            onDecision={onDecision}
+            onShare={onShare}
+            onRestart={deck.restart}
+            // The card sits clear of the header and the tab bar: nothing is laid over it.
+            insets={{ top: 0, bottom: 0 }}
+          />
+        ) : null}
+      </View>
       <DeckSettingsSheet
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -294,9 +295,3 @@ export default function DiscoverScreen() {
     </View>
   )
 }
-
-/** Keeps the header legible over a pale photo. */
-const topScrim = {
-  experimental_backgroundImage:
-    "linear-gradient(to bottom, rgba(14, 15, 19, 0.75) 0%, rgba(14, 15, 19, 0.35) 70%, rgba(14, 15, 19, 0) 100%)",
-} as const

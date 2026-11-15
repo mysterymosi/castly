@@ -47,8 +47,10 @@ export type { DeckDecision }
 const COMMIT_FRACTION = 0.28
 const FLICK_VELOCITY = 900
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
-/** Clear space between a card's last line and the tab bar below it. */
-const TAB_BAR_GAP = 16
+/** The caption's gap from the foot of the card, and the list's last padding. */
+const FOOT_GAP = 16
+/** The card's corners (radius.xl): a panel inset from the screen, not a full-bleed screen. */
+const CARD_RADIUS = 24
 /** Ask for the next page when this many cards are left: enough for the 5-card prefetch ahead. */
 const NEAR_END = 5
 
@@ -79,8 +81,8 @@ type Props = {
   /** The next page failed; past the last card, offer to retry instead of waiting. */
   loadMoreError?: string | null
   /**
-   * What the screen lays over the deck, which runs full bleed under it: the status bar and header
-   * above, the tab bar below. The decision buttons are in the card, at the end of the portfolio.
+   * Anything the screen lays over the deck (0 when the deck sits clear of the header and tab
+   * bar). The decision buttons are in the card, at the end of the portfolio.
    */
   insets: { top: number; bottom: number }
   ref?: Ref<SwipeDeckHandle>
@@ -138,7 +140,7 @@ export function SwipeDeck({
   const width = size?.width ?? 0
   const height = size?.height ?? 0
   const chrome = useMemo(
-    () => ({ top: insets.top, bottom: insets.bottom + TAB_BAR_GAP }),
+    () => ({ top: insets.top, bottom: insets.bottom + FOOT_GAP }),
     [insets.top, insets.bottom]
   )
   const offscreen = (size?.width ?? 0) * 1.5
@@ -441,41 +443,52 @@ function DeckSlot({
             onAction(event.nativeEvent.actionName as DeckDecision)
           }
         >
-          {!ready ? (
-            <View style={{ position: "absolute", top: 0, left: 0 }}>
-              <DeckCardPreview
-                card={card}
-                width={width}
-                height={height}
-                chrome={chrome}
-              />
-            </View>
-          ) : null}
-          {isTop ? (
-            <View
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                opacity: ready ? 1 : 0,
-              }}
-            >
-              <DeckCard
-                card={card}
-                width={width}
-                height={height}
-                chrome={chrome}
-                scrollGesture={scrollGesture}
-                scrollMomentum={scrollMomentum}
-                onShare={onShare}
-                onDecide={onAction}
-                onReady={() => {
-                  setReady(true)
-                  onShown?.()
+          {/* The panel's rounding and clip sit on a plain view: NativeWind's interop drops them
+              from an Animated.View's style. The stamps stay outside, so they aren't cut off. */}
+          <View
+            style={{
+              width,
+              height,
+              borderRadius: CARD_RADIUS,
+              overflow: "hidden",
+            }}
+          >
+            {!ready ? (
+              <View style={{ position: "absolute", top: 0, left: 0 }}>
+                <DeckCardPreview
+                  card={card}
+                  width={width}
+                  height={height}
+                  chrome={chrome}
+                />
+              </View>
+            ) : null}
+            {isTop ? (
+              <View
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  opacity: ready ? 1 : 0,
                 }}
-              />
-            </View>
-          ) : null}
+              >
+                <DeckCard
+                  card={card}
+                  width={width}
+                  height={height}
+                  chrome={chrome}
+                  scrollGesture={scrollGesture}
+                  scrollMomentum={scrollMomentum}
+                  onShare={onShare}
+                  onDecide={onAction}
+                  onReady={() => {
+                    setReady(true)
+                    onShown?.()
+                  }}
+                />
+              </View>
+            ) : null}
+          </View>
           {isTop ? (
             <>
               <Stamp
