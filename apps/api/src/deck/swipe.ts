@@ -73,7 +73,7 @@ async function shortlistFor(tx: Tx, bookerId: string, roleId: string | null) {
   return row!.id
 }
 
-/** Today's interest count for the talent, for exposure reporting (`talent_exposure_daily`). */
+/** Today's count of interests the talent received, for exposure reporting (`talent_exposure_daily`). */
 async function countInterest(tx: Tx, talentId: string, delta: 1 | -1, day: Date | null = null) {
   const date = day ? sql`${day.toISOString()}::timestamptz::date` : sql`current_date`
   if (delta === 1) {
@@ -151,7 +151,9 @@ export async function swipeCard(db: Db, bookerId: string, input: z.output<typeof
       entryAdded,
       interestId: sent.interestId,
     })
-    if (input.direction === "interest") await countInterest(tx, card.talentId, 1)
+    // Exposure counts interests the talent actually received. A swipe that sent none (one is
+    // already open, or the talent declined) must not move it.
+    if (sent.interestId) await countInterest(tx, card.talentId, 1)
 
     return {
       shortlistId,
@@ -213,7 +215,8 @@ export async function undoSwipe(db: Db, bookerId: string, sessionId: string) {
           )
       }
     }
-    if (last.direction === "interest") await countInterest(tx, last.talentId, -1, last.createdAt)
+    // Only a swipe that sent an interest counted one, so only it gives one back.
+    if (last.interestId) await countInterest(tx, last.talentId, -1, last.createdAt)
 
     return {
       position: last.position!,

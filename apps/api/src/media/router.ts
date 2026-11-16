@@ -8,25 +8,29 @@ import {
 } from "@workspace/schema"
 
 import { callProcedure } from "../trpc/errors.js"
-import { router, talentProcedure } from "../trpc/trpc.js"
+import { router, authedProcedure } from "../trpc/trpc.js"
 import { createUploadUrl, deleteMedia, getMediaStatus } from "./service.js"
 
+/**
+ * Uploads are open to any signed-in user: talents for their portfolio, either side of a chat for
+ * media messages. Every procedure acts only on the caller's own media (`loadOwnedMedia`).
+ */
 export const mediaRouter = router({
-  createUploadUrl: talentProcedure
+  createUploadUrl: authedProcedure
     .input(createUploadUrlInput)
     .output(createUploadUrlOutput)
     .mutation(({ ctx, input }) => {
       return callProcedure(() => createUploadUrl(ctx.db, ctx.userId, input))
     }),
 
-  status: talentProcedure
+  status: authedProcedure
     .input(mediaStatusInput)
     .output(mediaStatusOutput)
     .query(({ ctx, input }) => {
       return callProcedure(() => getMediaStatus(ctx.db, ctx.userId, input.mediaId))
     }),
 
-  delete: talentProcedure
+  delete: authedProcedure
     .input(deleteMediaInput)
     .output(deleteMediaOutput)
     .mutation(({ ctx, input }) => {

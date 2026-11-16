@@ -161,6 +161,57 @@ describe("a right-swipe sends an interest", () => {
   })
 })
 
+describe("exposure counts interests sent, not swipes", () => {
+  afterEach(cleanupDeckFixtures)
+
+  const interestsToday = async (talentId: string) => {
+    const [row] = await db
+      .select({ n: schema.talentExposureDaily.interests })
+      .from(schema.talentExposureDaily)
+      .where(eq(schema.talentExposureDaily.talentId, talentId))
+    return row?.n ?? 0
+  }
+
+  it("does not count a swipe that sent nothing, and undoing it takes nothing away", async () => {
+    const w = await world()
+    const t = await talent(w, "count-dupe")
+    const { userId: bookerId, api } = await booker(w, "count-dupe-booker")
+    const roleId = await role(bookerId, { categoryId: w.categoryId })
+    const first = await served(api, { roleId })
+    const second = await served(api, { roleId })
+
+    await api.deck.swipe({ sessionId: first.sessionId, position: first.at(t.userId), direction: "interest" })
+    await api.deck.swipe({ sessionId: second.sessionId, position: second.at(t.userId), direction: "interest" })
+    expect(await interestsFor(t.userId)).toHaveLength(1)
+    expect(await interestsToday(t.userId)).toBe(1)
+
+    // Undo the duplicate swipe (the latest): the one real interest keeps its count.
+    await api.deck.undo({ sessionId: second.sessionId })
+    expect(await interestsFor(t.userId)).toHaveLength(1)
+    expect(await interestsToday(t.userId)).toBe(1)
+
+    // Undo the swipe that did send it: now the count goes.
+    await api.deck.undo({ sessionId: first.sessionId })
+    expect(await interestsFor(t.userId)).toEqual([])
+    expect(await interestsToday(t.userId)).toBe(0)
+  })
+
+  it("does not count a swipe after the talent declined", async () => {
+    const w = await world()
+    const t = await talent(w, "count-declined")
+    const { userId: bookerId, api } = await booker(w, "count-declined-booker")
+    const roleId = await role(bookerId, { categoryId: w.categoryId })
+    const first = await served(api, { roleId })
+    const second = await served(api, { roleId })
+
+    await api.deck.swipe({ sessionId: first.sessionId, position: first.at(t.userId), direction: "interest" })
+    await t.api.interest.decline({ interestId: (await interestsFor(t.userId))[0]!.id })
+    await api.deck.swipe({ sessionId: second.sessionId, position: second.at(t.userId), direction: "interest" })
+
+    expect(await interestsToday(t.userId)).toBe(1)
+  })
+})
+
 describe("interest.accept and decline", () => {
   afterEach(cleanupDeckFixtures)
 

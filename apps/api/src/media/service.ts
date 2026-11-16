@@ -258,7 +258,8 @@ export async function applyMediaReadyEvent(db: Db, event: MediaProviderReadyEven
   schedulePublicPortfolioRevalidate(db, rows[0].ownerId)
 }
 
-function toMediaStatus(row: typeof schema.mediaAssets.$inferSelect): MediaStatusOutput {
+/** A media row as clients see it: variants and playback URLs, no owner. */
+export function toMediaStatus(row: typeof schema.mediaAssets.$inferSelect): MediaStatusOutput {
   const providerRef = row.providerRef
   if (row.status === "ready" && providerRef && row.provider === "cf_images") {
     assertCloudflareDeliveryConfig()

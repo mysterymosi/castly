@@ -14,6 +14,7 @@ import { bookerRouter } from "../booker/router.js"
 import { deckRouter } from "../deck/router.js"
 import { interestRouter } from "../interest/router.js"
 import { mediaRouter } from "../media/router.js"
+import { messageRouter } from "../message/router.js"
 import { projectRouter, roleRouter } from "../project/router.js"
 import { shortlistRouter } from "../shortlist/router.js"
 import { talentRouter } from "../talent/router.js"
@@ -132,6 +133,7 @@ export const appRouter = router({
   interest: interestRouter,
   shortlist: shortlistRouter,
   media: mediaRouter,
+  message: messageRouter,
   project: projectRouter,
   role: roleRouter,
   talent: talentRouter,

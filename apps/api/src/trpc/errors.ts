@@ -9,6 +9,7 @@ import { BookerError } from "../booker/errors.js"
 import { DeckError } from "../deck/errors.js"
 import { InterestError } from "../interest/errors.js"
 import { MediaError } from "../media/errors.js"
+import { MessageError } from "../message/errors.js"
 import { ProjectError } from "../project/errors.js"
 import { StudioError } from "../talent/errors.js"
 import { PublicReadRateLimited } from "../talent/public-rate-limit.js"
@@ -90,6 +91,11 @@ const projectCode = {
   publish_unavailable: "FORBIDDEN",
 } as const
 
+const messageCode = {
+  conversation_not_found: "NOT_FOUND",
+  media_not_usable: "BAD_REQUEST",
+} as const
+
 /** Map known domain failures to tRPC codes. Unexpected errors stay 500 and keep their cause. */
 export function throwTrpc(error: unknown): never {
   if (error instanceof MediaError) {
@@ -130,6 +136,13 @@ export function throwTrpc(error: unknown): never {
   if (error instanceof InterestError) {
     throw new TRPCError({
       code: interestCode[error.code],
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof MessageError) {
+    throw new TRPCError({
+      code: messageCode[error.code],
       message: error.message,
       cause: error,
     })
