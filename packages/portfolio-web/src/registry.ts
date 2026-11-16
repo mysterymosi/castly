@@ -1,5 +1,4 @@
 import { AboutSection } from "./sections/about"
-import { GallerySection } from "./sections/gallery"
 import { HeroSection } from "./sections/hero"
 import {
   AttributesSection,
@@ -15,7 +14,6 @@ import type { CoreSectionType, WebSectionRegistry } from "./types"
 export const webSectionRegistry = {
   hero: HeroSection,
   about: AboutSection,
-  gallery: GallerySection,
   showreel: ShowreelSection,
   credits: CreditsSection,
   attributes: AttributesSection,

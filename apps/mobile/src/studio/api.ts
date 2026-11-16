@@ -35,6 +35,18 @@ export const studioApi = {
       asStudioState(await trpc.talent.studio.updateProfile.mutate(input))
     )
   },
+  /** Primary first; replaces every category the talent had. */
+  setCategories(categoryIds: string[]) {
+    return invoke(async () =>
+      asStudioState(await trpc.talent.categories.set.mutate({ categoryIds }))
+    )
+  },
+  /** The deck card's canvas; null removes it. */
+  setCanvas(mediaId: string | null) {
+    return invoke(async () =>
+      asStudioState(await trpc.talent.studio.setCanvas.mutate({ mediaId }))
+    )
+  },
   completeQuickStart(
     input: Parameters<typeof trpc.talent.studio.completeQuickStart.mutate>[0]
   ) {
@@ -47,37 +59,10 @@ export const studioApi = {
       trpc.talent.studio.createPlaceholderPhotos.mutate({ count })
     )
   },
-  createSection(
-    type: Parameters<typeof trpc.talent.sections.create.mutate>[0]["type"]
-  ) {
+  /** The showreel; null removes it. */
+  setShowreel(mediaId: string | null) {
     return invoke(async () =>
-      asStudioState(await trpc.talent.sections.create.mutate({ type }))
-    )
-  },
-  updateSection(input: Parameters<typeof trpc.talent.sections.update.mutate>[0]) {
-    return invoke(async () =>
-      asStudioState(await trpc.talent.sections.update.mutate(input))
-    )
-  },
-  deleteSection(sectionId: string) {
-    return invoke(async () =>
-      asStudioState(await trpc.talent.sections.delete.mutate({ sectionId }))
-    )
-  },
-  reorderSections(sectionIds: string[]) {
-    return invoke(async () =>
-      asStudioState(await trpc.talent.sections.reorder.mutate({ sectionIds }))
-    )
-  },
-  applyTemplate(
-    templateId: Parameters<
-      typeof trpc.talent.sections.applyTemplate.mutate
-    >[0]["templateId"]
-  ) {
-    return invoke(async () =>
-      asStudioState(
-        await trpc.talent.sections.applyTemplate.mutate({ templateId })
-      )
+      asStudioState(await trpc.talent.studio.setShowreel.mutate({ mediaId }))
     )
   },
   publish() {
@@ -90,11 +75,49 @@ export const studioApi = {
       asStudioState(await trpc.talent.studio.unpublish.mutate())
     )
   },
-  setAttribute(definitionKey: string, valueText: string) {
+  /** Every photo in order, Main first; leaving one out removes it. */
+  setPhotos(mediaIds: string[]) {
+    return invoke(async () => asStudioState(await trpc.talent.photos.set.mutate({ mediaIds })))
+  },
+  /** An uploaded photo into `mediaId`'s slot. */
+  replacePhoto(mediaId: string, withMediaId: string) {
     return invoke(async () =>
-      asStudioState(
-        await trpc.talent.attributes.set.mutate({ definitionKey, valueText })
-      )
+      asStudioState(await trpc.talent.photos.replace.mutate({ mediaId, withMediaId }))
     )
+  },
+  /** An uploaded photo into the next free slot. */
+  addPhoto(mediaId: string) {
+    return invoke(async () => asStudioState(await trpc.talent.photos.add.mutate({ mediaId })))
+  },
+  /** One attribute; no value clears it, `isVisible` alone shows or hides it. */
+  setAttribute(input: Parameters<typeof trpc.talent.attributes.set.mutate>[0]) {
+    return invoke(async () => asStudioState(await trpc.talent.attributes.set.mutate(input)))
+  },
+  setSkills(input: Parameters<typeof trpc.talent.skills.set.mutate>[0]) {
+    return invoke(async () => asStudioState(await trpc.talent.skills.set.mutate(input)))
+  },
+  createCredit(input: Parameters<typeof trpc.talent.credits.create.mutate>[0]) {
+    return invoke(async () => asStudioState(await trpc.talent.credits.create.mutate(input)))
+  },
+  updateCredit(input: Parameters<typeof trpc.talent.credits.update.mutate>[0]) {
+    return invoke(async () => asStudioState(await trpc.talent.credits.update.mutate(input)))
+  },
+  deleteCredit(creditId: string) {
+    return invoke(async () => asStudioState(await trpc.talent.credits.delete.mutate({ creditId })))
+  },
+  reorderCredits(creditIds: string[]) {
+    return invoke(async () => asStudioState(await trpc.talent.credits.reorder.mutate({ creditIds })))
+  },
+  setLanguages(languages: Parameters<typeof trpc.talent.languages.set.mutate>[0]["languages"]) {
+    return invoke(async () => asStudioState(await trpc.talent.languages.set.mutate({ languages })))
+  },
+  setAccents(accentIds: string[]) {
+    return invoke(async () => asStudioState(await trpc.talent.accents.set.mutate({ accentIds })))
+  },
+  setRates(rates: Parameters<typeof trpc.talent.rates.set.mutate>[0]["rates"]) {
+    return invoke(async () => asStudioState(await trpc.talent.rates.set.mutate({ rates })))
+  },
+  setAvailability(months: Parameters<typeof trpc.talent.availability.set.mutate>[0]["months"]) {
+    return invoke(async () => asStudioState(await trpc.talent.availability.set.mutate({ months })))
   },
 }

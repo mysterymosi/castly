@@ -54,6 +54,19 @@ async function ensureCityId() {
   return created.id
 }
 
+const createdCategoryIds: string[] = []
+
+/** Publishing needs a category; each talent gets a throwaway one. */
+async function ensureCategoryId() {
+  const [created] = await db
+    .insert(schema.categories)
+    .values({ slug: `public-cat-${randomUUID().slice(0, 8)}`, name: "Actors", kind: "on_camera" })
+    .returning({ id: schema.categories.id })
+  if (!created) throw new Error("category insert failed")
+  createdCategoryIds.push(created.id)
+  return created.id
+}
+
 async function ensureSkillIds() {
   const ids: string[] = []
   for (const name of ["Stage combat", "Improvisation", "Voice"]) {
@@ -110,7 +123,7 @@ async function seedListRows(userId: string) {
   await db.insert(schema.talentAvailability).values({ talentId: userId, month: "2026-11", status: "partial" })
 }
 
-/** A live talent with a hidden about section, a public rate, and a rates section. */
+/** A live talent with a public day rate (the Rates section is part of every layout). */
 async function publishedTalent(label: string) {
   const userId = await seedAuthUser(label, adult)
   seededUserIds.push(userId)
@@ -123,22 +136,13 @@ async function publishedTalent(label: string) {
     bio: "Actor based in Ibadan.",
     skillIds: await ensureSkillIds(),
     photoMediaIds: photos.mediaIds,
+    categoryIds: [await ensureCategoryId()],
   })
   await db
     .update(schema.talentProfiles)
     .set({ headline: "Actor · Ibadan" })
     .where(eq(schema.talentProfiles.userId, userId))
 
-  const withAbout = await api.talent.sections.create({ type: "about" })
-  const about = withAbout.talent.sections.filter((s) => s.type === "about").at(-1)
-  if (!about) throw new Error("about section missing")
-  await api.talent.sections.update({
-    sectionId: about.id,
-    schemaVersion: about.schemaVersion,
-    config: { body: "Hidden draft bio" },
-    isVisible: false,
-  })
-  await api.talent.sections.create({ type: "rates" })
   await db.insert(schema.talentRates).values({
     talentId: userId,
     kind: "day",
@@ -175,6 +179,10 @@ describe("talent.public", () => {
           .delete(schema.attributeDefinitions)
           .where(eq(schema.attributeDefinitions.id, id))
       }
+    }
+    while (createdCategoryIds.length > 0) {
+      const id = createdCategoryIds.pop()
+      if (id) await db.delete(schema.categories).where(eq(schema.categories.id, id))
     }
     while (createdCityIds.length > 0) {
       const id = createdCityIds.pop()

@@ -33,21 +33,6 @@ function sessionFromIntent(intent: UploadIntent): CreateUploadUrlOutput | null {
   }
 }
 
-async function attachShowreel(mediaId: string) {
-  let state = await studioApi.get()
-  let section = state.talent.sections.find((s) => s.type === "showreel")
-  if (!section) {
-    state = await studioApi.createSection("showreel")
-    section = state.talent.sections.find((s) => s.type === "showreel")
-  }
-  if (!section) throw new Error("Could not create showreel section")
-  await studioApi.updateSection({
-    sectionId: section.id,
-    schemaVersion: section.schemaVersion,
-    config: { mediaId },
-  })
-}
-
 export class UploadQueueProcessor {
   private running = false
   private listeners = new Set<UploadQueueListener>()
@@ -132,7 +117,9 @@ export class UploadQueueProcessor {
     try {
       let working = { ...intent }
       if (working.kind === "image" && !working.compressedUri) {
-        working.compressedUri = await compressImage(working.fileUri)
+        working.compressedUri = await compressImage(working.fileUri, {
+          canvas: working.goal === "canvas",
+        })
         this.patch(working.id, { compressedUri: working.compressedUri })
       }
 
@@ -150,7 +137,14 @@ export class UploadQueueProcessor {
       const ready = await waitForReady(working.mediaId)
 
       if (working.goal === "showreel") {
-        await attachShowreel(ready.id)
+        await studioApi.setShowreel(ready.id)
+      }
+      if (working.goal === "canvas") {
+        await studioApi.setCanvas(ready.id)
+      }
+      if (working.goal === "photo") {
+        if (working.replaceMediaId) await studioApi.replacePhoto(working.replaceMediaId, ready.id)
+        else await studioApi.addPhoto(ready.id)
       }
 
       this.patch(working.id, {

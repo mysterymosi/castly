@@ -8,13 +8,16 @@ export const talentQualityScoreJob = "talent.quality-score"
 
 /**
  * Writes `talent_profiles.quality_score`.
- * Loads completeness, ready media, showreel, and credits only.
+ * Loads completeness, ready media, the showreel, and credits only.
  * Does not read follower counts or `talent_attributes` (sensitive fields stay out).
  * Verification tier stays `none` until M7 has a stored tier to pass in.
  */
 export async function runQualityScoreJob(db: Db, userId: string) {
   const [profile] = await db
-    .select({ completenessScore: schema.talentProfiles.completenessScore })
+    .select({
+      completenessScore: schema.talentProfiles.completenessScore,
+      showreelMediaId: schema.talentProfiles.showreelMediaId,
+    })
     .from(schema.talentProfiles)
     .where(eq(schema.talentProfiles.userId, userId))
     .limit(1)
@@ -30,14 +33,6 @@ export async function runQualityScoreJob(db: Db, userId: string) {
     .where(
       and(eq(schema.mediaAssets.ownerId, userId), eq(schema.mediaAssets.status, "ready"))
     )
-
-  const sections = await db
-    .select({
-      type: schema.portfolioSections.type,
-      isVisible: schema.portfolioSections.isVisible,
-    })
-    .from(schema.portfolioSections)
-    .where(eq(schema.portfolioSections.talentId, userId))
 
   const creditRows = await db
     .select({ id: schema.credits.id })
@@ -57,14 +52,14 @@ export async function runQualityScoreJob(db: Db, userId: string) {
     completenessScore: Number(profile.completenessScore),
     readyMediaCount: media.length,
     meanImageShortEdge,
-    hasShowreel: sections.some((row) => row.isVisible && row.type === "showreel"),
+    hasShowreel: Boolean(profile.showreelMediaId),
     creditCount: creditRows.length,
     verificationTier: "none",
   })
 
   await db
     .update(schema.talentProfiles)
-    .set({ qualityScore: score.toFixed(2), updatedAt: new Date() })
+    .set({ qualityScore: score.toFixed(2) })
     .where(eq(schema.talentProfiles.userId, userId))
 
   return score

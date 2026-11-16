@@ -1,6 +1,6 @@
 import { router } from "expo-router"
 import { useState } from "react"
-import { View } from "react-native"
+import { ActivityIndicator, Pressable, View } from "react-native"
 
 import { authApi } from "@/auth/client"
 import { errorMessage, useSession } from "@/auth/session-provider"
@@ -8,30 +8,46 @@ import { Logo } from "@/components/brand/logo"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Icon, type IconName } from "@/components/ui/icon"
+import { PressableScale } from "@/components/ui/pressable-scale"
 import { Screen } from "@/components/ui/screen"
 import { InlineError } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
+import { useTokens } from "@/hooks/use-tokens"
+import { cn } from "@/lib/cn"
 import { haptics } from "@/lib/haptics"
+import {
+  modeHome,
+  setActiveMode,
+  useActiveMode,
+  type ActiveMode,
+} from "@/mode/active-mode"
+import {
+  setAppearance,
+  useAppearancePreference,
+  type AppearancePreference,
+} from "@/theme/appearance"
 import { queryClient, trpcQuery } from "@/trpc/query-client"
 
-type Mode = "talent" | "booker"
-
-const modes: Record<Mode, { title: string; body: string; icon: IconName }> = {
+const modes: Record<
+  ActiveMode,
+  { title: string; body: string; icon: IconName }
+> = {
   talent: {
     title: "Talent",
-    body: "Build a portfolio and decision card that bookers can review.",
+    body: "Your studio and portfolio",
     icon: "star",
   },
   booker: {
     title: "Booker",
-    body: "Find and shortlist talent for your productions.",
+    body: "Discover and shortlist talent",
     icon: "briefcase",
   },
 }
 
 export default function AccountScreen() {
   const { me, refreshMe, signOut } = useSession()
-  const [pending, setPending] = useState<Mode | "signOut" | null>(null)
+  const activeMode = useActiveMode()
+  const [pending, setPending] = useState<ActiveMode | "signOut" | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   if (!me) return null
@@ -39,18 +55,29 @@ export default function AccountScreen() {
   const label = me.email ?? me.phone ?? "Your account"
   const initial = label.trim().charAt(0).toUpperCase() || "C"
 
-  async function enable(mode: Mode) {
+  /** Switches the tab bar to `mode`, turning the mode on first if the account doesn't have it. */
+  async function switchTo(mode: ActiveMode) {
+    if (!me || pending) return
+    if (me.modes.includes(mode)) {
+      if (mode !== activeMode) enterMode(mode)
+      return
+    }
     setPending(mode)
     setError(null)
     try {
       await authApi.enableMode(mode)
       await refreshMe()
       await queryClient.invalidateQueries(
-        mode === "booker" ? trpcQuery.booker.pathFilter() : trpcQuery.talent.pathFilter(),
+        mode === "booker"
+          ? trpcQuery.booker.pathFilter()
+          : trpcQuery.talent.pathFilter()
       )
       haptics.success()
       // Booker mode is only useful once we know what kind of work they do (PRD §6.2).
-      if (mode === "booker") router.push("/booker-setup")
+      enterMode(
+        mode,
+        mode === "booker" ? () => router.push("/booker-setup") : undefined
+      )
     } catch (caught) {
       haptics.error()
       setError(errorMessage(caught, "Could not enable that mode"))
@@ -72,7 +99,7 @@ export default function AccountScreen() {
 
       <Card className="flex-row items-center gap-4">
         <View
-          className="h-16 w-16 items-center justify-center rounded-pill bg-accent"
+          className="rounded-pill h-16 w-16 items-center justify-center bg-accent"
           importantForAccessibility="no-hide-descendants"
         >
           <Text variant="title" tone="onAccent" maxFontSizeMultiplier={1.3}>
@@ -84,8 +111,8 @@ export default function AccountScreen() {
             {label}
           </Text>
           <Text variant="footnote" tone="muted">
-            {me.modes.length > 0
-              ? `Active as ${me.modes.filter((m) => m !== "admin").join(" and ") || "admin"}`
+            {me.modes.includes(activeMode)
+              ? `In ${modes[activeMode].title.toLowerCase()} mode`
               : "Choose how you'll use Castly"}
           </Text>
         </View>
@@ -93,68 +120,39 @@ export default function AccountScreen() {
 
       <View className="gap-3">
         <Text variant="caption" tone="muted">
-          How you use Castly
+          Mode
         </Text>
-        {(Object.keys(modes) as Mode[]).map((mode) => {
-          const info = modes[mode]
-          const active = me.modes.includes(mode)
-          return (
-            <Card key={mode} className="gap-4">
-              <View className="flex-row items-start gap-3">
-                <View className="h-11 w-11 items-center justify-center rounded-pill bg-surfaceMuted">
-                  <Icon name={info.icon} size={20} />
-                </View>
-                <View className="flex-1 gap-1">
-                  <View className="flex-row items-center gap-2">
-                    <Text variant="body-strong">{info.title}</Text>
-                    {active ? (
-                      <View className="flex-row items-center gap-1 rounded-pill bg-interested/15 px-2 py-0.5">
-                        <Icon name="check" size={12} tone="interestedText" />
-                        <Text variant="footnote" tone="interested">
-                          Active
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text variant="body-sm" tone="muted">
-                    {info.body}
-                  </Text>
-                </View>
-              </View>
-              {active ? (
-                mode === "talent" ? (
-                  <Button
-                    label="Open portfolio studio"
-                    variant="secondary"
-                    size="md"
-                    icon="arrow-right"
-                    iconPosition="right"
-                    onPress={() => router.navigate("/studio")}
-                  />
-                ) : (
-                  <Button
-                    label="Booker profile"
-                    variant="secondary"
-                    size="md"
-                    icon="arrow-right"
-                    iconPosition="right"
-                    onPress={() => router.push("/booker-setup")}
-                  />
-                )
-              ) : (
-                <Button
-                  label={`Enable ${info.title.toLowerCase()} mode`}
-                  variant={mode === "talent" ? "primary" : "inverse"}
-                  size="md"
-                  loading={pending === mode}
-                  disabled={pending !== null}
-                  onPress={() => enable(mode)}
-                />
-              )}
-            </Card>
-          )
-        })}
+        <View className="flex-row gap-3" accessibilityRole="radiogroup">
+          {(Object.keys(modes) as ActiveMode[]).map((mode) => (
+            <ModeTile
+              key={mode}
+              mode={mode}
+              selected={mode === activeMode}
+              enabled={me.modes.includes(mode)}
+              loading={pending === mode}
+              disabled={pending !== null}
+              onPress={() => void switchTo(mode)}
+            />
+          ))}
+        </View>
         {error ? <InlineError message={error} /> : null}
+        {activeMode === "booker" && me.modes.includes("booker") ? (
+          <Button
+            label="Booker profile"
+            variant="secondary"
+            size="md"
+            icon="arrow-right"
+            iconPosition="right"
+            onPress={() => router.push("/booker-setup")}
+          />
+        ) : null}
+      </View>
+
+      <View className="gap-3">
+        <Text variant="caption" tone="muted">
+          Appearance
+        </Text>
+        <AppearanceSwitch />
       </View>
 
       <Button
@@ -166,5 +164,132 @@ export default function AccountScreen() {
         className="self-center"
       />
     </Screen>
+  )
+}
+
+/**
+ * Shows `mode`'s tabs, then opens its home tab. The jump waits a tick: until the tab bar has
+ * re-rendered, the home tab is still hidden, and a hidden tab can't take focus.
+ */
+function enterMode(mode: ActiveMode, then?: () => void) {
+  setActiveMode(mode)
+  setTimeout(() => {
+    router.navigate(modeHome[mode])
+    then?.()
+  }, 0)
+}
+
+/** One side of the mode switch: the selected tile is ink; a mode not yet on says so. */
+function ModeTile({
+  mode,
+  selected,
+  enabled,
+  loading,
+  disabled,
+  onPress,
+}: {
+  mode: ActiveMode
+  selected: boolean
+  enabled: boolean
+  loading: boolean
+  disabled: boolean
+  onPress: () => void
+}) {
+  const info = modes[mode]
+  const { color } = useTokens()
+  return (
+    // PressableScale fills its parent's width; this View is what shares the row.
+    <View className="flex-1">
+      <PressableScale
+        haptic="selection"
+        accessibilityRole="radio"
+        accessibilityState={{ selected, busy: loading, disabled }}
+        accessibilityLabel={`${info.title} mode. ${enabled ? info.body : `Not turned on. Tap to turn on ${info.title.toLowerCase()} mode`}`}
+        disabled={disabled}
+        onPress={onPress}
+        className={cn(
+          "min-h-36 justify-between gap-4 rounded-xl p-4",
+          selected ? "bg-inverse" : "bg-surface border border-border"
+        )}
+      >
+        <View className="flex-row items-center justify-between">
+          <View
+            className={cn(
+              "rounded-pill h-11 w-11 items-center justify-center",
+              selected ? "bg-accent" : "bg-surfaceMuted"
+            )}
+          >
+            {loading ? (
+              <ActivityIndicator
+                color={selected ? color.onAccent : color.text}
+              />
+            ) : (
+              <Icon
+                name={info.icon}
+                size={20}
+                tone={selected ? "onAccent" : "text"}
+              />
+            )}
+          </View>
+          {selected ? <Icon name="check" size={18} tone="onInverse" /> : null}
+        </View>
+        <View className="gap-0.5">
+          <Text variant="title-sm" tone={selected ? "onInverse" : "default"}>
+            {info.title}
+          </Text>
+          <Text
+            variant="footnote"
+            tone={selected ? "onInverse" : "muted"}
+            className={selected ? "opacity-80" : undefined}
+          >
+            {enabled ? info.body : "Tap to turn on"}
+          </Text>
+        </View>
+      </PressableScale>
+    </View>
+  )
+}
+
+const appearanceOptions: { value: AppearancePreference; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+]
+
+/** System (the default) follows the phone; Light and Dark override it on this device. */
+function AppearanceSwitch() {
+  const preference = useAppearancePreference()
+  return (
+    <View
+      className="flex-row gap-1 rounded-pill border border-border bg-surface p-1"
+      accessibilityRole="radiogroup"
+      accessibilityLabel="Appearance"
+    >
+      {appearanceOptions.map((option) => {
+        const selected = option.value === preference
+        return (
+          // Plain Pressable: PressableScale's full-width wrapper breaks a row of segments.
+          <Pressable
+            key={option.value}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            accessibilityLabel={option.label}
+            onPress={() => {
+              if (selected) return
+              haptics.selection()
+              setAppearance(option.value)
+            }}
+            className={cn(
+              "min-h-11 flex-1 items-center justify-center rounded-pill active:opacity-70",
+              selected && "bg-inverse"
+            )}
+          >
+            <Text variant="label" tone={selected ? "onInverse" : "default"}>
+              {option.label}
+            </Text>
+          </Pressable>
+        )
+      })}
+    </View>
   )
 }

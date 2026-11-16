@@ -15,3 +15,5 @@ Before editing files for a substantial task:
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
+
+Push back when you disagree; state a recommendation with trade-offs named, not a survey.

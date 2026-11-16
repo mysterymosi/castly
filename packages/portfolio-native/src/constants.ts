@@ -12,4 +12,3 @@ export const TAG_ROW_HEIGHT = 36
 /** Default media aspect ratios when `mediaMeta` has no dimensions. */
 export const DEFAULT_HERO_ASPECT = 5 / 4
 export const DEFAULT_SHOWREEL_ASPECT = 16 / 9
-export const DEFAULT_GALLERY_TILE_ASPECT = 1

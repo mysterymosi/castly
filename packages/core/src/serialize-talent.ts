@@ -41,6 +41,8 @@ export type TalentRecord = {
     rateVisibility: TalentRateVisibility
   }
   sections: TalentSectionDto[]
+  /** Studio order, Main first; ready images only (the loader filters). */
+  photoMediaIds: string[]
   skillIds: string[]
   rates: TalentRateDto[]
   /** List-section rows; attributes are filtered here, the rest are public. */
@@ -145,6 +147,7 @@ export function serializeTalent(
     sections: talent.sections.filter(
       (section) => (owner || section.isVisible) && (rates || section.type !== "rates"),
     ),
+    photoMediaIds: talent.photoMediaIds,
     skillIds: talent.skillIds,
     content: { ...talent.content, attributes: portfolioAttributes(talent) },
   }

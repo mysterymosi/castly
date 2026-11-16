@@ -2,17 +2,20 @@ import type { DeckCard } from "@workspace/schema"
 import { Image } from "expo-image"
 import { useEffect } from "react"
 
-import { mediaUri } from "@/deck/deck-card"
+import { cardCanvas, mediaUri } from "@/deck/deck-card"
 import { useDataSaver } from "@/media/data-saver"
 
 /** Cards ahead of the focused one whose decision layer (lead photo) is fetched early. */
 export const DECISION_PREFETCH_AHEAD = 5
 
-/** The decision layer's image: the first lead photo, or a video's poster. */
+/** The decision layer's images: the first lead photo (or a video's poster) and a still canvas. */
 export function decisionLayerUrls(card: DeckCard): string[] {
   const lead = card.decision.leadMediaIds[0]
   const uri = lead ? mediaUri(card, lead) : null
-  return uri ? [uri] : []
+  const canvas = cardCanvas(card)
+  return [uri, canvas?.kind === "still" ? canvas.uri : null].filter(
+    (url): url is string => !!url,
+  )
 }
 
 /**

@@ -41,7 +41,10 @@ describe("webSectionRegistry", () => {
 describe("PortfolioSections", () => {
   it("server-renders every core type in position order with no client script", () => {
     const html = renderFixture()
-    expect(renderedSectionTypes(html)).toEqual([...corePortfolioSectionTypes])
+    // Photos sit between sections; the sections themselves keep position order.
+    expect(renderedSectionTypes(html).filter((type) => type !== "photo")).toEqual([
+      ...corePortfolioSectionTypes,
+    ])
     expect(html).not.toContain("<script")
   })
 
@@ -55,14 +58,23 @@ describe("PortfolioSections", () => {
     expect(html).toContain("172 cm")
   })
 
+  it("spreads the photos between sections, each in a photo shell", () => {
+    const html = renderFixture()
+    const order = [...html.matchAll(/data-section-type="([a-z_]+)"/g)].map((m) => m[1])
+    expect(order.filter((type) => type === "photo")).toHaveLength(fixtureMediaIds.photos.length)
+    expect(order[0]).toBe("hero")
+    // Never two photos in a row while sections remain between them.
+    expect(order.join(",")).not.toContain("photo,photo")
+  })
+
   it("omits hidden sections", () => {
     expect(renderFixture()).not.toContain("Hidden draft bio")
   })
 
   it("renders only ready media", () => {
     const html = renderFixture()
-    for (const mediaId of fixtureMediaIds.gallery) {
-      expect(html).toContain(`data-media-id="${mediaId}"`)
+    for (const mediaId of fixtureMediaIds.photos) {
+      expect(html).toContain(`/${mediaId}/`)
     }
     expect(html).not.toContain(fixtureMediaIds.processing)
     expect(html).toContain(`stream.mux.com/${fixtureMediaIds.showreel}.m3u8`)

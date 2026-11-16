@@ -9,7 +9,7 @@ const id = (n: number) => `01932f8a-7b6e-7000-8000-${String(n).padStart(12, "0")
 export const fixtureMediaIds = {
   hero: id(101),
   about: id(102),
-  gallery: [id(103), id(104), id(105)],
+  photos: [id(103), id(104), id(105)],
   showreel: id(106),
   processing: id(107),
 } as const
@@ -35,7 +35,7 @@ const image = (mediaId: string): MediaStatusOutput => ({
 export const fixtureMedia: Record<string, MediaStatusOutput> = {
   [fixtureMediaIds.hero]: image(fixtureMediaIds.hero),
   [fixtureMediaIds.about]: image(fixtureMediaIds.about),
-  ...Object.fromEntries(fixtureMediaIds.gallery.map((m) => [m, image(m)])),
+  ...Object.fromEntries(fixtureMediaIds.photos.map((m) => [m, image(m)])),
   [fixtureMediaIds.showreel]: {
     id: fixtureMediaIds.showreel,
     kind: "video",
@@ -85,10 +85,6 @@ export const fixtureSections: TalentSectionDto[] = [
     body: "Stage and screen actor trained at the Nigerian Film Institute.",
     mediaId: fixtureMediaIds.about,
   }),
-  section("gallery", {
-    mediaIds: [...fixtureMediaIds.gallery, fixtureMediaIds.processing],
-    layout: "grid",
-  }),
   section("showreel", { mediaId: fixtureMediaIds.showreel, headline: "2026 reel" }),
   section("credits", { signatureOnly: false, limit: 2 }),
   section("attributes", { showHidden: false }),
@@ -102,6 +98,8 @@ export const fixtureSections: TalentSectionDto[] = [
 export const fixtureNow = new Date(Date.UTC(2026, 9, 24))
 
 export const fixtureContent: PortfolioContent = {
+  // A processing photo stays out of both renderers until it is ready.
+  photoMediaIds: [...fixtureMediaIds.photos, fixtureMediaIds.processing],
   credits: [
     {
       title: "King of Boys III",
@@ -171,7 +169,6 @@ const sparse: FixturePortfolio = {
   sections: [
     section("hero", { style: "minimal", mediaId: null, headline: "Voice artist", showBadges: false }, { schemaVersion: 2 }),
     section("about", {}),
-    section("gallery", { mediaIds: [], layout: "grid" }),
     section("showreel", { mediaId: null }),
     section("credits", { signatureOnly: false }),
     section("skills", {}),
@@ -190,19 +187,20 @@ const reordered: FixturePortfolio = {
     section("languages", { showAccents: false }, { at: 10 }),
     section("hero", {
       style: "split",
-      mediaId: fixtureMediaIds.gallery[0],
+      mediaId: fixtureMediaIds.photos[0],
       headline: "Dancer",
       subtitle: "Abuja",
       showBadges: false,
     }, { schemaVersion: 2, at: 0 }),
     section("availability", { horizonMonths: 1 }, { at: 30 }),
-    section("gallery", { mediaIds: [fixtureMediaIds.gallery[2], fixtureMediaIds.gallery[1]], layout: "masonry" }, { at: 20 }),
     section("rates", { showCurrency: false }, { at: 50 }),
     section("skills", {}, { at: 5, isVisible: false }),
   ],
   media: fixtureMedia,
   content: {
     ...fixtureContent,
+    // This hero has its own image, so Main is spread with the other photos.
+    photoMediaIds: [fixtureMediaIds.photos[2], fixtureMediaIds.photos[1]],
     rates: [
       { kind: "project", amountMin: null, amountMax: 2_000_000, currency: "NGN", negotiable: false },
       { kind: "half_day", amountMin: null, amountMax: null, currency: "NGN", negotiable: true },

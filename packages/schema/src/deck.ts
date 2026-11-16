@@ -16,8 +16,13 @@ export const deckDecisionSchema = z.object({
   categoryKind: categoryKindSchema.nullable(),
   /** From the visible playing-age attributes (on-camera only). */
   ageRange: z.object({ min: z.number().nullable(), max: z.number().nullable() }).nullable(),
-  /** Card lead first, then hero and gallery photos; at most five, ready only. */
+  /**
+   * The lead photo: the talent's Main photo (photo 1), when it is ready. One at most since photos
+   * replaced the gallery; the rest are spread between the portfolio's sections.
+   */
   leadMediaIds: z.array(z.uuid()).max(5),
+  /** The card's canvas, once ready and within `canvasSpec`; it plays behind the name instead of the photos. */
+  canvasMediaId: z.uuid().nullable().default(null),
   creditCount: z.number().int(),
   signatureCredit: z
     .object({ title: z.string(), roleName: z.string().nullable(), year: z.number().nullable() })

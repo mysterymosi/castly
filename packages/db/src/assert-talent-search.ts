@@ -92,10 +92,12 @@ try {
     throw new Error("Hidden rate visibility still projects the day rate")
   }
 
-  await db`
-    insert into portfolio_sections (talent_id, type, position, is_visible, config)
-    values (${talentId}, 'showreel', 0, true, '{}'::jsonb)
+  const [reel] = await db<{ id: string }[]>`
+    insert into media_assets (owner_id, kind, provider, status)
+    values (${talentId}, 'video', 'mux', 'ready')
+    returning id
   `
+  await db`update talent_profiles set showreel_media_id = ${reel!.id} where user_id = ${talentId}`
   await db`insert into credits (talent_id, title) values (${talentId}, 'The Lagoon')`
   const enriched = await onlyRow()
   if (!enriched.has_showreel || enriched.credit_count !== 1) {
@@ -126,7 +128,7 @@ try {
   if ((await searchRows()).length !== 0) throw new Error("Deleting the profile left a talent_search row")
 
   console.log(
-    "talent_search checks passed: one row per talent, incremental language/rate/section/credit/city sync, live index plan, delete cascade.",
+    "talent_search checks passed: one row per talent, incremental language/rate/showreel/credit/city sync, live index plan, delete cascade.",
   )
   console.log(planText)
 } finally {

@@ -26,7 +26,7 @@ const handBuiltProfile = {
   bio: null,
   cityId: null,
   cityName: null,
-  cardConfig: { leadMediaId: null, highlightFacts: [] },
+  cardConfig: { leadMediaId: null, canvasMediaId: null, canvasEnabled: true, highlightFacts: [] },
   publishedAt: null,
   rateVisibility: "hidden" as const,
   status: "live" as const,
@@ -48,6 +48,7 @@ const emptyContent = {
 const handBuiltOwner: OwnerTalentDto = {
   profile: handBuiltProfile,
   sections: [],
+  photoMediaIds: [],
   skillIds: [],
   content: emptyContent,
   rates: [],
@@ -57,6 +58,7 @@ const handBuiltOwner: OwnerTalentDto = {
 const handBuiltPublic: TalentDto = {
   profile: handBuiltProfile,
   sections: [],
+  photoMediaIds: [],
   skillIds: [],
   content: emptyContent,
 }
@@ -105,6 +107,7 @@ describe("serializeTalent is the only way out", () => {
     const record: TalentRecord = {
       profile: { ...handBuiltProfile, publishedAt: null, quickStartCompletedAt: null },
       sections: [],
+      photoMediaIds: [],
       skillIds: [],
       rates: [],
       content: emptyContent,

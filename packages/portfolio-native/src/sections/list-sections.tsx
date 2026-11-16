@@ -83,7 +83,7 @@ function Row({
 
 function Primary({ children }: { children: ReactNode }) {
   return (
-    <Text numberOfLines={1} maxFontSizeMultiplier={1.3} className="font-bodyMedium text-body text-text">
+    <Text numberOfLines={1} maxFontSizeMultiplier={1.3} className="font-bodySemibold text-body text-text">
       {children}
     </Text>
   )
@@ -91,7 +91,7 @@ function Primary({ children }: { children: ReactNode }) {
 
 function Secondary({ children }: { children: ReactNode }) {
   return (
-    <Text numberOfLines={1} maxFontSizeMultiplier={1.3} className="font-body text-footnote text-textMuted">
+    <Text numberOfLines={1} maxFontSizeMultiplier={1.3} className="font-bodyMedium text-footnote text-textMuted">
       {children}
     </Text>
   )
@@ -220,12 +220,13 @@ function SkillsSection({ config, content, cardWidth = CARD_WIDTH }: SectionRende
         {selectSkills(config, content).map((skill) => (
           <View
             key={skill.name}
-            className={`h-7 justify-center rounded-pill px-3 ${skill.highlighted ? "bg-accent" : "bg-surfaceMuted"}`}
+            // Grey in both schemes (surfaceMuted is each scheme's grey), highlighted or not.
+            className="h-7 justify-center rounded-pill bg-surfaceMuted px-3"
           >
             <Text
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
-              className={`font-body text-footnote ${skill.highlighted ? "text-onAccent" : "text-text"}`}
+              className="font-bodyMedium text-footnote text-text"
             >
               {skill.name}
             </Text>
@@ -267,10 +268,10 @@ function LanguagesSection({ config, content, cardWidth = CARD_WIDTH }: SectionRe
         <Text
           numberOfLines={1}
           maxFontSizeMultiplier={1.3}
-          className="mt-2 font-body text-footnote text-textMuted"
+          className="mt-2 font-bodyMedium text-footnote text-textMuted"
           style={{ height: ACCENTS_LINE_HEIGHT - 8 }}
         >
-          <Text className="font-bodyMedium text-text">{portfolioLabels.accents}</Text> {accents}
+          <Text className="font-bodySemibold text-text">{portfolioLabels.accents}</Text> {accents}
         </Text>
       ) : null}
     </SectionShell>

@@ -10,7 +10,15 @@ import { corePortfolioSectionTypes } from "../portfolio/types"
 const serializedTalentBrand = "SerializedTalent"
 
 export const cardConfigSchema = z.object({
+  /** Superseded by the Main photo (`talent_photos` position 0); kept so stored configs parse. */
   leadMediaId: z.uuid().nullable().default(null),
+  /** The deck card's looping canvas (`canvas.ts`); set only through `studio.setCanvas`. */
+  canvasMediaId: z.uuid().nullable().default(null),
+  /**
+   * Whether the card leads with the canvas or the photos. The talent chooses in the studio; the
+   * canvas stays uploaded when off. Bookers have no switch of their own.
+   */
+  canvasEnabled: z.boolean().default(true),
   highlightFacts: z.array(z.string().max(80)).max(3).default([]),
 })
 
@@ -94,6 +102,8 @@ export const talentDtoSchema = z
       qualityScore: ownerProfileShape.qualityScore.optional(),
     }),
     sections: z.array(talentSectionDtoSchema),
+    /** The talent's photos in studio order; the first is Main. Public, like the page itself. */
+    photoMediaIds: z.array(z.uuid()),
     skillIds: z.array(z.uuid()),
     content: talentContentDtoSchema,
     rates: z.array(talentRateDtoSchema).optional(),
@@ -105,6 +115,7 @@ export const ownerTalentDtoSchema = z
   .object({
     profile: z.object({ ...publicProfileShape, ...ownerProfileShape }),
     sections: z.array(talentSectionDtoSchema),
+    photoMediaIds: z.array(z.uuid()),
     skillIds: z.array(z.uuid()),
     content: talentContentDtoSchema,
     rates: z.array(talentRateDtoSchema),

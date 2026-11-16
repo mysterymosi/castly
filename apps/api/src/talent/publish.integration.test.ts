@@ -47,6 +47,19 @@ async function ensureCityId() {
   return created.id
 }
 
+const createdCategoryIds: string[] = []
+
+/** Publishing needs a category; each talent gets a throwaway one. */
+async function ensureCategoryId() {
+  const [created] = await db
+    .insert(schema.categories)
+    .values({ slug: `publish-cat-${randomUUID().slice(0, 8)}`, name: "Actors", kind: "on_camera" })
+    .returning({ id: schema.categories.id })
+  if (!created) throw new Error("category insert failed")
+  createdCategoryIds.push(created.id)
+  return created.id
+}
+
 async function ensureSkillIds() {
   const ids: string[] = []
   while (ids.length < 3) {
@@ -78,6 +91,23 @@ async function ensureEthnicity() {
   })
 }
 
+/** A ready Mux video owned by `ownerId`, for the showreel. */
+async function readyVideo(ownerId: string) {
+  const id = randomUUID()
+  await db.insert(schema.mediaAssets).values({
+    id,
+    ownerId,
+    kind: "video",
+    provider: "mux",
+    providerRef: `playback-${id}`,
+    status: "ready",
+    width: 1920,
+    height: 1080,
+    durationMs: 60_000,
+  })
+  return id
+}
+
 async function quickStart(userId: string) {
   const api = talentCaller(userId)
   const photos = await api.talent.studio.createPlaceholderPhotos({ count: 3 })
@@ -89,6 +119,7 @@ async function quickStart(userId: string) {
     bio: "Actor based in Lagos.",
     skillIds,
     photoMediaIds: photos.mediaIds,
+    categoryIds: [await ensureCategoryId()],
   })
 }
 
@@ -105,6 +136,10 @@ describe("talent publish", () => {
     while (createdLanguageIds.length > 0) {
       const id = createdLanguageIds.pop()
       if (id) await db.delete(schema.languages).where(eq(schema.languages.id, id))
+    }
+    while (createdCategoryIds.length > 0) {
+      const id = createdCategoryIds.pop()
+      if (id) await db.delete(schema.categories).where(eq(schema.categories.id, id))
     }
     while (createdCityIds.length > 0) {
       const id = createdCityIds.pop()
@@ -131,7 +166,8 @@ describe("talent publish", () => {
     const ready = await quickStart(userId)
     const beforeSection = Number(ready.talent.profile.completenessScore)
 
-    const withReel = await api.talent.sections.create({ type: "showreel" })
+    // The layout's Credits section scores nothing until it has a credit.
+    const withReel = await api.talent.credits.create({ title: "The Lagoon", roleName: "Lead" })
     expect(withReel.talent.profile.completenessScore).toBeGreaterThan(beforeSection)
     const [stored] = await db
       .select({ completenessScore: schema.talentProfiles.completenessScore })
@@ -190,7 +226,7 @@ describe("talent publish", () => {
     const api = talentCaller(userId)
     await api.auth.enableMode({ mode: "talent" })
     await quickStart(userId)
-    await api.talent.sections.create({ type: "showreel" })
+    await api.talent.studio.setShowreel({ mediaId: await readyVideo(userId) })
 
     const searchRows = () =>
       db
@@ -252,37 +288,35 @@ describe("talent publish", () => {
     ])
   })
 
-  it("returns sections at the current schema version, so an old row can be saved back", async () => {
-    const userId = await seedAuthUser("section-version", adult)
+  it("sets, scores and clears the showreel, which must be the talent's own video", async () => {
+    const userId = await seedAuthUser("showreel-set", adult)
     seededUserIds.push(userId)
     const api = talentCaller(userId)
     await api.auth.enableMode({ mode: "talent" })
-    await api.talent.studio.get()
+    const before = await quickStart(userId)
 
-    const [heroRow] = await db
-      .insert(schema.portfolioSections)
-      .values({
-        talentId: userId,
-        type: "hero",
-        position: 0,
-        schemaVersion: 1,
-        config: { style: "split", mediaId: null, headline: "Old hero", showBadges: true },
-      })
-      .returning({ id: schema.portfolioSections.id })
-    if (!heroRow) throw new Error("hero insert failed")
+    const video = await readyVideo(userId)
+    const withReel = await api.talent.studio.setShowreel({ mediaId: video })
+    const reel = withReel.talent.sections.find((section) => section.type === "showreel")
+    expect(reel?.config).toEqual({ mediaId: video })
+    expect(withReel.media[video]?.kind).toBe("video")
+    expect(withReel.completeness.score).toBeGreaterThan(before.completeness.score)
 
-    const state = await api.talent.studio.get()
-    const hero = state.talent.sections.find((section) => section.id === heroRow.id)
-    expect(hero?.schemaVersion).toBe(2)
-
-    const saved = await api.talent.sections.update({
-      sectionId: heroRow.id,
-      schemaVersion: hero!.schemaVersion,
-      config: { ...(hero!.config as object), headline: "New hero" },
+    const [photo] = before.talent.photoMediaIds
+    await expect(api.talent.studio.setShowreel({ mediaId: photo! })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
     })
-    const after = saved.talent.sections.find((section) => section.id === heroRow.id)
-    expect(after?.schemaVersion).toBe(2)
-    expect(after?.config).toMatchObject({ headline: "New hero" })
+    const other = await seedAuthUser("showreel-other", adult)
+    seededUserIds.push(other)
+    await expect(
+      api.talent.studio.setShowreel({ mediaId: await readyVideo(other) })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" })
+
+    const cleared = await api.talent.studio.setShowreel({ mediaId: null })
+    expect(cleared.talent.sections.find((section) => section.type === "showreel")?.config).toEqual({
+      mediaId: null,
+    })
+    expect(cleared.completeness.score).toBe(before.completeness.score)
   })
 })
 

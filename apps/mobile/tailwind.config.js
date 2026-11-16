@@ -27,6 +27,8 @@ module.exports = {
     "../../packages/portfolio-native/src/**/*.{js,jsx,ts,tsx}",
   ],
   presets: [require("nativewind/preset")],
+  // Light and dark palettes swap through CSS variables; the scheme follows `Appearance`, which
+  // the Account setting (system, light, dark) overrides.
   darkMode: "media",
   theme: {
     colors: {

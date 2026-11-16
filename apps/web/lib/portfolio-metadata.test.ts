@@ -23,6 +23,7 @@ function portfolio(
   overrides: {
     profile?: Partial<TalentRecord["profile"]>
     media?: PublicPortfolio["media"]
+    photoMediaIds?: string[]
   } = {}
 ): PublicPortfolio {
   const record: TalentRecord = {
@@ -34,7 +35,7 @@ function portfolio(
       bio: "Stage and screen actor.",
       cityId: null,
       cityName: "Lagos",
-      cardConfig: { leadMediaId: null, highlightFacts: [] },
+      cardConfig: { leadMediaId: null, canvasMediaId: null, canvasEnabled: true, highlightFacts: [] },
       status: "live",
       publishedAt: new Date("2026-10-01T00:00:00Z"),
       quickStartCompletedAt: null,
@@ -48,6 +49,7 @@ function portfolio(
       const current = readStoredPortfolioSection(section)
       return { ...section, schemaVersion: current.schemaVersion, config: current.config }
     }),
+    photoMediaIds: overrides.photoMediaIds ?? [...fixtureMediaIds.photos],
     skillIds: [],
     rates: [],
     content: { credits: [], attributes: [], skills: [], languages: [], accents: [], availability: [] },
@@ -73,12 +75,12 @@ describe("portfolioMetadata", () => {
       siteName: "Castly",
       title: "Tunde Adeyemi — Actor",
       description: "Actor · Lagos. Stage and screen actor.",
-      images: [{ url: ogUrl(fixtureMediaIds.hero), width: 1200, height: 630 }],
+      images: [{ url: ogUrl(fixtureMediaIds.photos[0]), width: 1200, height: 630 }],
     })
     expect(metadata.twitter).toMatchObject({
       card: "summary_large_image",
       title: "Tunde Adeyemi — Actor",
-      images: [{ url: ogUrl(fixtureMediaIds.hero) }],
+      images: [{ url: ogUrl(fixtureMediaIds.photos[0]) }],
     })
   })
 
@@ -91,40 +93,30 @@ describe("portfolioMetadata", () => {
 })
 
 describe("pickShareImage", () => {
-  it("prefers the card lead over the hero", () => {
-    const lead = fixtureMediaIds.gallery[1]
-    const image = pickShareImage(
-      portfolio({ profile: { cardConfig: { leadMediaId: lead, highlightFacts: [] } } })
-    )
-    expect(image?.url).toBe(ogUrl(lead))
+  it("prefers Main over the hero", () => {
+    const main = fixtureMediaIds.photos[1]
+    const image = pickShareImage(portfolio({ photoMediaIds: [main, fixtureMediaIds.photos[0]] }))
+    expect(image?.url).toBe(ogUrl(main))
   })
 
-  it("skips media that is not ready and falls through to the gallery", () => {
-    const { [fixtureMediaIds.hero]: hero, ...rest } = fixtureMedia
+  it("skips a photo that is not ready and falls through to the next", () => {
+    const [main, second] = fixtureMediaIds.photos
+    const { [main]: mainMedia, ...rest } = fixtureMedia
     const image = pickShareImage(
-      portfolio({ media: { ...rest, [fixtureMediaIds.hero]: { ...hero!, status: "processing" } } })
+      portfolio({ media: { ...rest, [main]: { ...mainMedia!, status: "processing" } } })
     )
-    expect(image?.url).toBe(ogUrl(fixtureMediaIds.gallery[0]))
+    expect(image?.url).toBe(ogUrl(second))
   })
 
-  it("uses a cropped poster when the talent chose a video as their card lead", () => {
-    const reel = fixtureMediaIds.showreel
-    const image = pickShareImage(
-      portfolio({
-        profile: { cardConfig: { leadMediaId: reel, highlightFacts: [] } },
-        media: { [reel]: fixtureMedia[reel]! },
-      })
-    )
-    expect(image).toMatchObject({
-      url: `https://image.mux.com/${reel}/thumbnail.jpg?width=1200&height=630&fit_mode=smartcrop`,
-      width: 1200,
-      height: 630,
-    })
+  it("uses the hero image when there are no photos", () => {
+    expect(pickShareImage(portfolio({ photoMediaIds: [] }))?.url).toBe(ogUrl(fixtureMediaIds.hero))
   })
 
   it("ignores a showreel frame the talent did not choose", () => {
     const reel = fixtureMediaIds.showreel
-    expect(pickShareImage(portfolio({ media: { [reel]: fixtureMedia[reel]! } }))).toBeNull()
+    expect(
+      pickShareImage(portfolio({ photoMediaIds: [], media: { [reel]: fixtureMedia[reel]! } }))
+    ).toBeNull()
   })
 })
 

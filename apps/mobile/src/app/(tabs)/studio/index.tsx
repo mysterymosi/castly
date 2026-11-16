@@ -1,40 +1,28 @@
 import type { StudioState } from "@workspace/schema"
 import { router } from "expo-router"
 import { useState } from "react"
-import { ActivityIndicator, ScrollView, View } from "react-native"
-import { FadeIn, LinearTransition } from "react-native-reanimated"
+import { View } from "react-native"
+import { FadeIn } from "react-native-reanimated"
 
 import { authApi } from "@/auth/client"
 import { errorMessage, useSession } from "@/auth/session-provider"
 import { AnimatedView } from "@/components/ui/animated"
 import { Button } from "@/components/ui/button"
-import { Card, PressableCard } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Icon } from "@/components/ui/icon"
 import { IconButton } from "@/components/ui/icon-button"
 import { Screen } from "@/components/ui/screen"
 import { EmptyState, ErrorState, InlineError, Skeleton } from "@/components/ui/states"
 import { Text } from "@/components/ui/text"
-import { useTokens } from "@/hooks/use-tokens"
-import { cn } from "@/lib/cn"
-import { isIntentActive, uploadIntentLabel } from "@/media/upload-intent"
-import { useUploadQueue } from "@/media/upload-queue-provider"
-import { ProgressBar } from "@/components/ui/progress-bar"
 import { markPreviewRequested } from "@/lib/measure"
 import { studioApi } from "@/studio/api"
+import { CanvasCard } from "@/studio/canvas-card"
 import { CompletenessMeter } from "@/studio/completeness-meter"
-import { DecisionCardPreview } from "@/studio/decision-card-preview"
-import { sectionMeta, templates } from "@/studio/section-meta"
+import { PhotosGrid } from "@/studio/photos-grid"
+import { PortfolioSections } from "@/studio/portfolio-sections"
+import { PillsField, ProfileSection } from "@/studio/profile-section"
 import { useStudio } from "@/studio/studio-provider"
 import { queryClient, trpcQuery } from "@/trpc/query-client"
-
-function SectionHeading({ title, action }: { title: string; action?: React.ReactNode }) {
-  return (
-    <View className="mb-3 mt-8 flex-row items-center justify-between">
-      <Text variant="title-sm">{title}</Text>
-      {action}
-    </View>
-  )
-}
 
 function HubSkeleton() {
   return (
@@ -110,14 +98,10 @@ function QuickStartPrompt({ state }: { state: StudioState }) {
 export default function StudioHub() {
   const { me } = useSession()
   const studio = useStudio()
-  const { color } = useTokens()
-  const { intents, pickAndEnqueueShowreel, retry, dismiss } = useUploadQueue()
 
   if (!me?.modes.includes("talent")) return <EnableTalent />
 
   const { state, loading, loadError, actionError, pending, reload, run } = studio
-  const showreelUpload = intents.find((row) => row.goal === "showreel" && isIntentActive(row))
-  const failedShowreel = intents.find((row) => row.goal === "showreel" && row.phase === "failed")
 
   if (!state && loadError) {
     return (
@@ -128,24 +112,11 @@ export default function StudioHub() {
   }
 
   const quickStartDone = !!state?.talent.profile.quickStartCompletedAt
-  const ordered = state ? [...state.talent.sections].sort((a, b) => a.position - b.position) : []
 
-  function move(sectionId: string, direction: -1 | 1) {
-    const index = ordered.findIndex((s) => s.id === sectionId)
-    const target = index + direction
-    if (index < 0 || target < 0 || target >= ordered.length) return
-    const next = [...ordered]
-    const [item] = next.splice(index, 1)
-    next.splice(target, 0, item!)
-    void run(`move:${sectionId}`, () => studioApi.reorderSections(next.map((s) => s.id)), "Could not reorder")
-  }
-
-  function startShowreelUpload() {
-    void pickAndEnqueueShowreel()
-  }
-
-  const hasShowreel = ordered.some((s) => s.type === "showreel")
-  const showreelBusy = !!showreelUpload
+  const categoryNames = (state?.categoryIds ?? []).flatMap((id) => {
+    const name = state?.categories.find((c) => c.id === id)?.name
+    return name ? [name] : []
+  })
 
   return (
     <Screen scroll edges={["top"]} contentClassName="pt-2">
@@ -188,7 +159,9 @@ export default function StudioHub() {
                     ? "Publishing is turned off until this is lifted."
                     : state.completeness.canPublish
                       ? "Bookers can find you once this is published."
-                      : "Finish quick start before publishing."}
+                      : state.completeness.publishBlockers[0] === "category"
+                        ? "Pick what you do before publishing."
+                        : "Finish quick start before publishing."}
                 </Text>
               </View>
             </View>
@@ -216,212 +189,49 @@ export default function StudioHub() {
             )}
           </Card>
 
-          <SectionHeading title="Decision card" />
-          <PressableCard
-            accessibilityLabel="Decision card. Opens a preview"
-            onPress={() => {
-                markPreviewRequested()
-                router.push({ pathname: "/studio/preview", params: { tab: "card" } })
-              }}
-            className="flex-row items-center gap-4 p-3"
-          >
-            <View className="overflow-hidden rounded-lg" style={{ width: 96, height: 128 }} pointerEvents="none">
-              <DecisionCardPreview
-                displayName={state.talent.profile.displayName}
-                headline={state.talent.profile.headline}
-                cardConfig={state.talent.profile.cardConfig}
-                compact
-              />
-            </View>
-            <View className="flex-1 gap-1">
-              <Text variant="body-strong">What bookers see first</Text>
-              <Text variant="body-sm" tone="muted">
-                {state.talent.profile.cardConfig.highlightFacts.filter(Boolean).length}/3 highlights added
-              </Text>
-            </View>
-            <Icon name="chevron-right" size={18} tone="textMuted" />
-          </PressableCard>
-          <Button
-            label="Edit highlights"
-            variant="secondary"
-            size="md"
-            onPress={() => router.push("/studio/highlights")}
-            className="mt-3"
-          />
+          <ProfileSection title="Photos" subtitle="Up to 6. The first one is your Main photo.">
+            <PhotosGrid state={state} />
+          </ProfileSection>
 
-          <SectionHeading title="Template" />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            className="-mx-5"
-            contentContainerClassName="gap-3 px-5"
-          >
-            {templates.map((template) => {
-              const busy = pending === `template:${template.id}`
-              return (
-                <PressableCard
-                  key={template.id}
-                  accessibilityLabel={`Apply ${template.label} template. ${template.description}`}
-                  accessibilityState={{ busy, disabled: pending !== null }}
-                  disabled={pending !== null}
-                  onPress={() =>
-                    void run(`template:${template.id}`, () => studioApi.applyTemplate(template.id), "Could not apply template")
-                  }
-                  className="gap-3 p-4"
-                  style={{ width: 168 }}
-                >
-                  <View className="h-10 w-10 items-center justify-center rounded-pill bg-surfaceMuted">
-                    {busy ? <ActivityIndicator color={color.text} /> : <Icon name={template.icon} size={18} />}
-                  </View>
-                  <View className="gap-0.5">
-                    <Text variant="body-strong">{template.label}</Text>
-                    <Text variant="footnote" tone="muted">
-                      {template.description}
-                    </Text>
-                  </View>
-                </PressableCard>
-              )
-            })}
-          </ScrollView>
-
-          <SectionHeading
-            title="Sections"
-            action={
-              <Text variant="footnote" tone="muted">
-                {ordered.length} total
-              </Text>
+          <ProfileSection
+            title="What you do"
+            subtitle={
+              categoryNames.length > 0
+                ? "You show up for roles in these."
+                : "Until you pick, you won't show up for any role."
             }
-          />
-          <View className="gap-2">
-            {ordered.map((section, index) => {
-              const meta = sectionMeta[section.type]
-              const busy = pending === `move:${section.id}`
-              return (
-                <AnimatedView
-                  key={section.id}
-                  layout={LinearTransition.duration(220)}
-                  className="min-h-16 flex-row items-center gap-3 rounded-xl border border-border bg-surface py-2 pl-4 pr-2"
-                >
-                  <Icon name={meta.icon} size={18} tone="textMuted" />
-                  <View className="flex-1 gap-0.5">
-                    <Text variant="body-strong" numberOfLines={1}>
-                      {meta.label}
-                    </Text>
-                    <View
-                      className={cn(
-                        "flex-row items-center gap-1 self-start rounded-pill px-2 py-0.5",
-                        section.isVisible ? "bg-interested/15" : "bg-surfaceMuted",
-                      )}
-                    >
-                      <Icon
-                        name={section.isVisible ? "eye" : "eye-off"}
-                        size={11}
-                        tone={section.isVisible ? "interestedText" : "textMuted"}
-                      />
-                      <Text variant="footnote" tone={section.isVisible ? "interested" : "muted"}>
-                        {section.isVisible ? "Visible" : "Hidden"}
-                      </Text>
-                    </View>
-                  </View>
-                  {busy ? <ActivityIndicator color={color.text} className="mr-3" /> : null}
-                  <IconButton
-                    icon="chevron-up"
-                    variant="ghost"
-                    accessibilityLabel={`Move ${meta.label} up`}
-                    disabled={index === 0 || pending !== null}
-                    onPress={() => move(section.id, -1)}
-                  />
-                  <IconButton
-                    icon="chevron-down"
-                    variant="ghost"
-                    accessibilityLabel={`Move ${meta.label} down`}
-                    disabled={index === ordered.length - 1 || pending !== null}
-                    onPress={() => move(section.id, 1)}
-                  />
-                </AnimatedView>
-              )
-            })}
-            {ordered.length === 0 ? (
-              <EmptyState icon="layers" title="No sections yet" body="Add sections or apply a template to build your page." />
-            ) : null}
-          </View>
-          <Button
-            label="Add section"
-            icon="plus"
-            variant="secondary"
-            size="md"
-            onPress={() => router.push("/studio/add-section")}
-            className="mt-3"
-          />
+            warn={categoryNames.length === 0}
+          >
+            <PillsField
+              title="What you do"
+              values={categoryNames}
+              emptyLabel="Pick what you do"
+              onPress={() => router.push("/studio/categories")}
+            />
+          </ProfileSection>
 
-          <SectionHeading title="Showreel" />
-          <Card className="gap-3">
-            <View className="flex-row items-center gap-4">
-              <View className="h-12 w-12 items-center justify-center rounded-pill bg-surfaceMuted">
-                <Icon name="video" size={22} />
-              </View>
-              <View className="flex-1 gap-0.5">
-                <Text variant="body-strong">{hasShowreel ? "Replace showreel" : "Upload a showreel"}</Text>
-                <Text variant="footnote" tone="muted">
-                  {showreelBusy
-                    ? showreelUpload?.phase === "processing"
-                      ? "Processing video…"
-                      : "Uploading… you can leave the app"
-                    : failedShowreel
-                      ? (failedShowreel.error ?? "Upload failed")
-                      : "Pick a video from your library"}
-                </Text>
-              </View>
-              <Button
-                label={showreelBusy ? "Uploading" : failedShowreel ? "Retry" : "Upload"}
-                size="md"
-                variant="inverse"
-                loading={showreelBusy}
-                disabled={showreelBusy}
-                onPress={() => {
-                  if (failedShowreel) retry(failedShowreel.id)
-                  else startShowreelUpload()
-                }}
-              />
-            </View>
-            {showreelUpload ? (
-              <ProgressBar
-                value={showreelUpload.progress}
-                label={`${uploadIntentLabel(showreelUpload)} upload`}
-              />
-            ) : null}
-            {failedShowreel ? (
-              <Button
-                label="Dismiss"
-                variant="ghost"
-                size="md"
-                onPress={() => dismiss(failedShowreel.id)}
-              />
-            ) : null}
-          </Card>
+          <ProfileSection
+            title="Highlights"
+            subtitle="Up to 3 short facts on your card. Bookers read these before deciding."
+          >
+            <PillsField
+              title="Highlights"
+              values={state.talent.profile.cardConfig.highlightFacts.filter((f) => f.trim())}
+              emptyLabel="Add your highlights"
+              onPress={() => router.push("/studio/highlights")}
+            />
+          </ProfileSection>
 
-          {__DEV__ ? (
-            <>
-              <SectionHeading title="Developer" />
-              <Card className="gap-3 border-dashed">
-                <View className="flex-row items-center gap-2">
-                  <Icon name="code" size={16} tone="textMuted" />
-                  <Text variant="footnote" tone="muted" className="flex-1">
-                    Dev-only check: sensitive attributes must not change completeness.
-                  </Text>
-                </View>
-                <Button
-                  label="Set test ethnicity attribute"
-                  variant="ghost"
-                  size="md"
-                  loading={pending === "ethnicity"}
-                  onPress={() =>
-                    void run("ethnicity", () => studioApi.setAttribute("ethnicity", "black"), "Could not set attribute")
-                  }
-                />
-              </Card>
-            </>
-          ) : null}
+          <ProfileSection title="Canvas" subtitle="A short video or photo behind your name on the deck.">
+            <CanvasCard state={state} />
+          </ProfileSection>
+
+          <PortfolioSections state={state} />
+
+          <Text variant="footnote" tone="muted" className="mb-28 mt-8">
+            Bookers see your portfolio in this order, with your photos in between. Empty sections
+            stay hidden until you fill them in.
+          </Text>
         </AnimatedView>
       )}
     </Screen>

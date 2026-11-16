@@ -2,7 +2,15 @@ import type { MediaStatusOutput } from "@workspace/schema"
 import { Image } from "expo-image"
 import { StatusBar } from "expo-status-bar"
 import { useState } from "react"
-import { FlatList, Modal, Platform, Pressable, ScrollView, useWindowDimensions, View } from "react-native"
+import {
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  useWindowDimensions,
+  View,
+} from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 
 import { Icon } from "@/components/ui/icon"
@@ -11,7 +19,7 @@ import { Text } from "@/components/ui/text"
 export type ImageViewerState = { mediaIds: string[]; index: number }
 
 /**
- * A gallery's photos full screen, one per page, swiped sideways. Each page pinch-zooms on iOS
+ * The talent's photos full screen, one per page, swiped sideways. Each page pinch-zooms on iOS
  * (a zooming ScrollView); Android shows the photo fitted. The full variant loads over the card
  * variant already in memory.
  */
@@ -33,7 +41,9 @@ export function ImageViewer({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      {state ? <ViewerPages state={state} media={media} onClose={onClose} /> : null}
+      {state ? (
+        <ViewerPages state={state} media={media} onClose={onClose} />
+      ) : null}
     </Modal>
   )
 }
@@ -62,8 +72,14 @@ function ViewerPages({
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         initialScrollIndex={state.index}
-        getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-        onMomentumScrollEnd={(event) => setPage(Math.round(event.nativeEvent.contentOffset.x / width))}
+        getItemLayout={(_, i) => ({
+          length: width,
+          offset: width * i,
+          index: i,
+        })}
+        onMomentumScrollEnd={(event) =>
+          setPage(Math.round(event.nativeEvent.contentOffset.x / width))
+        }
         renderItem={({ item: id }) => {
           const item = media[id]
           const full = item?.variants?.full ?? item?.variants?.card
@@ -81,7 +97,13 @@ function ViewerPages({
               {full ? (
                 <Image
                   source={{ uri: full }}
-                  placeholder={card && card !== full ? { uri: card } : item?.blurhash ? { blurhash: item.blurhash } : undefined}
+                  placeholder={
+                    card && card !== full
+                      ? { uri: card }
+                      : item?.blurhash
+                        ? { blurhash: item.blurhash }
+                        : undefined
+                  }
                   placeholderContentFit="contain"
                   contentFit="contain"
                   style={{ width, height }}
@@ -118,10 +140,14 @@ function ViewerPages({
             backgroundColor: "rgba(255, 255, 255, 0.16)",
           }}
         >
-          <Icon name="close" size={18} tone="onInverse" />
+          <Icon name="close" size={18} color="#FFFFFF" />
         </Pressable>
         {count > 1 ? (
-          <Text variant="body-sm" tone="onInverse" style={{ fontVariant: ["tabular-nums"] }}>
+          <Text
+            variant="body-sm"
+            // Always on the viewer's black, whatever the scheme.
+            style={{ color: "#FFFFFF", fontVariant: ["tabular-nums"] }}
+          >
             {page + 1} / {count}
           </Text>
         ) : null}

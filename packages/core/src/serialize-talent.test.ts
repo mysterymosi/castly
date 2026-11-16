@@ -22,7 +22,7 @@ function talent(rateVisibility: TalentRateVisibility): TalentRecord {
       bio: "Actor based in Lagos.",
       cityId: null,
       cityName: "Lagos",
-      cardConfig: { leadMediaId: null, highlightFacts: [] },
+      cardConfig: { leadMediaId: null, canvasMediaId: null, canvasEnabled: true, highlightFacts: [] },
       status: "live",
       publishedAt: new Date("2026-10-01T00:00:00Z"),
       quickStartCompletedAt: new Date("2026-09-30T00:00:00Z"),
@@ -56,6 +56,7 @@ function talent(rateVisibility: TalentRateVisibility): TalentRecord {
         config: {},
       },
     ],
+    photoMediaIds: [],
     skillIds: [],
     rates: [
       { kind: "day", amountMin: 50000, amountMax: 80000, currency: "NGN", negotiable: true },

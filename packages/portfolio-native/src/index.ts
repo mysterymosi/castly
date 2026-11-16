@@ -3,12 +3,13 @@ export {
   mediaMetaFromStatus,
   PortfolioMediaProvider,
   PortfolioVideoGate,
-  type OpenGalleryImage,
+  type OpenPhoto,
   type PortfolioImageProps,
   type PortfolioMediaComponents,
   type PortfolioVideoProps,
 } from "./media"
 export { renderStudioSection } from "./render"
+export { estimatePhotoHeight, PortfolioPhoto } from "./sections/photo"
 export {
   assertStudioSectionType,
   estimateSectionHeight,

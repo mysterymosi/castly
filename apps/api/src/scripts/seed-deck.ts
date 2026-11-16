@@ -12,11 +12,7 @@
 import { randomUUID } from "node:crypto"
 
 import { LOCAL_DATABASE_URL, schema } from "@workspace/db"
-import {
-  currentSchemaVersion,
-  validatePortfolioSectionWrite,
-  type CoreSectionType,
-} from "@workspace/schema"
+import { PHOTO_SLOTS } from "@workspace/schema"
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm"
 import postgres from "postgres"
 
@@ -156,7 +152,7 @@ for (const [index, demo] of demos.entries()) {
     slug: `demo-${demo.name.toLowerCase().replace(/[^a-z]+/g, "-")}`,
     displayName: demo.name,
     headline: demo.headline,
-    bio: `${demo.headline}. Demo talent for the deck shell.`,
+    bio: `${demo.headline}. ${demo.facts.join(". ")}.`,
     cityId,
     status: "live",
     publishedAt: new Date(Date.now() - index * 60_000),
@@ -183,34 +179,20 @@ for (const [index, demo] of demos.entries()) {
     }
   }
 
-  const gallery = { type: "gallery" as const, config: { mediaIds: imageIds.slice(1), layout: "grid" } }
-  const showreel = videoId
-    ? [{ type: "showreel" as const, config: { mediaId: videoId, headline: isCrew ? "Recent work" : "2025 showreel" } }]
-    : []
-  // Crew portfolios lead with work samples and credits; on-camera with the hero shot.
-  const sections: { type: CoreSectionType; config: Record<string, unknown> }[] = isCrew
-    ? [
-        gallery,
-        ...showreel,
-        { type: "credits", config: { signatureOnly: false } },
-        { type: "about", config: { body: `${demo.headline} based in ${demo.city === "lagos" ? "Lagos" : "Abuja"}.` } },
-        { type: "skills", config: {} },
-      ]
-    : [
-        { type: "hero", config: { style: "full_bleed", mediaId: imageIds[0] ?? null, headline: demo.headline, showBadges: false } },
-        { type: "about", config: { body: `${demo.headline}. ${demo.facts.join(". ")}.` } },
-        ...showreel,
-        gallery,
-        { type: "credits", config: { signatureOnly: false } },
-        { type: "skills", config: {} },
-      ]
-  await db.insert(schema.portfolioSections).values(
-    sections.map((section, position) => {
-      const schemaVersion = currentSchemaVersion(section.type)
-      const valid = validatePortfolioSectionWrite(section.type, schemaVersion, section.config)
-      return { talentId: userId, type: section.type, position, isVisible: true, schemaVersion, config: valid.config }
-    }),
-  )
+  // Photos, Main first: the card leads with Main and spreads the rest between sections.
+  const photoIds = [...new Set(imageIds)].slice(0, PHOTO_SLOTS)
+  if (photoIds.length > 0) {
+    await db
+      .insert(schema.talentPhotos)
+      .values(photoIds.map((mediaId, position) => ({ talentId: userId, mediaId, position })))
+  }
+  // The layout is fixed by category; the showreel is a profile field.
+  if (videoId) {
+    await db
+      .update(schema.talentProfiles)
+      .set({ showreelMediaId: videoId })
+      .where(eq(schema.talentProfiles.userId, userId))
+  }
   console.log(`${isCrew ? "crew     " : "on-camera"}  ${demo.name}`)
 }
 

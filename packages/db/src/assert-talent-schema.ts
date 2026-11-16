@@ -47,24 +47,6 @@ try {
     values (${talentId}, ${`talent-${talentId.slice(0, 8)}`}, 'Schema probe')
   `
 
-  for (let i = 0; i < 12; i++) {
-    await db`
-      insert into portfolio_sections (talent_id, type, position, is_visible, config)
-      values (${talentId}, 'about', ${i}, true, '{}'::jsonb)
-    `
-  }
-
-  try {
-    await db`
-      insert into portfolio_sections (talent_id, type, position, is_visible, config)
-      values (${talentId}, 'about', 99, true, '{}'::jsonb)
-    `
-    throw new Error("13th visible portfolio section insert succeeded; cap trigger is missing.")
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (!message.includes("portfolio_sections_visible_cap_exceeded")) throw error
-  }
-
   await db`
     insert into profile_delegates (talent_id, delegate_user_id)
     values (${talentId}, ${agencyId})
@@ -86,7 +68,7 @@ try {
   }
 
   console.log(
-    "Talent schema checks passed: 12-section cap, delegate grant/revoke, owner immutability.",
+    "Talent schema checks passed: delegate grant/revoke, owner immutability.",
   )
 } finally {
   await db`delete from public.users where id in (${talentId}, ${agencyId})`

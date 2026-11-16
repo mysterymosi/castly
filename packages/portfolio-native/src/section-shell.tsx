@@ -43,7 +43,7 @@ export function SectionTitle({ children }: { children: string }) {
       accessibilityRole="header"
       numberOfLines={1}
       maxFontSizeMultiplier={1.3}
-      className="mb-1 font-headingSemibold text-body text-text"
+      className="mb-1 font-heading text-body text-text"
     >
       {children}
     </Text>

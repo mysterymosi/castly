@@ -1,3 +1,5 @@
+import { selectAbout } from "@workspace/schema"
+
 import { SectionImage } from "../media"
 import { SectionShell } from "../section-shell"
 import type { CoreSectionConfigMap, WebSectionProps } from "../types"
@@ -5,7 +7,7 @@ import type { CoreSectionConfigMap, WebSectionProps } from "../types"
 type AboutConfig = CoreSectionConfigMap["about"]
 
 export function AboutSection({ config, context }: WebSectionProps<AboutConfig>) {
-  const body = config.body?.trim()
+  const { body } = selectAbout(config, context.content)
   const hasMedia = Boolean(config.mediaId && context.mediaMeta[config.mediaId])
   if (!body && !hasMedia) return null
   return (

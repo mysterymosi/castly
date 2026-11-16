@@ -24,6 +24,8 @@ High-value first: category, location + radius, travel, availability, verificatio
 
 Live result count as filters change.
 
+**Projection first.** `talent_search` has no columns for availability or willingness to travel. M2b collects both (`talent_availability`, `talent_profiles.willing_to_travel`) but left the projection to this milestone: add the columns and extend `refresh_talent_search` and its triggers before building these two filters.
+
 **Acceptance.** Changing category updates the count without waiting for a full deck restart. Over-constrained filters show a low count, not a spinner forever.
 
 ### 8.3 Rate privacy

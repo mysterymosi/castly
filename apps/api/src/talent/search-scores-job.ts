@@ -1,7 +1,7 @@
 import { computeFreshnessScore } from "@workspace/core"
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
-import { eq, max } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 
 /** Handler name for the publish / completeness-write (and later nightly) projection score job. */
 export const talentSearchScoresJob = "talent.search-scores"
@@ -19,6 +19,7 @@ export async function runSearchScoresJob(db: Db, userId: string, now = new Date(
       completenessScore: schema.talentProfiles.completenessScore,
       responsivenessScore: schema.talentProfiles.responsivenessScore,
       lastActiveAt: schema.users.lastActiveAt,
+      contentUpdatedAt: schema.talentProfiles.contentUpdatedAt,
     })
     .from(schema.talentProfiles)
     .innerJoin(schema.users, eq(schema.users.id, schema.talentProfiles.userId))
@@ -26,14 +27,10 @@ export async function runSearchScoresJob(db: Db, userId: string, now = new Date(
     .limit(1)
   if (!profile) return null
 
-  const [sections] = await db
-    .select({ lastUpdatedAt: max(schema.portfolioSections.updatedAt) })
-    .from(schema.portfolioSections)
-    .where(eq(schema.portfolioSections.talentId, userId))
-
   const freshnessScore = computeFreshnessScore({
     lastActiveAt: profile.lastActiveAt,
-    lastPortfolioUpdateAt: sections?.lastUpdatedAt ?? null,
+    // Stamped by booker-visible edits only; score writes and studio loads leave it alone.
+    lastPortfolioUpdateAt: profile.contentUpdatedAt,
     now,
   })
 

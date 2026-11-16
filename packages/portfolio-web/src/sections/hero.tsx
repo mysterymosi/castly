@@ -1,3 +1,5 @@
+import { selectHeroMediaId } from "@workspace/schema"
+
 import { SectionImage, SectionVideo } from "../media"
 import { SectionShell } from "../section-shell"
 import type { CoreSectionConfigMap, WebSectionProps } from "../types"
@@ -53,7 +55,9 @@ function HeroText({ config }: { config: HeroConfig }) {
 }
 
 /** Badges (verification, Pro) are not rendered until their data exists; `showBadges` is honoured then. */
-export function HeroSection({ config, context }: WebSectionProps<HeroConfig>) {
+export function HeroSection({ config: stored, context }: WebSectionProps<HeroConfig>) {
+  // Its own image, else the Main photo.
+  const config = { ...stored, mediaId: selectHeroMediaId(stored, context.content) }
   const hasMedia = Boolean(config.mediaId && context.mediaMeta[config.mediaId])
   if (!hasMedia && !config.headline && !config.subtitle) return null
 

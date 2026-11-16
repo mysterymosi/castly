@@ -14,15 +14,12 @@ function StudioStack() {
         <Stack.Screen name="index" />
         <Stack.Screen name="quick-start" options={{ presentation: "fullScreenModal", animation: "slide_from_bottom" }} />
         <Stack.Screen name="highlights" />
+        <Stack.Screen name="categories" />
+        <Stack.Screen name="edit/[type]" />
+        <Stack.Screen name="credit" options={{ presentation: "modal" }} />
         <Stack.Screen
-          name="add-section"
-          options={{
-            presentation: "formSheet",
-            sheetAllowedDetents: [0.6, 1],
-            sheetGrabberVisible: true,
-            sheetCornerRadius: 24,
-            contentStyle: { backgroundColor: color.surface },
-          }}
+          name="crop"
+          options={{ presentation: "fullScreenModal", animation: "slide_from_bottom", gestureEnabled: false }}
         />
         <Stack.Screen name="preview" options={{ presentation: "modal" }} />
       </Stack>

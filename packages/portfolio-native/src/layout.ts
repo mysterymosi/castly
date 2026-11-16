@@ -1,5 +1,5 @@
 import type { SectionMediaMeta } from "./types"
-import { DEFAULT_GALLERY_TILE_ASPECT, DEFAULT_HERO_ASPECT, DEFAULT_SHOWREEL_ASPECT } from "./constants"
+import { DEFAULT_HERO_ASPECT, DEFAULT_SHOWREEL_ASPECT } from "./constants"
 
 export function mediaHeightForWidth(
   mediaId: string | null | undefined,
@@ -45,6 +45,3 @@ export function showreelMediaHeight(
   return mediaHeightForWidth(mediaId, cardWidth, mediaMeta, DEFAULT_SHOWREEL_ASPECT)
 }
 
-export function galleryTileHeight(cardWidth: number, mediaMeta: SectionMediaMeta, mediaId: string): number {
-  return mediaHeightForWidth(mediaId, cardWidth / 2 - 4, mediaMeta, DEFAULT_GALLERY_TILE_ASPECT)
-}

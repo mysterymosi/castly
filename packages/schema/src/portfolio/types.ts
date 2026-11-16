@@ -2,7 +2,6 @@
 export const corePortfolioSectionTypes = [
   "hero",
   "about",
-  "gallery",
   "showreel",
   "credits",
   "attributes",

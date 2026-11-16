@@ -31,7 +31,6 @@ describe("studioSectionRegistry", () => {
         config: { style: "minimal" as const, mediaId: null, showBadges: false },
       },
       { type: "about" as const, schemaVersion: 1 as const, config: {} },
-      { type: "gallery" as const, schemaVersion: 1 as const, config: { mediaIds: [] } },
       {
         type: "showreel" as const,
         schemaVersion: 1 as const,

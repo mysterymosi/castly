@@ -1,9 +1,5 @@
-import {
-  mediaMetaFromStatus,
-  PortfolioSections,
-  sectionsFromDto,
-} from "@workspace/portfolio-web"
-import { portfolioContentFromDto } from "@workspace/schema"
+import { mediaMetaFromStatus, PortfolioSections } from "@workspace/portfolio-web"
+import { portfolioContentFromDto, readRenderableSections } from "@workspace/schema"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound, permanentRedirect } from "next/navigation"
@@ -38,6 +34,8 @@ export default async function TalentPortfolioPage({ params }: Props) {
 
   const { talent, media } = portfolio
   const { profile } = talent
+  const content = portfolioContentFromDto(talent)
+  const now = new Date()
   // One URL per talent: `/Tunde-Adeyemi` and `/tunde-adeyemi` resolve to the stored slug.
   if (slug !== profile.slug) permanentRedirect(`/${profile.slug}`)
 
@@ -54,9 +52,11 @@ export default async function TalentPortfolioPage({ params }: Props) {
         ) : null}
       </header>
       <PortfolioSections
-        sections={sectionsFromDto(talent.sections)}
+        // Empty list sections (no credits yet, say) are left out rather than drawn as a bare title.
+        sections={readRenderableSections(talent.sections, content, now)}
         mediaMeta={mediaMetaFromStatus(media)}
-        content={portfolioContentFromDto(talent)}
+        content={content}
+        now={now}
       />
       <footer className="text-muted-foreground mx-auto mt-12 w-full max-w-3xl px-4 text-sm sm:px-6">
         Portfolio on <Link href="/" className="text-foreground font-medium">Castly</Link>

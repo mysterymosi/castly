@@ -1,13 +1,19 @@
 import { serializeTalent } from "@workspace/core"
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
-import type { CoreSectionConfigMap, DeckCard, DeckDecision } from "@workspace/schema"
+import {
+  canvasProblem,
+  type CoreSectionConfigMap,
+  type DeckCard,
+  type DeckDecision,
+} from "@workspace/schema"
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm"
 
 import { getMediaStatuses } from "../media/service.js"
-import { loadTalentRecord, sectionMediaIds } from "../talent/record.js"
+import { loadTalentRecord, talentMediaIds } from "../talent/record.js"
 
-const LEAD_MEDIA_MAX = 5
+/** Main only: the card's first screen shows one photo; the rest sit between sections. */
+const LEAD_MEDIA_MAX = 1
 
 export type Card = Omit<DeckCard, "talent"> & {
   talent: ReturnType<typeof serializeTalent>
@@ -62,23 +68,30 @@ export async function deckCard(
   const record = await loadTalentRecord(db, profile, Number(profile.completenessScore))
   const talent = serializeTalent(record, { kind: "user", userId: viewerId, verifiedBooker: false }, {})
 
-  // Decision-layer media: card lead, then hero and gallery photos, in that order.
+  // The lead is Main, the first photo; without photos, a hero image. The other photos are spread
+  // between the portfolio's sections on the card (`layoutPortfolio`).
   const sections = talent.sections
-  const configs = <T extends keyof CoreSectionConfigMap>(type: T) =>
-    sections.filter((s) => s.type === type).map((s) => s.config as CoreSectionConfigMap[T])
-  const leadCandidates = [
-    talent.profile.cardConfig.leadMediaId,
-    ...configs("hero").map((c) => c.mediaId),
-    ...configs("gallery").flatMap((c) => c.mediaIds),
-  ].filter((id): id is string => Boolean(id))
+  const heroImages = sections
+    .filter((s) => s.type === "hero")
+    .map((s) => (s.config as CoreSectionConfigMap["hero"]).mediaId)
+  const leadCandidates = [...talent.photoMediaIds, ...heroImages].filter(
+    (id): id is string => Boolean(id)
+  )
 
-  const ids = new Set([...sectionMediaIds(sections), ...leadCandidates])
+  const { canvasMediaId, canvasEnabled } = talent.profile.cardConfig
+  const ids = new Set([...talentMediaIds(talent), ...leadCandidates])
+  if (canvasMediaId) ids.add(canvasMediaId)
   const statuses = await getMediaStatuses(db, profile.userId, [...ids])
   const media = Object.fromEntries(Object.entries(statuses).filter(([, m]) => m.status === "ready"))
 
   const leadMediaIds = [...new Set(leadCandidates)]
     .filter((id) => media[id]?.kind === "image" || media[id]?.posterUrl)
     .slice(0, LEAD_MEDIA_MAX)
+
+  // Checked again now it's measured: a video set while processing may have come out of spec.
+  const canvas = canvasMediaId ? media[canvasMediaId] : undefined
+  // Off in the studio: the card shows the photos, though the canvas stays uploaded.
+  const canvasReady = canvasEnabled && canvas && !canvasProblem(canvas) ? canvas.id : null
 
   const category = await primaryCategory(db, profile.userId)
   const credits = talent.content.credits
@@ -92,6 +105,7 @@ export async function deckCard(
       categoryKind: category?.kind ?? null,
       ageRange: category?.kind === "on_camera" || !category ? await playingAge(db, profile.userId) : null,
       leadMediaIds,
+      canvasMediaId: canvasReady,
       creditCount: credits.length,
       signatureCredit: signature
         ? { title: signature.title, roleName: signature.roleName, year: signature.year }

@@ -35,7 +35,7 @@ export default function WelcomeScreen() {
       <View className="flex-1 items-center justify-center gap-6">
         <AnimatedView
           entering={FadeInDown.duration(420)}
-          className="h-28 w-28 items-center justify-center rounded-xl dark:border dark:border-border"
+          className="h-28 w-28 items-center justify-center rounded-xl border border-border"
           style={{ backgroundColor: palette.ink, boxShadow: shadow.raised }}
         >
           <Logo variant="mark" size={72} color={palette.gold} />
