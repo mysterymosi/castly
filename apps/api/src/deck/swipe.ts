@@ -4,6 +4,7 @@ import type { DeckGoal, deckSetGoalInput, deckSwipeInput } from "@workspace/sche
 import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm"
 import type { z } from "zod"
 
+import { recordInterest, withdrawInterest } from "../interest/service.js"
 import { DeckError } from "./errors.js"
 
 /** Undos a free booker gets per session (PRD §7.2.2). Pro bookers (M10) get unlimited. */
@@ -94,8 +95,9 @@ async function countInterest(tx: Tx, talentId: string, delta: 1 | -1, day: Date 
 /**
  * `deck.swipe`: records a decision on a served card (PRD §7.2.2). Pass only records it — stage 1
  * then hides the talent for this role for 30 days. Interest also puts the talent on the role's
- * shortlist (Saved talent when there's no role); save for later puts them on Saved talent. One
- * live decision per card: an undo frees it.
+ * shortlist (Saved talent when there's no role) and sends them an interest, which a talent with
+ * auto-accept on answers at once; save for later puts them on Saved talent. One live decision
+ * per card: an undo frees it.
  */
 export async function swipeCard(db: Db, bookerId: string, input: z.output<typeof deckSwipeInput>) {
   return db.transaction(async (tx) => {
@@ -131,6 +133,12 @@ export async function swipeCard(db: Db, bookerId: string, input: z.output<typeof
       entryAdded = added.length > 0
     }
 
+    // A right-swipe is also an interest sent to the talent (PRD §7.5); auto-accept may answer it.
+    const sent =
+      input.direction === "interest"
+        ? await recordInterest(tx, { bookerId, talentId: card.talentId, roleId: session.roleId })
+        : { interestId: null, matchId: null }
+
     await tx.insert(schema.swipes).values({
       bookerId,
       talentId: card.talentId,
@@ -141,10 +149,16 @@ export async function swipeCard(db: Db, bookerId: string, input: z.output<typeof
       position: input.position,
       shortlistId,
       entryAdded,
+      interestId: sent.interestId,
     })
     if (input.direction === "interest") await countInterest(tx, card.talentId, 1)
 
-    return { shortlistId, goal: await goalOf(tx, session), undosLeft: await undosLeft(tx, session.id) }
+    return {
+      shortlistId,
+      matchId: sent.matchId,
+      goal: await goalOf(tx, session),
+      undosLeft: await undosLeft(tx, session.id),
+    }
   })
 }
 
@@ -167,6 +181,11 @@ export async function undoSwipe(db: Db, bookerId: string, sessionId: string) {
       .orderBy(desc(schema.swipes.createdAt), desc(schema.swipes.id))
       .limit(1)
     if (!last) throw new DeckError("There's nothing to undo", "nothing_to_undo")
+
+    // Taking back an interest the talent hasn't answered unsends it; once answered, it stands.
+    if (last.interestId && !(await withdrawInterest(tx, last.interestId))) {
+      throw new DeckError("This talent has already responded to your interest", "interest_answered")
+    }
 
     await tx.update(schema.swipes).set({ undoneAt: new Date() }).where(eq(schema.swipes.id, last.id))
     if (last.shortlistId && last.entryAdded) {

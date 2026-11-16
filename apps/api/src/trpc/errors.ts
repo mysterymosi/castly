@@ -7,6 +7,7 @@ import { OtpRateLimited } from "../auth/rate-limit.js"
 import { AuthRejected, OtpDeliveryFailed } from "../auth/supabase.js"
 import { BookerError } from "../booker/errors.js"
 import { DeckError } from "../deck/errors.js"
+import { InterestError } from "../interest/errors.js"
 import { MediaError } from "../media/errors.js"
 import { ProjectError } from "../project/errors.js"
 import { StudioError } from "../talent/errors.js"
@@ -63,6 +64,14 @@ const deckCode = {
   already_decided: "CONFLICT",
   undo_limit: "FORBIDDEN",
   nothing_to_undo: "PRECONDITION_FAILED",
+  interest_answered: "CONFLICT",
+} as const
+
+const interestCode = {
+  interest_not_found: "NOT_FOUND",
+  interest_closed: "CONFLICT",
+  interest_expired: "PRECONDITION_FAILED",
+  talent_profile_required: "PRECONDITION_FAILED",
 } as const
 
 const adminCode = {
@@ -114,6 +123,13 @@ export function throwTrpc(error: unknown): never {
   if (error instanceof DeckError) {
     throw new TRPCError({
       code: deckCode[error.code],
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof InterestError) {
+    throw new TRPCError({
+      code: interestCode[error.code],
       message: error.message,
       cause: error,
     })

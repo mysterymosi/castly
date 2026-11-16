@@ -8,6 +8,7 @@ export type DeckErrorCode =
   | "already_decided"
   | "undo_limit"
   | "nothing_to_undo"
+  | "interest_answered"
 
 export class DeckError extends Error {
   readonly code: DeckErrorCode

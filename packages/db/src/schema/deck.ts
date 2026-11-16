@@ -18,6 +18,7 @@ import {
 import { bookerProfiles, roles, shortlists } from "./booker.js"
 import { primaryUuid, timestamptz } from "./columns.js"
 import { users } from "./identity.js"
+import { interests } from "./interest.js"
 import { talentProfiles } from "./talent.js"
 
 export const swipeDirection = pgEnum("swipe_direction", ["pass", "interest", "save"])
@@ -116,6 +117,11 @@ export const swipes = pgTable(
     position: integer("position"),
     shortlistId: uuid("shortlist_id").references(() => shortlists.id, { onDelete: "set null" }),
     entryAdded: boolean("entry_added").notNull().default(false),
+    /**
+     * The interest this swipe created (set only when it created one), so undo can withdraw it
+     * while it is still pending. SET NULL: the swipe row outlives the interest.
+     */
+    interestId: uuid("interest_id").references(() => interests.id, { onDelete: "set null" }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     undoneAt: timestamptz("undone_at"),
   },
@@ -127,6 +133,7 @@ export const swipes = pgTable(
     // The partial index above can't serve the session foreign key; this one can.
     index("swipes_session_id_idx").on(table.sessionId),
     index("swipes_shortlist_id_idx").on(table.shortlistId),
+    index("swipes_interest_id_idx").on(table.interestId),
     check("swipes_session_has_position", sql`${table.sessionId} IS NULL OR ${table.position} IS NOT NULL`),
     // Stage 1's decay check and undo: a booker's recent swipes, per role.
     index("swipes_booker_role_created_idx").on(table.bookerId, table.roleId, table.createdAt.desc()),

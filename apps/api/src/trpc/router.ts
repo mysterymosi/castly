@@ -12,6 +12,7 @@ import {
 import { adminRouter } from "../admin/router.js"
 import { bookerRouter } from "../booker/router.js"
 import { deckRouter } from "../deck/router.js"
+import { interestRouter } from "../interest/router.js"
 import { mediaRouter } from "../media/router.js"
 import { projectRouter, roleRouter } from "../project/router.js"
 import { shortlistRouter } from "../shortlist/router.js"
@@ -128,6 +129,7 @@ export const appRouter = router({
   admin: adminRouter,
   booker: bookerRouter,
   deck: deckRouter,
+  interest: interestRouter,
   shortlist: shortlistRouter,
   media: mediaRouter,
   project: projectRouter,

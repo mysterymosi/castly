@@ -101,6 +101,11 @@ export const talentProfiles = pgTable(
       .default("0"),
     rateVisibility: rateVisibility("rate_visibility").notNull().default("public"),
     /**
+     * Opt-in: an interest from a verified booker becomes a match at once (PRD §6.3). Off by
+     * default — the talent chooses to waive the mutual opt-in; we never assume it for them.
+     */
+    autoAcceptVerified: boolean("auto_accept_verified").notNull().default(false),
+    /**
      * The talent's showreel (a ready Mux video), shown in the portfolio's Showreel slot. The
      * portfolio's layout is fixed by category (`portfolioLayoutFor`), so this is a field, not a
      * section. Deleting the media clears it.
