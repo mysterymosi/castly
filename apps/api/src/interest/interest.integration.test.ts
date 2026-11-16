@@ -332,6 +332,45 @@ describe("auto-accept", () => {
   })
 })
 
+describe("an answered interest never reads as expired", () => {
+  afterEach(cleanupDeckFixtures)
+
+  // `withdrawInterest` treats `expired` as "never answered, nothing to withdraw". That is only
+  // right because an accepted or declined interest cannot become expired: every expiry write is
+  // limited to pending rows, and the table's check ties `responded_at` to the answered statuses.
+  it("cannot be flipped to expired once accepted or declined", async () => {
+    const w = await world()
+    const t = await talent(w, "answered-expire")
+    const { api } = await booker(w, "answered-expire-booker")
+    const first = await served(api, { filters: w.filters })
+    await api.deck.swipe({ sessionId: first.sessionId, position: first.at(t.userId), direction: "interest" })
+    const [row] = await interestsFor(t.userId)
+    await t.api.interest.accept({ interestId: row!.id })
+    await lapse(row!.id)
+
+    // The job and a fresh swipe both leave it accepted...
+    expect(await expireInterests(db)).toBe(0)
+    expect((await interestsFor(t.userId))[0]).toMatchObject({ status: "accepted" })
+    // ...and the database refuses the flip outright.
+    const flip = db.update(schema.interests).set({ status: "expired" }).where(eq(schema.interests.id, row!.id))
+    expect(await pgCode(flip)).toBe("23514")
+  })
+
+  it("keeps the undo refused after the interest's expiry date has passed", async () => {
+    const w = await world()
+    const t = await talent(w, "answered-undo")
+    const { api } = await booker(w, "answered-undo-booker")
+    const { sessionId, at } = await served(api, { filters: w.filters })
+    await api.deck.swipe({ sessionId, position: at(t.userId), direction: "interest" })
+    const [row] = await interestsFor(t.userId)
+    await t.api.interest.decline({ interestId: row!.id })
+    await lapse(row!.id)
+    await expireInterests(db)
+
+    await expect(api.deck.undo({ sessionId })).rejects.toMatchObject({ code: "CONFLICT" })
+  })
+})
+
 describe("undo", () => {
   afterEach(cleanupDeckFixtures)
 
