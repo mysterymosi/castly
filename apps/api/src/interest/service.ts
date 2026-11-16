@@ -24,9 +24,9 @@ export function isVerifiedBooker(tier: "phone" | "id" | "professional") {
 }
 
 /**
- * Accepts a pending interest: marks it and creates the match. The one place a match is born, so
- * `deck.swipe` (auto-accept) and `interest.accept` cannot diverge. M6 6.2 adds the conversation
- * and its two participants here, in the same transaction.
+ * Accepts a pending interest: marks it and creates the match, its conversation and the two
+ * participants, all in the caller's transaction — a match never exists without its chat. The one
+ * place a match is born, so `deck.swipe` (auto-accept) and `interest.accept` cannot diverge.
  */
 async function acceptRow(
   tx: Tx,
@@ -46,7 +46,15 @@ async function acceptRow(
       roleId: interest.roleId,
     })
     .returning({ id: schema.matches.id })
-  return match!.id
+  const [conversation] = await tx
+    .insert(schema.conversations)
+    .values({ matchId: match!.id })
+    .returning({ id: schema.conversations.id })
+  await tx.insert(schema.conversationParticipants).values([
+    { conversationId: conversation!.id, userId: interest.bookerId },
+    { conversationId: conversation!.id, userId: interest.talentId },
+  ])
+  return { matchId: match!.id, conversationId: conversation!.id }
 }
 
 /**
@@ -62,7 +70,7 @@ export async function recordInterest(
   tx: Tx,
   input: { bookerId: string; talentId: string; roleId: string | null },
   now: Date = new Date(),
-): Promise<{ interestId: string | null; matchId: string | null }> {
+): Promise<{ interestId: string | null; matchId: string | null; conversationId: string | null }> {
   const sameAsk = and(
     eq(schema.interests.bookerId, input.bookerId),
     eq(schema.interests.talentId, input.talentId),
@@ -80,7 +88,7 @@ export async function recordInterest(
     .from(schema.interests)
     .where(and(sameAsk, inArray(schema.interests.status, ["pending", "accepted", "declined"])))
     .limit(1)
-  if (existing) return { interestId: null, matchId: null }
+  if (existing) return { interestId: null, matchId: null, conversationId: null }
 
   const expiresAt = new Date(now.getTime() + INTEREST_TTL_DAYS * 24 * 60 * 60 * 1000)
   // The partial unique index settles a race between two swipes the check above both missed.
@@ -89,7 +97,7 @@ export async function recordInterest(
     .values({ ...input, expiresAt })
     .onConflictDoNothing()
     .returning({ id: schema.interests.id })
-  if (!created) return { interestId: null, matchId: null }
+  if (!created) return { interestId: null, matchId: null, conversationId: null }
 
   const [parties] = await tx
     .select({
@@ -101,10 +109,10 @@ export async function recordInterest(
     .where(eq(schema.talentProfiles.userId, input.talentId))
     .limit(1)
   if (parties?.autoAccept && isVerifiedBooker(parties.tier)) {
-    const matchId = await acceptRow(tx, { ...input, id: created.id }, now)
-    return { interestId: created.id, matchId }
+    const opened = await acceptRow(tx, { ...input, id: created.id }, now)
+    return { interestId: created.id, ...opened }
   }
-  return { interestId: created.id, matchId: null }
+  return { interestId: created.id, matchId: null, conversationId: null }
 }
 
 /**
@@ -180,7 +188,8 @@ export async function listIncoming(db: Db, talentId: string, now: Date = new Dat
   }
 }
 
-type Answer = { kind: "done"; matchId: string | null } | { kind: "missing" | "closed" | "expired" }
+type Opened = { matchId: string; conversationId: string }
+type Answer = { kind: "done"; opened: Opened | null } | { kind: "missing" | "closed" | "expired" }
 
 function throwUnanswered(answer: Exclude<Answer, { kind: "done" }>): never {
   if (answer.kind === "missing") throw new InterestError("Interest not found", "interest_not_found")
@@ -189,8 +198,8 @@ function throwUnanswered(answer: Exclude<Answer, { kind: "done" }>): never {
 }
 
 /**
- * `interest.accept`: the talent says yes, creating the match. Repeating it returns the same
- * match, so a retry is safe. Past `expires_at` it flips the interest to expired (committed, then
+ * `interest.accept`: the talent says yes, creating the match and its conversation. Repeating it
+ * returns the same ones, so a retry is safe. Past `expires_at` it flips the interest to expired (committed, then
  * refused) rather than leaving the job as the only thing that closes it.
  */
 export async function acceptInterest(db: Db, talentId: string, interestId: string, now: Date = new Date()) {
@@ -203,12 +212,13 @@ export async function acceptInterest(db: Db, talentId: string, interestId: strin
       .limit(1)
     if (!row) return { kind: "missing" }
     if (row.status === "accepted") {
-      const [match] = await tx
-        .select({ id: schema.matches.id })
+      const [opened] = await tx
+        .select({ matchId: schema.matches.id, conversationId: schema.conversations.id })
         .from(schema.matches)
+        .innerJoin(schema.conversations, eq(schema.conversations.matchId, schema.matches.id))
         .where(eq(schema.matches.interestId, row.id))
         .limit(1)
-      return { kind: "done", matchId: match?.id ?? null }
+      return { kind: "done", opened: opened ?? null }
     }
     if (row.status === "expired") return { kind: "expired" }
     if (row.status !== "pending") return { kind: "closed" }
@@ -216,10 +226,10 @@ export async function acceptInterest(db: Db, talentId: string, interestId: strin
       await tx.update(schema.interests).set({ status: "expired" }).where(eq(schema.interests.id, row.id))
       return { kind: "expired" }
     }
-    return { kind: "done", matchId: await acceptRow(tx, row, now) }
+    return { kind: "done", opened: await acceptRow(tx, row, now) }
   })
   if (answer.kind !== "done") throwUnanswered(answer)
-  return { interestId, matchId: answer.matchId! }
+  return { interestId, ...answer.opened! }
 }
 
 /** `interest.decline`: the talent says no. No match, nothing sent to the booker. Idempotent. */
@@ -232,7 +242,7 @@ export async function declineInterest(db: Db, talentId: string, interestId: stri
       .for("update")
       .limit(1)
     if (!row) return { kind: "missing" }
-    if (row.status === "declined") return { kind: "done", matchId: null }
+    if (row.status === "declined") return { kind: "done", opened: null }
     if (row.status === "expired") return { kind: "expired" }
     if (row.status !== "pending") return { kind: "closed" }
     if (row.expiresAt <= now) {
@@ -243,7 +253,7 @@ export async function declineInterest(db: Db, talentId: string, interestId: stri
       .update(schema.interests)
       .set({ status: "declined", respondedAt: now })
       .where(eq(schema.interests.id, row.id))
-    return { kind: "done", matchId: null }
+    return { kind: "done", opened: null }
   })
   if (answer.kind !== "done") throwUnanswered(answer)
   return { interestId, status: "declined" as const }

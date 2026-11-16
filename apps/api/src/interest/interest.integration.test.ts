@@ -1,5 +1,5 @@
 import { schema } from "@workspace/db"
-import { and, eq } from "drizzle-orm"
+import { and, eq, inArray } from "drizzle-orm"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { db } from "../db.js"
@@ -36,6 +36,40 @@ async function interestsFor(talentId: string) {
 
 async function matchesFor(talentId: string) {
   return db.select().from(schema.matches).where(eq(schema.matches.talentId, talentId))
+}
+
+async function chatFor(matchId: string) {
+  const conversations = await db
+    .select()
+    .from(schema.conversations)
+    .where(eq(schema.conversations.matchId, matchId))
+  const participants = await db
+    .select()
+    .from(schema.conversationParticipants)
+    .where(
+      inArray(
+        schema.conversationParticipants.conversationId,
+        conversations.map((c) => c.id),
+      ),
+    )
+  return { conversations, participants }
+}
+
+async function conversationsOf(userId: string) {
+  return db
+    .select({ id: schema.conversationParticipants.conversationId })
+    .from(schema.conversationParticipants)
+    .where(eq(schema.conversationParticipants.userId, userId))
+}
+
+/** The Postgres error code under a Drizzle query error. */
+async function pgCode(work: Promise<unknown>) {
+  try {
+    await work
+  } catch (error) {
+    return (error as { cause?: { code?: string } }).cause?.code
+  }
+  return undefined
 }
 
 async function verify(bookerId: string) {
@@ -330,5 +364,100 @@ describe("undo", () => {
       .from(schema.swipes)
       .where(and(eq(schema.swipes.sessionId, sessionId), eq(schema.swipes.talentId, t.userId)))
     expect(live).toHaveLength(1)
+  })
+})
+
+describe("matches and conversations", () => {
+  afterEach(cleanupDeckFixtures)
+
+  async function sent(label: string) {
+    const w = await world()
+    const t = await talent(w, `${label}-talent`)
+    const b = await booker(w, `${label}-booker`)
+    const { sessionId, at } = await served(b.api, { filters: w.filters })
+    const swiped = await b.api.deck.swipe({ sessionId, position: at(t.userId), direction: "interest" })
+    const [interest] = await interestsFor(t.userId)
+    return { w, t, b, swiped, interest: interest! }
+  }
+
+  it("accepting creates the match, one conversation and both participants", async () => {
+    const { t, b, interest } = await sent("chat")
+    expect(await conversationsOf(t.userId)).toEqual([])
+
+    const accepted = await t.api.interest.accept({ interestId: interest.id })
+
+    const { conversations, participants } = await chatFor(accepted.matchId)
+    expect(conversations).toHaveLength(1)
+    expect(conversations[0]!.id).toBe(accepted.conversationId)
+    expect(participants.map((p) => p.userId).sort()).toEqual([b.userId, t.userId].sort())
+    expect(participants.every((p) => p.lastReadAt === null)).toBe(true)
+  })
+
+  it("repeating the accept returns the same conversation and makes no second", async () => {
+    const { t, interest } = await sent("chat-retry")
+    const first = await t.api.interest.accept({ interestId: interest.id })
+    const again = await t.api.interest.accept({ interestId: interest.id })
+
+    expect(again.conversationId).toBe(first.conversationId)
+    const { conversations, participants } = await chatFor(first.matchId)
+    expect(conversations).toHaveLength(1)
+    expect(participants).toHaveLength(2)
+  })
+
+  it("auto-accept opens the chat in the swipe, and hands the booker its ids", async () => {
+    const w = await world()
+    const t = await talent(w, "chat-auto-talent")
+    const b = await booker(w, "chat-auto-booker")
+    await verify(b.userId)
+    await t.api.interest.setAutoAccept({ enabled: true })
+    const { sessionId, at } = await served(b.api, { filters: w.filters })
+    const result = await b.api.deck.swipe({ sessionId, position: at(t.userId), direction: "interest" })
+
+    const { conversations, participants } = await chatFor(result.matchId!)
+    expect(conversations.map((c) => c.id)).toEqual([result.conversationId])
+    expect(participants.map((p) => p.userId).sort()).toEqual([b.userId, t.userId].sort())
+  })
+
+  it("a pending, declined or lapsed interest has no conversation", async () => {
+    const pending = await sent("chat-pending")
+    const declined = await sent("chat-declined")
+    const lapsed = await sent("chat-lapsed")
+    await declined.t.api.interest.decline({ interestId: declined.interest.id })
+    await lapse(lapsed.interest.id)
+    await expireInterests(db)
+
+    expect(pending.swiped).toMatchObject({ matchId: null, conversationId: null })
+    for (const { t } of [pending, declined, lapsed]) {
+      expect(await matchesFor(t.userId)).toEqual([])
+      expect(await conversationsOf(t.userId)).toEqual([])
+    }
+  })
+
+  it("the database refuses a conversation without a match", async () => {
+    // No match at all, and a match that does not exist: both fail on the foreign key.
+    expect(await pgCode(db.insert(schema.conversations).values({} as never))).toBe("23502")
+    expect(
+      await pgCode(db.insert(schema.conversations).values({ matchId: "00000000-0000-4000-8000-000000000000" })),
+    ).toBe("23503")
+  })
+
+  it("allows one conversation per match", async () => {
+    const { t, interest } = await sent("chat-once")
+    const { matchId } = await t.api.interest.accept({ interestId: interest.id })
+    expect(await pgCode(db.insert(schema.conversations).values({ matchId }))).toBe("23505")
+  })
+
+  it("takes the chat with the match when a user is deleted", async () => {
+    const { t, interest } = await sent("chat-delete")
+    const { conversationId } = await t.api.interest.accept({ interestId: interest.id })
+    await db.delete(schema.users).where(eq(schema.users.id, t.userId))
+
+    expect(await db.select().from(schema.conversations).where(eq(schema.conversations.id, conversationId))).toEqual([])
+    expect(
+      await db
+        .select()
+        .from(schema.conversationParticipants)
+        .where(eq(schema.conversationParticipants.conversationId, conversationId)),
+    ).toEqual([])
   })
 })

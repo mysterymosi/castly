@@ -7,6 +7,7 @@ export * from "./search.js"
 export * from "./booker.js"
 export * from "./deck.js"
 export * from "./interest.js"
+export * from "./conversation.js"
 export * from "./safety.js"
 
 /**
@@ -60,5 +61,7 @@ export const rlsTables = [
   "profile_views",
   "interests",
   "matches",
+  "conversations",
+  "conversation_participants",
   "blocks",
 ] as const

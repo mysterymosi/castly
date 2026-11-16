@@ -137,7 +137,7 @@ export async function swipeCard(db: Db, bookerId: string, input: z.output<typeof
     const sent =
       input.direction === "interest"
         ? await recordInterest(tx, { bookerId, talentId: card.talentId, roleId: session.roleId })
-        : { interestId: null, matchId: null }
+        : { interestId: null, matchId: null, conversationId: null }
 
     await tx.insert(schema.swipes).values({
       bookerId,
@@ -156,6 +156,7 @@ export async function swipeCard(db: Db, bookerId: string, input: z.output<typeof
     return {
       shortlistId,
       matchId: sent.matchId,
+      conversationId: sent.conversationId,
       goal: await goalOf(tx, session),
       undosLeft: await undosLeft(tx, session.id),
     }

@@ -41,6 +41,8 @@ export const interestIdInput = z.object({ interestId: z.uuid() })
 export const interestAcceptResultSchema = z.object({
   interestId: z.uuid(),
   matchId: z.uuid(),
+  /** The chat the match opened; both sides land here. */
+  conversationId: z.uuid(),
 })
 
 export const interestDeclineResultSchema = z.object({
