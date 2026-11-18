@@ -13,6 +13,7 @@ import { adminRouter } from "../admin/router.js"
 import { bookerRouter } from "../booker/router.js"
 import { deckRouter } from "../deck/router.js"
 import { interestRouter } from "../interest/router.js"
+import { matchRouter } from "../match/router.js"
 import { mediaRouter } from "../media/router.js"
 import { messageRouter } from "../message/router.js"
 import { projectRouter, roleRouter } from "../project/router.js"
@@ -132,6 +133,7 @@ export const appRouter = router({
   deck: deckRouter,
   interest: interestRouter,
   shortlist: shortlistRouter,
+  match: matchRouter,
   media: mediaRouter,
   message: messageRouter,
   project: projectRouter,

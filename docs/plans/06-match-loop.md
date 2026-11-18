@@ -12,6 +12,8 @@
 
 ### 6.1 Interests
 
+**Status:** Done (API; inbox UI is 6.6). `deck.swipe` sends an interest in the swipe's own transaction (`apps/api/src/interest/`, tables `interests` and `matches`, migration `0017`). `interest.listIncoming | accept | decline | setAutoAccept` on `talentProcedure`; accept and decline are idempotent and refuse a lapsed interest even before the job has run. Expiry is `expireInterests` (one idempotent statement) run by `pnpm --filter api interest:expire`; pg-boss scheduling lands with 6.5. Auto-accept is a talent opt-in, off by default (`talent_profiles.auto_accept_verified`), and fires only for a booker at tier `professional` — nobody holds it until M7, so it is dormant, not stub-true. It applies to interests sent after it is switched on. No new interest is sent while one is pending or accepted, or after a decline (a lapsed one may be re-sent); such a swipe does not move the exposure counter. Undo withdraws a pending interest and is refused once the talent has answered. The notification wording is `interestHeadline` ("A casting director is interested in you for Lagos Nights"); delivery is 6.5. Tests: `src/interest/` (in `test:unit` and `test:integration`).
+
 On right-swipe, write `interests` (`pending`, optional `role_id`, `expires_at`). Talent sees incoming list. `accept` / `decline` / expiry job. `setAutoAccept` for verified bookers (verification may still be stub-true until M7; wire the flag anyway).
 
 Talent notification: "A {vertical} is interested in you" plus project if attached.
@@ -20,11 +22,15 @@ Talent notification: "A {vertical} is interested in you" plus project if attache
 
 ### 6.2 Matches and conversations
 
+**Status:** Done (migration `0018`). `conversations.match_id` is NOT NULL with a foreign key and a unique index, so a conversation cannot exist without a match and a match has one chat; `conversation_participants` holds exactly the booker and the talent. Accepting — manually or by auto-accept — creates the match, conversation and both participants in one transaction (`acceptRow`), and `interest.accept` / `deck.swipe` return `conversationId`. The migration backfills a chat for matches made under 6.1. Tests prove the database refuses a conversation with no match, a missing match, or a second chat per match, and that deleting a user removes the chat. A forced mid-accept failure is not tested; the rollback is the shared transaction.
+
 `matches` FK from `interests`. `conversations` FK from `matches`. `conversation_participants` (two rows). **No conversation row without a match** — enforced by foreign key.
 
 **Acceptance.** Inserting a conversation without a match fails. Accepting an interest creates match + conversation + two participants in one transaction.
 
 ### 6.3 Messages via tRPC; reads via Realtime
+
+**Status:** Built for text, image and video; documents and audio not built (migration `0019`). `message.send | list | markRead` on `authedProcedure`, membership checked on every call (a stranger and a missing conversation are both NOT_FOUND). `send` is idempotent on an optional `clientId`; `list` pages by message id, newest first. RLS: `authenticated` has SELECT on `messages` through a participant-membership policy that hides deleted messages, and on its own `conversation_participants` rows; `anon` has none, and nobody can write through the Data API. `messages` is in the `supabase_realtime` publication, and typing/presence use private `conversation:<id>` broadcast channels restricted by policies on `realtime.messages`. `message.conversation_id` is NOT NULL with a foreign key, so a message cannot exist without a conversation, hence a match (the plan's "match_id" is reached through it). Media reuses the M2 pipeline for image and video: the sender must own a finished upload of the right kind, once; cleanup protects it; upload procedures are now open to any signed-in user so a booker can send media. Verified live with `pnpm --filter api realtime:probe` (real JWTs and Realtime sockets: the other side receives the message, a third subscriber receives nothing, a stranger is refused the typing channel). Not done: document and audio messages — the pipeline's buckets are public-read, so scripts and briefs need a private bucket and signed downloads first; notification fan-out (6.5); the mobile Realtime client, which must open typing channels as private (6.6). Hosted Supabase: turn off "Allow public access" in Realtime settings. Tests: `src/message/`.
 
 `message.send` validates, stores, fans out notifications. `message.list`, `markRead`.
 
@@ -39,6 +45,8 @@ Quick replies are client-only templates.
 **Acceptance.** Two devices: send appears on the other without polling. A third user subscribed to the conversation id receives nothing. Message without a match_id cannot be inserted.
 
 ### 6.4 Brief attachment
+
+**Status:** Done (API; thread UI is 6.6). `match.attachBrief` (booker) copies the role's offer onto the match — role, project, written brief, shoot window, rate range — and `match.get` (either side) returns it with the `conversationId`, so a talent opening the thread reads it (migration `0020`, `matches.brief` / `brief_attached_at`). It is a snapshot, not a live link: the talent sees what was offered until the booker attaches again, which replaces it. `roles.requirements` is never copied, because it can hold sensitive-tier attributes. Defaults to the role the interest was for; a role-less match needs a `roleId`, which must be the booker's own and have a written brief. The talent is not told when a brief is attached (6.5) and the thread does not update live; the client refetches `match.get`. Tests: `src/match/`.
 
 Booker can attach the role brief to the match so the talent sees the opportunity, not just "hi."
 

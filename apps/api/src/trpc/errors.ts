@@ -8,6 +8,7 @@ import { AuthRejected, OtpDeliveryFailed } from "../auth/supabase.js"
 import { BookerError } from "../booker/errors.js"
 import { DeckError } from "../deck/errors.js"
 import { InterestError } from "../interest/errors.js"
+import { MatchError } from "../match/errors.js"
 import { MediaError } from "../media/errors.js"
 import { MessageError } from "../message/errors.js"
 import { ProjectError } from "../project/errors.js"
@@ -91,6 +92,13 @@ const projectCode = {
   publish_unavailable: "FORBIDDEN",
 } as const
 
+const matchCode = {
+  match_not_found: "NOT_FOUND",
+  role_not_found: "NOT_FOUND",
+  role_required: "BAD_REQUEST",
+  role_has_no_brief: "PRECONDITION_FAILED",
+} as const
+
 const messageCode = {
   conversation_not_found: "NOT_FOUND",
   media_not_usable: "BAD_REQUEST",
@@ -136,6 +144,13 @@ export function throwTrpc(error: unknown): never {
   if (error instanceof InterestError) {
     throw new TRPCError({
       code: interestCode[error.code],
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof MatchError) {
+    throw new TRPCError({
+      code: matchCode[error.code],
       message: error.message,
       cause: error,
     })
