@@ -10,14 +10,14 @@ import type { AppRouter } from "api/router"
 
 import { getAccessToken } from "@/auth/token"
 
-// Dev builds don't always populate expoConfig.hostUri, so fall back to the
-// host the JS bundle was loaded from (the Mac running Metro).
+// Native dev builds can get Metro's host from the bundle URL when hostUri is missing.
+// The native registry is absent during web export.
 interface SourceCodeModule extends TurboModule {
   getConstants(): { scriptURL?: string }
 }
 
 function devServerHost() {
-  const sourceCode = TurboModuleRegistry.get<SourceCodeModule>("SourceCode")
+  const sourceCode = TurboModuleRegistry?.get<SourceCodeModule>("SourceCode")
   const scriptURL = sourceCode?.getConstants().scriptURL
   return scriptURL?.match(/^https?:\/\/([^:/]+)/)?.[1]
 }

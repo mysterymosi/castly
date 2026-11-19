@@ -3,6 +3,7 @@ import { schema } from "@workspace/db"
 import type { Match, MatchBrief } from "@workspace/schema"
 import { and, eq, or } from "drizzle-orm"
 
+import { recordPush } from "../notification/events.js"
 import { MatchError } from "./errors.js"
 
 /**
@@ -93,10 +94,12 @@ export async function attachBrief(
     rateMax: role.rateMax === null ? null : Number(role.rateMax),
     rateCurrency: role.rateCurrency,
   }
-  await db
-    .update(schema.matches)
-    .set({ brief, briefAttachedAt: new Date() })
-    .where(eq(schema.matches.id, found.match.id))
+  await db.transaction(async (tx) => {
+    await tx.update(schema.matches)
+      .set({ brief, briefAttachedAt: new Date() })
+      .where(eq(schema.matches.id, found.match.id))
+    await recordPush(tx, "brief", found.match.id, [found.match.talentId])
+  })
 
   return getMatch(db, bookerId, found.match.id)
 }

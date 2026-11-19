@@ -5,6 +5,7 @@ import { and, desc, eq, gt, inArray, isNull, lte } from "drizzle-orm"
 
 import { interestHeadline } from "./copy.js"
 import { InterestError } from "./errors.js"
+import { recordPush } from "../notification/events.js"
 
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0]
 
@@ -54,6 +55,7 @@ async function acceptRow(
     { conversationId: conversation!.id, userId: interest.bookerId },
     { conversationId: conversation!.id, userId: interest.talentId },
   ])
+  await recordPush(tx, "match", match!.id, [interest.bookerId, interest.talentId])
   return { matchId: match!.id, conversationId: conversation!.id }
 }
 
@@ -112,6 +114,7 @@ export async function recordInterest(
     const opened = await acceptRow(tx, { ...input, id: created.id }, now)
     return { interestId: created.id, ...opened }
   }
+  await recordPush(tx, "interest", created.id, [input.talentId])
   return { interestId: created.id, matchId: null, conversationId: null }
 }
 

@@ -16,6 +16,7 @@ import { interestRouter } from "../interest/router.js"
 import { matchRouter } from "../match/router.js"
 import { mediaRouter } from "../media/router.js"
 import { messageRouter } from "../message/router.js"
+import { notificationRouter } from "../notification/router.js"
 import { projectRouter, roleRouter } from "../project/router.js"
 import { shortlistRouter } from "../shortlist/router.js"
 import { talentRouter } from "../talent/router.js"
@@ -136,6 +137,7 @@ export const appRouter = router({
   match: matchRouter,
   media: mediaRouter,
   message: messageRouter,
+  notification: notificationRouter,
   project: projectRouter,
   role: roleRouter,
   talent: talentRouter,

@@ -3,6 +3,8 @@ import { createContext, use, useCallback, useEffect, useMemo, useState, type Rea
 
 import { authApi } from "@/auth/client"
 import { clearSession, currentUser, saveSession } from "@/auth/session"
+import { pushDeviceOptions } from "@/notification/device-query"
+import { revokePushDevice, watchPushDevice } from "@/notification/push"
 import { queryClient } from "@/trpc/query-client"
 
 type SessionStatus = "loading" | "signedOut" | "signedIn"
@@ -50,6 +52,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signOut = useCallback(async () => {
+    await revokePushDevice().catch(() => {})
     await clearSession()
     // Nothing cached for this user may show up for the next one.
     queryClient.clear()
@@ -57,6 +60,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setDraft({ email: "" })
     setStatus("signedOut")
   }, [])
+
+  const userId = status === "signedIn" ? me?.id : undefined
+  useEffect(() => {
+    if (!userId) return
+    return watchPushDevice((pushStatus) => {
+      queryClient.setQueryData(pushDeviceOptions(userId).queryKey, pushStatus)
+    })
+  }, [userId])
 
   const refreshMe = useCallback(async () => {
     setMe(await authApi.me())

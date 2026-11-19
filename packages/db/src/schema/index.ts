@@ -8,6 +8,7 @@ export * from "./booker.js"
 export * from "./deck.js"
 export * from "./interest.js"
 export * from "./conversation.js"
+export * from "./notification.js"
 export * from "./safety.js"
 
 /**
@@ -65,5 +66,7 @@ export const rlsTables = [
   "interests",
   "matches",
   "conversations",
+  "notification_prefs",
+  "push_notifications",
   "blocks",
 ] as const

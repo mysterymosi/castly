@@ -1,6 +1,6 @@
 # M6 — Match loop
 
-**Goal.** Two devices go from right-swipe to a real conversation. SMS arrives when push does not.
+**Goal.** Two devices go from right-swipe to a real conversation, with push notifications for match activity.
 
 **Depends on.** M5 — swipes of type `interest`, shortlists, deck sessions.
 
@@ -52,15 +52,17 @@ Booker can attach the role brief to the match so the talent sees the opportunity
 
 **Acceptance.** Talent opening the thread sees the brief when the booker attached one.
 
-### 6.5 Push + SMS fallback
+### 6.5 Push notifications
 
-Expo Push via `device_tokens`. pg-boss fanout. High-value events (new interest, new match): if push unacked within a configured interval, Termii SMS.
+**Status:** Implemented for Expo Push. An interest alerts the talent while it is pending. A match alerts both parties, including when auto-accepted. An unread message alerts the other participant without exposing its contents. A shared brief alerts the talent once per match and defaults to a weekly digest on Mondays at 09:00 in Lagos. Account settings let each user toggle the four categories. The API also supports a per-category cap over a rolling 24 hours and immediate delivery for briefs. Messages default to 20 notifications per 24 hours.
 
-Idempotent writes on `(user_id, category, subject_id)`.
+The API records each event in its source transaction, deduplicated by `(user_id, category, subject_id)`. pg-boss scans for due events every minute and queues one job per registered device. It checks Expo receipts and removes unregistered tokens. The same worker runs interest expiry every 15 minutes. If Expo accepts a push but the response is lost, a delivery retry can repeat the push.
 
-`notification_prefs` with per-category enable and frequency cap; weekly digest default for low-intensity types.
+**Setup.** Apply migration `0021` with `pnpm db:migrate` before restarting the API. Link the mobile app to its Expo project so the app config has `extra.eas.projectId`. Configure APNs for iOS and FCM v1 for Android, including `android.googleServicesFile` in the Android build config. Rebuild the native app with the notifications plugin. Set the server-only `EXPO_PUSH_ACCESS_TOKEN` if the Expo project has enhanced push security enabled. [Expo push setup](https://docs.expo.dev/push-notifications/push-notifications-setup/)
 
-**Acceptance.** With push permission denied, a new interest still produces an SMS to the talent's phone. Retrying the job does not send a second SMS for the same interest.
+**Verification.** API integration tests passed against PostgreSQL with mocked Expo responses. Live-device push testing is deferred until Castly has a paid Apple Developer account and can configure APNs. The push delivery exit gate remains pending.
+
+**Device acceptance test.** On a native build, enable push from Account and send an interest from a second account. Confirm the talent receives one push per registered device. Reprocess the same event and confirm it creates no additional delivery jobs. Deny permission or disable the category and confirm subsequent interests produce no push.
 
 ### 6.6 Inbox surfaces
 
@@ -72,10 +74,11 @@ Mobile: Interests (talent), Matches, Chats. Professional tone: "interested", not
 
 ## Exit gate
 
-Two physical devices complete interest → accept → ≥3 messages. SMS fallback demonstrated with push suppressed. RLS prevents a stranger from reading `messages`.
+Two physical devices complete interest → accept → ≥3 messages. An interest push arrives on a registered device. RLS prevents a stranger from reading `messages`.
 
 ## Deferred
 
+- SMS fallback for new interests and matches
 - Anti-fraud interstitial (M7) — first message from unverified booker
 - `verifiedBooker` blocking the right-swipe that creates the interest (M7)
 - Report/block from chat (M7)

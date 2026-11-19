@@ -1,9 +1,10 @@
 import type { Db } from "@workspace/db"
 import { schema } from "@workspace/db"
 import type { Message, MessageSendInput } from "@workspace/schema"
-import { and, desc, eq, isNull, lt, sql } from "drizzle-orm"
+import { and, desc, eq, isNull, lt, ne, sql } from "drizzle-orm"
 
 import { toMediaStatus } from "../media/service.js"
+import { recordPush } from "../notification/events.js"
 import { MessageError } from "./errors.js"
 
 type MediaRow = typeof schema.mediaAssets.$inferSelect
@@ -84,7 +85,7 @@ async function requireUsableMedia(db: Db, userId: string, input: MessageSendInpu
 /**
  * `message.send`: validates, stores, and returns the message. Realtime then streams the stored
  * row to the other participant (TECH_SPEC §13) — the write goes through here so validation, and
- * later moderation and notification fan-out, always run server-side.
+ * moderation and notification fan-out, always run server-side.
  *
  * Idempotent on `clientId`: a repeat returns the message already stored. Sending also marks the
  * conversation read for the sender up to that message.
@@ -111,6 +112,12 @@ export async function sendMessage(db: Db, userId: string, input: MessageSendInpu
       .onConflictDoNothing()
       .returning()
     if (!created) return null
+    const participants = schema.conversationParticipants
+    const recipients = await tx.select({ userId: participants.userId }).from(participants).where(and(
+      eq(participants.conversationId, input.conversationId),
+      ne(participants.userId, userId),
+    ))
+    await recordPush(tx, "message", created.id, recipients.map((recipient) => recipient.userId))
     await tx
       .update(schema.conversationParticipants)
       .set({ lastReadAt: sql`now()` })
