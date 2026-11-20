@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm"
 
 import { muxPosterUrl } from "./delivery.js"
 import { muxClient } from "./mux-client.js"
+import { applyMp4Rendition, chatMp4File } from "./mux-mp4.js"
 import { applyMediaReadyEvent, markMediaProcessing } from "./service.js"
 
 function videoTrack(asset: {
@@ -52,4 +53,5 @@ export async function syncMuxVideoIfReady(
     durationMs: track?.duration ? Math.round(track.duration * 1000) : undefined,
     posterUrl: muxPosterUrl(playbackId),
   })
+  await applyMp4Rendition(db, row.id, chatMp4File(asset.static_renditions?.files))
 }

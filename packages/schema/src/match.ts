@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { projectTypeSchema } from "./booker"
+import { messageKindSchema } from "./message"
 
 /**
  * The brief a booker attached to a match: what the talent reads to see the opportunity, not just
@@ -30,6 +31,45 @@ export const matchSchema = z.object({
   /** Null until the booker attaches one. */
   brief: matchBriefSchema.nullable(),
   briefAttachedAt: z.string().nullable(),
+  counterpart: z.object({
+    name: z.string(),
+    role: z.enum(["booker", "talent"]),
+  }),
+  projectName: z.string().nullable(),
+  roleName: z.string().nullable(),
+})
+
+const matchListItemSchema = matchSchema
+  .pick({
+    id: true,
+    conversationId: true,
+    counterpart: true,
+    projectName: true,
+    roleName: true,
+    createdAt: true,
+  })
+  .extend({
+    latestMessage: z
+      .object({
+        kind: messageKindSchema,
+        body: z.string().nullable(),
+        createdAt: z.string(),
+      })
+      .nullable(),
+    unread: z.boolean(),
+  })
+
+const matchListCursor = z.object({ sortId: z.uuid(), matchId: z.uuid() })
+
+export const matchListInput = z.object({
+  mode: z.enum(["talent", "booker"]),
+  view: z.enum(["matches", "chats"]),
+  cursor: matchListCursor.nullish(),
+})
+
+export const matchListSchema = z.object({
+  items: z.array(matchListItemSchema),
+  nextCursor: matchListCursor.nullable(),
 })
 
 export const matchIdInput = z.object({ matchId: z.uuid() })

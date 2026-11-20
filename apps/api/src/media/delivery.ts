@@ -37,6 +37,16 @@ export function muxPlaybackUrl(playbackId: string) {
   return `https://stream.mux.com/${playbackId}.m3u8`
 }
 
+/** A Mux static rendition, e.g. `https://stream.mux.com/<id>/720p.mp4`. */
+export function muxMp4Url(playbackId: string, name: string) {
+  return `https://stream.mux.com/${playbackId}/${name}`
+}
+
+/** A video's downloadable MP4, where the provider makes one. */
+export function videoMp4Url(provider: MediaProvider, providerRef: string, name: string) {
+  return provider === "mux" ? muxMp4Url(providerRef, name) : null
+}
+
 export function muxPosterUrl(playbackId: string) {
   return `https://image.mux.com/${playbackId}/thumbnail.jpg`
 }

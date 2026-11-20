@@ -30,7 +30,7 @@ Talent notification: "A {vertical} is interested in you" plus project if attache
 
 ### 6.3 Messages via tRPC; reads via Realtime
 
-**Status:** Built for text, image and video; documents and audio not built (migration `0019`). `message.send | list | markRead` on `authedProcedure`, membership checked on every call (a stranger and a missing conversation are both NOT_FOUND). `send` is idempotent on an optional `clientId`; `list` pages by message id, newest first. RLS: `authenticated` has SELECT on `messages` through a participant-membership policy that hides deleted messages, and on its own `conversation_participants` rows; `anon` has none, and nobody can write through the Data API. `messages` is in the `supabase_realtime` publication, and typing/presence use private `conversation:<id>` broadcast channels restricted by policies on `realtime.messages`. `message.conversation_id` is NOT NULL with a foreign key, so a message cannot exist without a conversation, hence a match (the plan's "match_id" is reached through it). Media reuses the M2 pipeline for image and video: the sender must own a finished upload of the right kind, once; cleanup protects it; upload procedures are now open to any signed-in user so a booker can send media. Verified live with `pnpm --filter api realtime:probe` (real JWTs and Realtime sockets: the other side receives the message, a third subscriber receives nothing, a stranger is refused the typing channel). Not done: document and audio messages — the pipeline's buckets are public-read, so scripts and briefs need a private bucket and signed downloads first; notification fan-out (6.5); the mobile Realtime client, which must open typing channels as private (6.6). Hosted Supabase: turn off "Allow public access" in Realtime settings. Tests: `src/message/`.
+**Status:** Built for text, image and video; documents and audio not built (migration `0019`). `message.send | list | markRead` on `authedProcedure`, membership checked on every call (a stranger and a missing conversation are both NOT_FOUND). `send` is idempotent on an optional `clientId`; `list` pages by message id, newest first. RLS: `authenticated` has SELECT on `messages` through a participant-membership policy that hides deleted messages, and on its own `conversation_participants` rows; `anon` has none, and nobody can write through the Data API. `messages` is in the `supabase_realtime` publication, and typing/presence use private `conversation:<id>` broadcast channels restricted by policies on `realtime.messages`. `message.conversation_id` is NOT NULL with a foreign key, so a message cannot exist without a conversation, hence a match (the plan's "match_id" is reached through it). Media reuses the M2 pipeline for image and video: the sender must own a finished upload of the right kind, once; cleanup protects it; upload procedures are now open to any signed-in user so a booker can send media. Verified live with `pnpm --filter api realtime:probe` (real JWTs and Realtime sockets: the other side receives the message, a third subscriber receives nothing, a stranger is refused the typing channel). Document and audio messages still need a private bucket and signed downloads. Push fan-out is in 6.5, and the mobile client uses private Realtime channels in 6.6. Hosted Supabase: turn off "Allow public access" in Realtime settings. Tests: `src/message/`.
 
 `message.send` validates, stores, fans out notifications. `message.list`, `markRead`.
 
@@ -46,7 +46,7 @@ Quick replies are client-only templates.
 
 ### 6.4 Brief attachment
 
-**Status:** Done (API; thread UI is 6.6). `match.attachBrief` (booker) copies the role's offer onto the match — role, project, written brief, shoot window, rate range — and `match.get` (either side) returns it with the `conversationId`, so a talent opening the thread reads it (migration `0020`, `matches.brief` / `brief_attached_at`). It is a snapshot, not a live link: the talent sees what was offered until the booker attaches again, which replaces it. `roles.requirements` is never copied, because it can hold sensitive-tier attributes. Defaults to the role the interest was for; a role-less match needs a `roleId`, which must be the booker's own and have a written brief. The talent is not told when a brief is attached (6.5) and the thread does not update live; the client refetches `match.get`. Tests: `src/match/`.
+**Status:** Done (API; thread UI is 6.6). `match.attachBrief` (booker) copies the role's offer onto the match — role, project, written brief, shoot window, rate range — and `match.get` (either side) returns it with the `conversationId`, so a talent opening the thread reads it (migration `0020`, `matches.brief` / `brief_attached_at`). It is a snapshot, not a live link: the talent sees what was offered until the booker attaches again, which replaces it. `roles.requirements` is never copied, because it can hold sensitive-tier attributes. Defaults to the role the interest was for; a role-less match needs a `roleId`, which must be the booker's own and have a written brief. Sharing a brief queues a notification (6.5). When both clients have the conversation open, the talent’s client refreshes `match.get` on the private channel signal (6.6). Tests: `src/match/`.
 
 Booker can attach the role brief to the match so the talent sees the opportunity, not just "hi."
 
@@ -66,9 +66,15 @@ The API records each event in its source transaction, deduplicated by `(user_id,
 
 ### 6.6 Inbox surfaces
 
+**Status.** The mobile Inbox shows pending Interests in talent mode, and Matches and Chats in both modes. Accepting an interest opens the talent's chat. The booker opens the same conversation from Inbox. Threads support text, photo and video messages, quick replies, read receipts, typing, presence, and viewing or sharing a role brief.
+
+**Realtime setup.** Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the mobile environment and restart Metro or rebuild. Use a Supabase origin the device can reach. Threads use the signed-in user's access token for private channels and refresh through tRPC when the connection is unavailable.
+
 Mobile: Interests (talent), Matches, Chats. Professional tone: "interested", not "liked". No confetti.
 
-**Acceptance.** Maestro or two-device manual: swipe right → talent sees interest → accept → both land in the same chat.
+**Acceptance.** Swipe right as the booker. In talent mode, open Inbox → Interests and accept. In booker mode, open the matching thread from Inbox → Matches. Verify both clients see the messages exchanged in that conversation.
+
+**Verification.** The local run used a real deck interest and two signed-in Expo web clients. Both opened the same chat, exchanged three messages over Realtime, and viewed a shared brief. The Realtime probe also verified that a third account received no messages and could not join the private typing channel. The two-physical-device check remains pending.
 
 ---
 

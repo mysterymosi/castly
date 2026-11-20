@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from "react"
 
+import { randomUUID } from "@/lib/uuid"
+
 import { pickCanvas, pickVideo } from "./upload"
 import { isIntentActive, type UploadIntent } from "./upload-intent"
 import { uploadQueueProcessor } from "./upload-queue-processor"
@@ -28,11 +30,6 @@ type UploadQueueValue = {
 }
 
 const UploadQueueContext = createContext<UploadQueueValue | null>(null)
-
-function randomId() {
-  const crypto = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
-  return crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
-}
 
 export function UploadQueueProvider({
   children,
@@ -72,7 +69,7 @@ export function UploadQueueProvider({
 
   const enqueueShowreel = useCallback((fileUri: string) => {
     return uploadQueueProcessor.enqueue({
-      id: randomId(),
+      id: randomUUID(),
       kind: "video",
       fileUri,
       mimeType: "video/mp4",
@@ -94,7 +91,7 @@ export function UploadQueueProvider({
       if (row.goal === "canvas" && !isIntentActive(row)) uploadQueueProcessor.dismiss(row.id)
     }
     const id = uploadQueueProcessor.enqueue({
-      id: randomId(),
+      id: randomUUID(),
       kind: picked.kind,
       fileUri: picked.uri,
       mimeType: picked.mimeType,
@@ -106,7 +103,7 @@ export function UploadQueueProvider({
   const enqueuePhotos = useCallback((uris: string[], replaceMediaId?: string) => {
     for (const uri of uris) {
       uploadQueueProcessor.enqueue({
-        id: randomId(),
+        id: randomUUID(),
         kind: "image",
         fileUri: uri,
         mimeType: "image/jpeg",

@@ -5,8 +5,21 @@ import { mediaStatusOutput } from "./media"
 /** The longest a message body may be. Mirrors the `messages_body_length` check. */
 export const MESSAGE_BODY_MAX = 4000
 
+/**
+ * The longest chat video, in seconds. Checked when the video is picked, before any upload, so a
+ * sender on mobile data isn't left pushing hundreds of megabytes. Viewers get a 720p copy either
+ * way; this protects the sender's data and time.
+ */
+export const CHAT_VIDEO_MAX_SECONDS = 180
+
 /** Mirrors the `message_kind` enum. */
-export const messageKinds = ["text", "image", "video", "audio", "document"] as const
+export const messageKinds = [
+  "text",
+  "image",
+  "video",
+  "audio",
+  "document",
+] as const
 export const messageKindSchema = z.enum(messageKinds)
 
 /**
@@ -47,10 +60,24 @@ export const messageSendInput = z
   })
   .superRefine((input, ctx) => {
     if (input.kind === "text") {
-      if (!input.body) ctx.addIssue({ code: "custom", path: ["body"], message: "A message needs text" })
-      if (input.mediaId) ctx.addIssue({ code: "custom", path: ["mediaId"], message: "A text message has no media" })
+      if (!input.body)
+        ctx.addIssue({
+          code: "custom",
+          path: ["body"],
+          message: "A message needs text",
+        })
+      if (input.mediaId)
+        ctx.addIssue({
+          code: "custom",
+          path: ["mediaId"],
+          message: "A text message has no media",
+        })
     } else if (!input.mediaId) {
-      ctx.addIssue({ code: "custom", path: ["mediaId"], message: `A ${input.kind} message needs its media` })
+      ctx.addIssue({
+        code: "custom",
+        path: ["mediaId"],
+        message: `A ${input.kind} message needs its media`,
+      })
     }
   })
 
@@ -65,9 +92,18 @@ export const messageListInput = z.object({
 export const messageListSchema = z.object({
   messages: z.array(messageSchema),
   nextCursor: z.uuid().nullable(),
+  peerLastReadAt: z.string().nullable(),
+  /**
+   * The newest message the other participant has read, compared in the database at full
+   * precision. Use this, not `peerLastReadAt`, to decide whether a message was seen.
+   */
+  peerReadThroughId: z.uuid().nullable(),
 })
 
-export const messageMarkReadInput = z.object({ conversationId: z.uuid() })
+export const messageMarkReadInput = z.object({
+  conversationId: z.uuid(),
+  messageId: z.uuid().optional(),
+})
 
 export const messageMarkReadSchema = z.object({ lastReadAt: z.string() })
 

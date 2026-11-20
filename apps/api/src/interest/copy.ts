@@ -1,7 +1,7 @@
 import type { BookerVertical } from "@workspace/schema"
 
 /** How a booker's vertical reads mid-sentence. "Other" has no honest noun, so it is just a booker. */
-const verticalNoun: Record<BookerVertical, string> = {
+export const verticalNoun: Record<BookerVertical, string> = {
   casting_director: "casting director",
   producer: "producer",
   director: "director",

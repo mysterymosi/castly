@@ -67,6 +67,26 @@ function RootNavigator() {
         <Stack.Screen name="index" />
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="chat/[matchId]" />
+          <Stack.Screen
+            name="brief/[matchId]"
+            options={{
+              presentation: "formSheet",
+              sheetGrabberVisible: true,
+              sheetAllowedDetents: [0.72, 1],
+              sheetCornerRadius: 24,
+              sheetExpandsWhenScrolledToEdge: true,
+              contentStyle: { backgroundColor: color.bg },
+            }}
+          />
+          <Stack.Screen
+            name="media-viewer"
+            options={{
+              presentation: "fullScreenModal",
+              animation: "fade",
+              contentStyle: { backgroundColor: "#000" },
+            }}
+          />
           <Stack.Screen
             name="booker-setup"
             options={{

@@ -2,10 +2,17 @@ import { z } from "zod"
 
 export const mediaKindInputSchema = z.enum(["image", "video"])
 
+/**
+ * What an upload is for. A chat video also gets a downloadable MP4, so the phone can keep it and
+ * replay it without downloading again; portfolio video streams only.
+ */
+export const mediaUploadPurposeSchema = z.enum(["portfolio", "chat"])
+
 export const createUploadUrlInput = z.object({
   kind: mediaKindInputSchema,
   contentType: z.string().min(3).max(120),
   byteSize: z.number().int().positive().max(512 * 1024 * 1024).optional(),
+  purpose: mediaUploadPurposeSchema.default("portfolio"),
 })
 
 export const mediaUploadMethodSchema = z.enum(["POST", "PUT"])
@@ -42,6 +49,11 @@ export const mediaStatusOutput = z.object({
   durationMs: z.number().int().nullable(),
   posterUrl: z.url().nullable(),
   playbackUrl: z.url().nullable(),
+  /**
+   * A video's downloadable MP4, once the provider has made it. Play this when present: unlike the
+   * HLS \`playbackUrl\` it can be cached on the device.
+   */
+  mp4Url: z.url().nullable(),
   blurhash: z.string().nullable(),
   variants: mediaImageVariantsSchema.nullable(),
 })
@@ -61,3 +73,4 @@ export const deleteMediaOutput = z.object({
 export type CreateUploadUrlInput = z.infer<typeof createUploadUrlInput>
 export type CreateUploadUrlOutput = z.infer<typeof createUploadUrlOutput>
 export type MediaStatusOutput = z.infer<typeof mediaStatusOutput>
+export type MediaUploadPurpose = z.infer<typeof mediaUploadPurposeSchema>

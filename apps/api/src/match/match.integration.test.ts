@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 
 import { schema } from "@workspace/db"
-import { eq } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { db } from "../db.js"
@@ -170,5 +170,59 @@ describe("match.attachBrief", () => {
     expect(
       await code(db.update(schema.matches).set({ briefAttachedAt: new Date() }).where(eq(schema.matches.id, m.matchId))),
     ).toBe("23514")
+  })
+})
+
+describe("match inbox", () => {
+  afterEach(cleanupDeckFixtures)
+
+  it("opens the same chat on both sides and previews unread messages only for the recipient", async () => {
+    const m = await matched("inbox")
+    const { conversationId } = await m.talent.api.match.get({ matchId: m.matchId })
+    const stranger = caller(await newUser("inbox-stranger"))
+    const input = { view: "chats", mode: "talent" } as const
+
+    expect(await stranger.match.list(input)).toEqual({ items: [], nextCursor: null })
+    expect(await m.booker.api.match.list(input)).toEqual({ items: [], nextCursor: null })
+    const bookerInbox = () => m.booker.api.match.list({ ...input, mode: "booker" })
+    const talentInbox = () => m.talent.api.match.list(input)
+    expect((await bookerInbox()).items).toMatchObject([{ conversationId, latestMessage: null, unread: false }])
+    expect((await talentInbox()).items).toMatchObject([{ conversationId, projectName: "Lagos Nights", unread: false }])
+
+    const first = await m.booker.api.message.send({ conversationId, body: "Are you free?" })
+    const second = await m.booker.api.message.send({ conversationId, body: "Friday morning." })
+    expect((await talentInbox()).items).toMatchObject([{ latestMessage: { body: "Friday morning." }, unread: true }])
+    expect((await bookerInbox()).items).toMatchObject([{ unread: false }])
+
+    await m.talent.api.message.markRead({ conversationId, messageId: first.id })
+    expect((await talentInbox()).items).toMatchObject([{ unread: true }])
+    await m.talent.api.message.markRead({ conversationId, messageId: second.id })
+    expect((await talentInbox()).items).toMatchObject([{ unread: false }])
+    expect((await m.booker.api.message.list({ conversationId })).peerLastReadAt).toBe(second.createdAt)
+    await expect(m.talent.api.message.markRead({ conversationId, messageId: randomUUID() }))
+      .rejects.toMatchObject({ code: "NOT_FOUND" })
+  })
+
+  it("tells a message in the same millisecond as the last read apart from one already read", async () => {
+    const m = await matched("microsecond")
+    const { conversationId } = await m.talent.api.match.get({ matchId: m.matchId })
+    const talentInbox = () => m.talent.api.match.list({ view: "chats", mode: "talent" })
+    // Postgres keeps microseconds; a JavaScript Date keeps milliseconds. These two collide there.
+    const stamp = (id: string, micros: string) =>
+      db.execute(sql`update messages set created_at = ${`2027-01-01 12:00:00.${micros}+00`}::timestamptz where id = ${id}`)
+
+    const read = await m.booker.api.message.send({ conversationId, body: "Are you free?" })
+    await stamp(read.id, "123100")
+    await m.talent.api.message.markRead({ conversationId, messageId: read.id })
+
+    const newer = await m.booker.api.message.send({ conversationId, body: "Friday morning." })
+    await stamp(newer.id, "123400")
+
+    expect((await talentInbox()).items).toMatchObject([{ unread: true }])
+    expect(await m.booker.api.message.list({ conversationId })).toMatchObject({ peerReadThroughId: read.id })
+
+    await m.talent.api.message.markRead({ conversationId, messageId: newer.id })
+    expect((await talentInbox()).items).toMatchObject([{ unread: false }])
+    expect(await m.booker.api.message.list({ conversationId })).toMatchObject({ peerReadThroughId: newer.id })
   })
 })

@@ -16,7 +16,8 @@ export default function AppTabs() {
 
   return (
     <NativeTabs
-      // Back never lands on a tab the current mode hides (the default jumps to `studio`).
+      // Back never lands on a tab the current mode hides: the default returns to the initial route
+      // (`inbox`), and a mode's own tabs are the only ones it should reach.
       backBehavior="none"
       backgroundColor={color.surface}
       indicatorColor={color.accent}
@@ -57,6 +58,14 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon
           sf={{ default: "folder", selected: "folder.fill" }}
           md="folder"
+        />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="inbox">
+        <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: "bubble.left.and.bubble.right", selected: "bubble.left.and.bubble.right.fill" }}
+          md="forum"
         />
       </NativeTabs.Trigger>
 

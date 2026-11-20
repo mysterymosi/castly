@@ -35,6 +35,9 @@ export default function AppTabs() {
               </TabTrigger>
             </>
           )}
+          <TabTrigger name="inbox" href="/inbox" asChild>
+            <TabButton icon="chat" label="Inbox" />
+          </TabTrigger>
           <TabTrigger name="account" href="/account" asChild>
             <TabButton icon="person" label="Account" />
           </TabTrigger>

@@ -146,39 +146,73 @@ export async function listMessages(
 ) {
   await requireParticipant(db, userId, input.conversationId)
 
-  const rows = await db
-    .select({ message: schema.messages, media: schema.mediaAssets })
-    .from(schema.messages)
-    .leftJoin(schema.mediaAssets, eq(schema.mediaAssets.id, schema.messages.mediaId))
-    .where(
-      and(
-        eq(schema.messages.conversationId, input.conversationId),
-        isNull(schema.messages.deletedAt),
-        input.cursor ? lt(schema.messages.id, input.cursor) : undefined,
-      ),
-    )
-    .orderBy(desc(schema.messages.id))
-    .limit(input.limit + 1)
+  const participants = schema.conversationParticipants
+  // The newest message the other side has read, decided in Postgres: timestamps lose their
+  // microseconds in JavaScript, which would call a message in the same millisecond "read".
+  const readThroughId = sql<string | null>`(
+    select m.id from messages m
+    where m.conversation_id = ${input.conversationId}
+      and m.deleted_at is null
+      and m.created_at <= ${participants.lastReadAt}
+    order by m.id desc limit 1
+  )`
+  const [rows, [peer]] = await Promise.all([
+    db
+      .select({ message: schema.messages, media: schema.mediaAssets })
+      .from(schema.messages)
+      .leftJoin(schema.mediaAssets, eq(schema.mediaAssets.id, schema.messages.mediaId))
+      .where(
+        and(
+          eq(schema.messages.conversationId, input.conversationId),
+          isNull(schema.messages.deletedAt),
+          input.cursor ? lt(schema.messages.id, input.cursor) : undefined,
+        ),
+      )
+      .orderBy(desc(schema.messages.id))
+      .limit(input.limit + 1),
+    db
+      .select({ lastReadAt: participants.lastReadAt, readThroughId })
+      .from(participants)
+      .where(and(eq(participants.conversationId, input.conversationId), ne(participants.userId, userId))),
+  ])
 
   const page = rows.slice(0, input.limit)
   return {
     messages: page.map(({ message, media }) => toMessage(message, media)),
     nextCursor: rows.length > input.limit ? page[page.length - 1]!.message.id : null,
+    peerLastReadAt: peer?.lastReadAt?.toISOString() ?? null,
+    peerReadThroughId: peer?.readThroughId ?? null,
   }
 }
 
-/** `message.markRead`: the caller has read the conversation up to now. */
-export async function markRead(db: Db, userId: string, conversationId: string) {
+/** `message.markRead`: the caller has read the conversation up to a message, or up to now. */
+export async function markRead(db: Db, userId: string, conversationId: string, messageId?: string) {
+  const participants = schema.conversationParticipants
+  const messages = schema.messages
+  const mine = and(eq(participants.conversationId, conversationId), eq(participants.userId, userId))
+
+  if (!messageId) {
+    const [row] = await db
+      .update(participants)
+      .set({ lastReadAt: sql`greatest(${participants.lastReadAt}, now())` })
+      .where(mine)
+      .returning({ lastReadAt: participants.lastReadAt })
+    return readResult(row)
+  }
+
+  // The message's own timestamp as Postgres stores it, microseconds included.
+  const seen = db.select({ createdAt: messages.createdAt }).from(messages).where(and(
+    eq(messages.conversationId, conversationId), eq(messages.id, messageId), isNull(messages.deletedAt),
+  ))
   const [row] = await db
-    .update(schema.conversationParticipants)
-    .set({ lastReadAt: sql`now()` })
-    .where(
-      and(
-        eq(schema.conversationParticipants.conversationId, conversationId),
-        eq(schema.conversationParticipants.userId, userId),
-      ),
-    )
-    .returning({ lastReadAt: schema.conversationParticipants.lastReadAt })
+    .update(participants)
+    .set({ lastReadAt: sql`greatest(${participants.lastReadAt}, (${seen}))` })
+    .where(and(mine, sql`exists (${seen})`))
+    .returning({ lastReadAt: participants.lastReadAt })
+  return readResult(row)
+}
+
+function readResult(row: { lastReadAt: Date | null } | undefined) {
   if (!row?.lastReadAt) throw new MessageError("Conversation not found", "conversation_not_found")
   return { lastReadAt: row.lastReadAt.toISOString() }
 }

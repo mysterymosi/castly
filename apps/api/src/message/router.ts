@@ -30,5 +30,5 @@ export const messageRouter = router({
   markRead: authedProcedure
     .input(messageMarkReadInput)
     .output(messageMarkReadSchema)
-    .mutation(({ ctx, input }) => callProcedure(() => markRead(ctx.db, ctx.userId, input.conversationId))),
+    .mutation(({ ctx, input }) => callProcedure(() => markRead(ctx.db, ctx.userId, input.conversationId, input.messageId))),
 })

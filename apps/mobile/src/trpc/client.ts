@@ -9,6 +9,7 @@ import {
 import type { AppRouter } from "api/router"
 
 import { getAccessToken } from "@/auth/token"
+import { randomUUID } from "@/lib/uuid"
 
 // Native dev builds can get Metro's host from the bundle URL when hostUri is missing.
 // The native registry is absent during web export.
@@ -29,18 +30,12 @@ export function apiBaseUrl() {
   return `http://${host ?? "127.0.0.1"}:3001`
 }
 
-function requestId() {
-  const crypto = (globalThis as { crypto?: { randomUUID?: () => string } })
-    .crypto
-  return crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
-}
-
 export const trpc: TRPCClient<AppRouter> = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
       url: `${apiBaseUrl()}/trpc`,
       headers() {
-        const headers: Record<string, string> = { "x-request-id": requestId() }
+        const headers: Record<string, string> = { "x-request-id": randomUUID() }
         const token = getAccessToken()
         if (token) headers.authorization = `Bearer ${token}`
         return headers
