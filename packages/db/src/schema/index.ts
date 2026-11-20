@@ -6,13 +6,19 @@ export * from "./media.js"
 export * from "./search.js"
 export * from "./booker.js"
 export * from "./deck.js"
+export * from "./interest.js"
+export * from "./conversation.js"
+export * from "./notification.js"
 export * from "./safety.js"
 
 /**
  * Tables with RLS enabled and no policies (default-deny).
  * `anon` and `authenticated` have SELECT only, so a query returns zero rows.
- * Writes stay revoked. M6 may grant `authenticated` SELECT on chat tables.
- * The API connects as `castly_api`, which bypasses RLS.
+ * Writes stay revoked. The API connects as `castly_api`, which bypasses RLS.
+ *
+ * Not listed, because they carry policies (0019): `messages` (a participant reads their own
+ * conversation's undeleted messages) and `conversation_participants` (a user reads their own
+ * rows). `authenticated` has SELECT on those two and nothing else; `anon` has no access to them.
  */
 export const rlsTables = [
   "users",
@@ -57,5 +63,10 @@ export const rlsTables = [
   "deck_impressions",
   "talent_exposure_daily",
   "profile_views",
+  "interests",
+  "matches",
+  "conversations",
+  "notification_prefs",
+  "push_notifications",
   "blocks",
 ] as const

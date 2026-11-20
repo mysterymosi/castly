@@ -14,6 +14,7 @@ import { handleLocalMediaUpload } from "./media/local-upload.js"
 import { applyMediaReadyEvent } from "./media/service.js"
 import { measurePayload } from "./observability/measure-payload.js"
 import { verifyMediaProviderWebhook } from "./media/webhook.js"
+import { startNotificationWorker } from "./notification/worker.js"
 import { createContext, type Context } from "./trpc/context.js"
 import { appRouter } from "./trpc/router.js"
 
@@ -100,7 +101,19 @@ app.use(
 )
 
 const port = Number(process.env.PORT ?? 3001)
+const notificationWorker = await startNotificationWorker(db)
 
-serve({ fetch: app.fetch, port }, (info) => {
+const server = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`api listening on ${info.port}`)
 })
+
+async function stop() {
+  await Promise.all([
+    new Promise<void>((resolve) => server.close(() => resolve())),
+    notificationWorker.stop(),
+  ])
+  await db.$client.end()
+}
+
+process.once("SIGTERM", stop)
+process.once("SIGINT", stop)

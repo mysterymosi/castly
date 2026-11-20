@@ -76,6 +76,18 @@ export const mediaAssetStatus = pgEnum("media_asset_status", [
   "quarantined",
 ])
 
+/**
+ * A downloadable MP4 copy of a video, beside its HLS stream. Chat videos ask Mux for one so the
+ * phone can keep it and replay it without downloading again (HLS can't be cached on iOS). Null:
+ * none was requested. `skipped`: Mux made none, e.g. the source is smaller than the rendition.
+ */
+export const mediaMp4Status = pgEnum("media_mp4_status", [
+  "preparing",
+  "ready",
+  "skipped",
+  "errored",
+])
+
 /** Talent-owned profile. `user_id` is the sole owner and cannot be reassigned (DB trigger). */
 export const talentProfiles = pgTable(
   "talent_profiles",
@@ -100,6 +112,11 @@ export const talentProfiles = pgTable(
       .notNull()
       .default("0"),
     rateVisibility: rateVisibility("rate_visibility").notNull().default("public"),
+    /**
+     * Opt-in: an interest from a verified booker becomes a match at once (PRD §6.3). Off by
+     * default — the talent chooses to waive the mutual opt-in; we never assume it for them.
+     */
+    autoAcceptVerified: boolean("auto_accept_verified").notNull().default(false),
     /**
      * The talent's showreel (a ready Mux video), shown in the portfolio's Showreel slot. The
      * portfolio's layout is fixed by category (`portfolioLayoutFor`), so this is a field, not a
@@ -354,10 +371,23 @@ export const mediaAssets = pgTable(
     blurhash: text("blurhash"),
     moderationStatus: text("moderation_status"),
     moderationPayload: jsonb("moderation_payload"),
+    mp4Status: mediaMp4Status("mp4_status"),
+    /** The rendition's file name at the provider (Mux: "720p.mp4"), set once it is ready. */
+    mp4Name: text("mp4_name"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
-  (table) => [index("media_assets_owner_id_idx").on(table.ownerId)],
+  (table) => [
+    index("media_assets_owner_id_idx").on(table.ownerId),
+    // The MP4 sweep reads only renditions still being made.
+    index("media_assets_mp4_preparing_idx")
+      .on(table.createdAt)
+      .where(sql`${table.mp4Status} = 'preparing'`),
+    check(
+      "media_assets_mp4_name_when_ready",
+      sql`(${table.mp4Status} IS NOT DISTINCT FROM 'ready') = (${table.mp4Name} IS NOT NULL)`,
+    ),
+  ],
 )
 
 /**

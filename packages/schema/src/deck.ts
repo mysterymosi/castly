@@ -169,6 +169,13 @@ export const deckSwipeInput = z.object({
 export const deckSwipeResultSchema = z.object({
   /** The shortlist the talent landed on: the role's (interest), Saved talent (save, or no role). */
   shortlistId: z.uuid().nullable(),
+  /**
+   * Set when this swipe's interest was accepted at once (the talent has auto-accept on and the
+   * booker is verified): the match and its open chat. Null otherwise — the interest is pending,
+   * or none was sent.
+   */
+  matchId: z.uuid().nullable(),
+  conversationId: z.uuid().nullable(),
   goal: deckGoalSchema,
   /** Undos left this session; null when unlimited (Pro, M10). */
   undosLeft: z.number().int().nullable(),

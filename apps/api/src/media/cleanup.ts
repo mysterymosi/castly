@@ -12,7 +12,7 @@ import { muxClient, muxConfigured } from "./mux-client.js"
  * their use (NDPA); the storage bill agrees.
  *
  * "In use" is anything that can show a media id: a photo slot, the showreel, the card config
- * (canvas, the old lead). A media row with any of
+ * (canvas, the old lead), a chat message. A media row with any of
  * those is never touched. The provider file is deleted first; if that fails the row stays, so a
  * later sweep tries again rather than leaving an orphaned file nobody can find.
  */
@@ -34,6 +34,8 @@ async function referencedMediaIds(db: Db, ids: string[]): Promise<Set<string>> {
       SELECT media_id AS id FROM talent_photos WHERE media_id = ANY(${idArray})
       UNION ALL
       SELECT showreel_media_id FROM talent_profiles WHERE showreel_media_id = ANY(${idArray})
+      UNION ALL
+      SELECT media_id FROM messages WHERE media_id = ANY(${idArray})
       UNION ALL
       SELECT (card_config->>'canvasMediaId')::uuid FROM talent_profiles
         WHERE card_config->>'canvasMediaId' IS NOT NULL
@@ -147,13 +149,14 @@ export async function deleteUnusedMedia(
       })
       continue
     }
-    // Re-checked inside the delete: a photo slot taken since the check keeps its media.
+    // Re-checked inside the delete: a photo slot or message taken since the check keeps its media.
     const removed = await db
       .delete(schema.mediaAssets)
       .where(
         and(
           eq(schema.mediaAssets.id, row.id),
-          sql`NOT EXISTS (SELECT 1 FROM talent_photos WHERE media_id = ${row.id})`
+          sql`NOT EXISTS (SELECT 1 FROM talent_photos WHERE media_id = ${row.id})
+            AND NOT EXISTS (SELECT 1 FROM messages WHERE media_id = ${row.id})`
         )
       )
       .returning({ id: schema.mediaAssets.id })

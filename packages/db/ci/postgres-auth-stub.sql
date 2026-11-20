@@ -26,3 +26,27 @@ BEGIN
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
+
+-- Match the Supabase objects used by the chat RLS migration and integration tests.
+CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+LANGUAGE sql STABLE
+AS $$
+  SELECT (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')::uuid
+$$;
+GRANT USAGE ON SCHEMA auth TO authenticated;
+
+CREATE SCHEMA IF NOT EXISTS realtime;
+CREATE TABLE IF NOT EXISTS realtime.messages (extension text);
+ALTER TABLE realtime.messages ENABLE ROW LEVEL SECURITY;
+CREATE OR REPLACE FUNCTION realtime.topic() RETURNS text
+LANGUAGE sql STABLE
+AS $$
+  SELECT nullif(current_setting('realtime.topic', true), '')
+$$;
+
+DO $$
+BEGIN
+  CREATE PUBLICATION supabase_realtime;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;

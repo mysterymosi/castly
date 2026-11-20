@@ -12,13 +12,15 @@
     "seed:measure": "tsx src/scripts/seed-measure-portfolio.ts",
     "seed:deck": "tsx src/scripts/seed-deck.ts",
     "media:cleanup": "tsx src/scripts/media-cleanup.ts",
+    "interest:expire": "tsx src/scripts/expire-interests.ts",
+    "realtime:probe": "tsx src/scripts/realtime-probe.ts",
     "measure:deck-payload": "tsx src/scripts/measure-deck-payload.ts",
     "measure:candidates": "tsx src/scripts/measure-candidates.ts",
     "measure:deck-next": "tsx src/scripts/measure-deck-next.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:unit": "vitest run src/auth/age.test.ts src/auth/rate-limit.test.ts src/talent/public-rate-limit.test.ts src/taxonomy/attribute-policy.test.ts src/auth/termii.test.ts src/auth/phone.test.ts src/observability/sentry.test.ts",
-    "test:integration": "vitest run --no-file-parallelism src/trpc/middleware.test.ts src/auth/router.test.ts src/media/media.integration.test.ts src/talent/publish.integration.test.ts src/talent/canvas.integration.test.ts src/talent/categories.integration.test.ts src/talent/content.integration.test.ts src/talent/photos.integration.test.ts src/media/cleanup.integration.test.ts src/talent/public.integration.test.ts src/talent/serialize-talent.guard.test.ts src/booker/booker.integration.test.ts src/admin/vertical-weights.integration.test.ts src/admin/deck-inspector.integration.test.ts src/project/project.integration.test.ts src/deck/preview.integration.test.ts src/deck/session.integration.test.ts src/deck/swipe.integration.test.ts"
+    "test:unit": "vitest run src/auth/age.test.ts src/auth/rate-limit.test.ts src/talent/public-rate-limit.test.ts src/taxonomy/attribute-policy.test.ts src/auth/termii.test.ts src/auth/phone.test.ts src/observability/sentry.test.ts src/interest/copy.test.ts",
+    "test:integration": "vitest run --no-file-parallelism src/trpc/middleware.test.ts src/auth/router.test.ts src/media/media.integration.test.ts src/talent/publish.integration.test.ts src/talent/canvas.integration.test.ts src/talent/categories.integration.test.ts src/talent/content.integration.test.ts src/talent/photos.integration.test.ts src/media/cleanup.integration.test.ts src/talent/public.integration.test.ts src/talent/serialize-talent.guard.test.ts src/booker/booker.integration.test.ts src/admin/vertical-weights.integration.test.ts src/admin/deck-inspector.integration.test.ts src/project/project.integration.test.ts src/deck/preview.integration.test.ts src/deck/session.integration.test.ts src/deck/swipe.integration.test.ts src/interest/interest.integration.test.ts src/message/message.integration.test.ts src/match/match.integration.test.ts src/notification/notification.integration.test.ts src/media/mux-mp4.integration.test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",
@@ -33,6 +35,7 @@
     "hono": "^4.11.3",
     "image-size": "^2.0.4",
     "jose": "^6.2.12",
+    "pg-boss": "^12.38.2",
     "standardwebhooks": "^1.1.1",
     "zod": "^4.4.3"
   },

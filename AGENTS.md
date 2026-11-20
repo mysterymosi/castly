@@ -17,3 +17,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- END:nextjs-agent-rules -->
 
 Push back when you disagree; state a recommendation with trade-offs named, not a survey.
+
+## Graphify
+
+For questions about code structure, callers, dependencies, or the impact of a change, query Graphify's code graph (MCP server `graphify`) before using grep:
+- `query_graph` / `graphify_find` — locate modules, symbols, and how they relate.
+- `graphify_callers` — who calls a function or uses a symbol.
+- `graphify_impact` — what breaks if something changes.
+- `review_status` — status of Graphify PR reviews.
+
+The graph reflects the default branch (`main`) only — not other branches or uncommitted work. For anything touched on the current branch (check `git status` / `git diff main...`), confirm graph answers with grep or by reading the file.
+
+Use grep for exact-string searches. If the Graphify tools are unavailable, say so and fall back to grep.

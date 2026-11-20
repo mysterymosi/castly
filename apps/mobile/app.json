@@ -14,6 +14,7 @@
       "appleTeamId": "U4MW77Z972"
     },
     "android": {
+      "package": "com.okimmosi.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#0E0F13",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -41,11 +42,24 @@
         }
       ],
       "expo-secure-store",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "castly"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5ec0eb0d-fa34-4671-b55a-c4d37b19bf2c"
+      }
+    },
+    "owner": "okimmosi"
   }
 }

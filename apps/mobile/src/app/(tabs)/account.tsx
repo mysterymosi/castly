@@ -21,6 +21,7 @@ import {
   useActiveMode,
   type ActiveMode,
 } from "@/mode/active-mode"
+import { NotificationSettings } from "@/notification/notification-settings"
 import {
   setAppearance,
   useAppearancePreference,
@@ -154,6 +155,8 @@ export default function AccountScreen() {
         </Text>
         <AppearanceSwitch />
       </View>
+
+      <NotificationSettings userId={me.id} disabled={pending === "signOut"} />
 
       <Button
         label="Sign out"

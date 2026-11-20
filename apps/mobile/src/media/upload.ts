@@ -7,6 +7,7 @@ import {
   canvasSpec,
   type CreateUploadUrlOutput,
   type MediaStatusOutput,
+  type MediaUploadPurpose,
 } from "@workspace/schema"
 
 import { invoke, trpc } from "@/trpc/client"
@@ -107,9 +108,14 @@ export async function compressImage(uri: string, { canvas = false } = {}) {
   return manipulated.uri
 }
 
-export async function createUpload(kind: "image" | "video", contentType: string, byteSize?: number) {
+export async function createUpload(
+  kind: "image" | "video",
+  contentType: string,
+  byteSize?: number,
+  purpose: MediaUploadPurpose = "portfolio"
+) {
   return invoke(() =>
-    trpc.media.createUploadUrl.mutate({ kind, contentType, byteSize })
+    trpc.media.createUploadUrl.mutate({ kind, contentType, byteSize, purpose })
   )
 }
 
@@ -265,10 +271,14 @@ export async function uploadImageFromUri(uri: string): Promise<MediaStatusOutput
   return waitForReady(upload.mediaId)
 }
 
-export async function uploadVideoFromUri(uri: string): Promise<MediaStatusOutput> {
+/** `chat` also asks for an MP4 the recipient's phone can cache; portfolio video streams only. */
+export async function uploadVideoFromUri(
+  uri: string,
+  purpose: MediaUploadPurpose = "portfolio"
+): Promise<MediaStatusOutput> {
   const file = new File(uri)
   const mimeType = file.type || "video/mp4"
-  const upload = await createUpload("video", mimeType, file.size)
+  const upload = await createUpload("video", mimeType, file.size, purpose)
   await transferUpload(upload, uri, mimeType)
   return waitForReady(upload.mediaId)
 }

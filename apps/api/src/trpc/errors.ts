@@ -7,7 +7,10 @@ import { OtpRateLimited } from "../auth/rate-limit.js"
 import { AuthRejected, OtpDeliveryFailed } from "../auth/supabase.js"
 import { BookerError } from "../booker/errors.js"
 import { DeckError } from "../deck/errors.js"
+import { InterestError } from "../interest/errors.js"
+import { MatchError } from "../match/errors.js"
 import { MediaError } from "../media/errors.js"
+import { MessageError } from "../message/errors.js"
 import { ProjectError } from "../project/errors.js"
 import { StudioError } from "../talent/errors.js"
 import { PublicReadRateLimited } from "../talent/public-rate-limit.js"
@@ -63,6 +66,14 @@ const deckCode = {
   already_decided: "CONFLICT",
   undo_limit: "FORBIDDEN",
   nothing_to_undo: "PRECONDITION_FAILED",
+  interest_answered: "CONFLICT",
+} as const
+
+const interestCode = {
+  interest_not_found: "NOT_FOUND",
+  interest_closed: "CONFLICT",
+  interest_expired: "PRECONDITION_FAILED",
+  talent_profile_required: "PRECONDITION_FAILED",
 } as const
 
 const adminCode = {
@@ -79,6 +90,18 @@ const projectCode = {
   invalid_requirement: "BAD_REQUEST",
   sensitive_requires_brief: "BAD_REQUEST",
   publish_unavailable: "FORBIDDEN",
+} as const
+
+const matchCode = {
+  match_not_found: "NOT_FOUND",
+  role_not_found: "NOT_FOUND",
+  role_required: "BAD_REQUEST",
+  role_has_no_brief: "PRECONDITION_FAILED",
+} as const
+
+const messageCode = {
+  conversation_not_found: "NOT_FOUND",
+  media_not_usable: "BAD_REQUEST",
 } as const
 
 /** Map known domain failures to tRPC codes. Unexpected errors stay 500 and keep their cause. */
@@ -114,6 +137,27 @@ export function throwTrpc(error: unknown): never {
   if (error instanceof DeckError) {
     throw new TRPCError({
       code: deckCode[error.code],
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof InterestError) {
+    throw new TRPCError({
+      code: interestCode[error.code],
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof MatchError) {
+    throw new TRPCError({
+      code: matchCode[error.code],
+      message: error.message,
+      cause: error,
+    })
+  }
+  if (error instanceof MessageError) {
+    throw new TRPCError({
+      code: messageCode[error.code],
       message: error.message,
       cause: error,
     })

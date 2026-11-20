@@ -15,6 +15,7 @@ import {
 } from "./config.js"
 import {
   imageVariantsForRef,
+  videoMp4Url,
   videoPlaybackUrl,
   videoPosterUrl,
 } from "./delivery.js"
@@ -31,7 +32,7 @@ const uploadTtlMs = 60 * 60 * 1000
 export async function createUploadUrl(
   db: Db,
   userId: string,
-  input: CreateUploadUrlInput
+  input: Omit<CreateUploadUrlInput, "purpose"> & Partial<Pick<CreateUploadUrlInput, "purpose">>
 ) {
   if (input.kind === "video" && !input.contentType.startsWith("video/")) {
     throw new MediaError("invalid_kind", "Video uploads require a video content type")
@@ -50,6 +51,9 @@ export async function createUploadUrl(
   let resumable = false
   let providerRef: string | null = null
 
+  // A chat video also gets an MP4 the phone can cache (Mux only; the local backend streams).
+  const mp4 = input.kind === "video" && input.purpose === "chat" && backend === "remote"
+
   await db.insert(schema.mediaAssets).values({
     id: mediaId,
     ownerId: userId,
@@ -57,6 +61,7 @@ export async function createUploadUrl(
     provider: backend === "remote" ? provider : "supabase",
     providerRef: backend === "local" ? `local-${mediaId}` : null,
     status: "pending",
+    mp4Status: mp4 ? "preparing" : null,
   })
 
   if (backend === "remote") {
@@ -68,7 +73,7 @@ export async function createUploadUrl(
     }
     const created =
       input.kind === "video"
-        ? await createMuxVideoUpload(mediaId)
+        ? await createMuxVideoUpload(mediaId, { mp4 })
         : provider === "supabase"
           ? await createSupabaseImageUpload({
               mediaId,
@@ -258,7 +263,8 @@ export async function applyMediaReadyEvent(db: Db, event: MediaProviderReadyEven
   schedulePublicPortfolioRevalidate(db, rows[0].ownerId)
 }
 
-function toMediaStatus(row: typeof schema.mediaAssets.$inferSelect): MediaStatusOutput {
+/** A media row as clients see it: variants and playback URLs, no owner. */
+export function toMediaStatus(row: typeof schema.mediaAssets.$inferSelect): MediaStatusOutput {
   const providerRef = row.providerRef
   if (row.status === "ready" && providerRef && row.provider === "cf_images") {
     assertCloudflareDeliveryConfig()
@@ -266,6 +272,14 @@ function toMediaStatus(row: typeof schema.mediaAssets.$inferSelect): MediaStatus
   const playbackUrl =
     row.kind === "video" && row.status === "ready" && providerRef
       ? videoPlaybackUrl(row.provider, providerRef)
+      : null
+  const mp4Url =
+    row.kind === "video" &&
+    row.status === "ready" &&
+    providerRef &&
+    row.mp4Status === "ready" &&
+    row.mp4Name
+      ? videoMp4Url(row.provider, providerRef, row.mp4Name)
       : null
   const variants =
     row.kind === "image" && row.status === "ready" && providerRef
@@ -284,6 +298,7 @@ function toMediaStatus(row: typeof schema.mediaAssets.$inferSelect): MediaStatus
         ? videoPosterUrl(row.provider, providerRef, row.posterUrl)
         : row.posterUrl,
     playbackUrl,
+    mp4Url,
     blurhash: row.blurhash,
     variants,
   }

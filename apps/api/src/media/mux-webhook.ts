@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm"
 
 import { muxPosterUrl } from "./delivery.js"
 import { MediaError } from "./errors.js"
+import { muxClient } from "./mux-client.js"
+import { applyMp4Rendition, chatMp4File } from "./mux-mp4.js"
 import { applyMediaReadyEvent } from "./service.js"
 
 /** Mux webhook signature (`Mux-Signature`: `t=…,v1=…`). */
@@ -33,10 +35,18 @@ export function verifyMuxWebhookSignature(
   }
 }
 
-type MuxAssetPayload = {
-  passthrough?: string
+type MuxRenditionPayload = {
+  /** Set on a static rendition's own events. */
+  asset_id?: string
+  name?: string
+  resolution?: string
   status?: string
+}
+
+type MuxAssetPayload = MuxRenditionPayload & {
+  passthrough?: string
   playback_ids?: Array<{ id?: string }>
+  static_renditions?: { files?: MuxRenditionPayload[] }
   tracks?: Array<{
     type?: string
     max_width?: number
@@ -54,12 +64,35 @@ function videoTrack(asset: MuxAssetPayload) {
   return asset.tracks?.find((track) => track.type === "video")
 }
 
-export async function handleMuxVideoWebhook(db: Db, rawBody: string) {
+const renditionEvents = new Set([
+  "video.asset.static_rendition.ready",
+  "video.asset.static_rendition.skipped",
+  "video.asset.static_rendition.errored",
+])
+
+export async function handleMuxVideoWebhook(
+  db: Db,
+  rawBody: string,
+  options: { assetPassthrough?: (assetId: string) => Promise<string | undefined> } = {}
+) {
   const payload = JSON.parse(rawBody) as MuxWebhookBody
   const type = payload.type
   const asset = payload.data
-  if (!asset?.passthrough) return
+  if (!asset || !type) return
 
+  // A static rendition's own events carry the rendition, not the asset. Its passthrough is the
+  // media id when Mux kept it; otherwise the asset's passthrough is.
+  if (renditionEvents.has(type)) {
+    const lookup =
+      options.assetPassthrough ??
+      (async (assetId: string) => (await muxClient().video.assets.retrieve(assetId)).passthrough)
+    const mediaId =
+      asset.passthrough ?? (asset.asset_id ? await lookup(asset.asset_id) : undefined)
+    if (mediaId) await applyMp4Rendition(db, mediaId, asset)
+    return
+  }
+
+  if (!asset.passthrough) return
   const mediaId = asset.passthrough
 
   if (type === "video.asset.errored") {
@@ -85,4 +118,6 @@ export async function handleMuxVideoWebhook(db: Db, rawBody: string) {
     durationMs: track?.duration ? Math.round(track.duration * 1000) : undefined,
     posterUrl: muxPosterUrl(playbackId),
   })
+  // A short clip's MP4 can be ready with the stream.
+  await applyMp4Rendition(db, mediaId, chatMp4File(asset.static_renditions?.files))
 }
