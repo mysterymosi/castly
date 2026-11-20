@@ -23,6 +23,7 @@ const image = (mediaId: string): MediaStatusOutput => ({
   durationMs: null,
   posterUrl: null,
   playbackUrl: null,
+  mp4Url: null,
   blurhash: null,
   variants: {
     card: `https://imagedelivery.net/hash/${mediaId}/card`,
@@ -45,6 +46,8 @@ export const fixtureMedia: Record<string, MediaStatusOutput> = {
     durationMs: 92_000,
     posterUrl: `https://image.mux.com/${fixtureMediaIds.showreel}/thumbnail.jpg`,
     playbackUrl: `https://stream.mux.com/${fixtureMediaIds.showreel}.m3u8`,
+    // Portfolio video streams only; the downloadable MP4 is for chat uploads.
+    mp4Url: null,
     blurhash: null,
     variants: null,
   },
